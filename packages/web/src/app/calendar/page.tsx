@@ -30,6 +30,8 @@ import { providerFailureText } from "../../lib/provider-failure";
 import { queryKeys } from "../../lib/query-keys";
 import { captureClientError } from "../../lib/sentry";
 import { useDisplayTimeZone } from "../../lib/use-time-zone";
+import { monthStartForKey, shiftDayKey } from "./agenda-model";
+import { PhoneAgenda, type PhoneCalendarView, PhoneDayHeader } from "./phone-agenda";
 
 export default function CalendarPage() {
   return (
@@ -111,6 +113,9 @@ function CalendarView() {
   // prev/next navigation never falls into adjacent-month corners when
   // we add or subtract a month at the end of the calendar.
   const [viewMonth, setViewMonth] = useState<Date>(() => firstOfMonth(new Date(), userTimezone));
+  // Phone only (below 600px): the day the agenda shows, and agenda vs month.
+  const [dayKey, setDayKey] = useState<string>(() => dayKeyForInZone(new Date(), userTimezone));
+  const [phoneView, setPhoneView] = useState<PhoneCalendarView>("agenda");
 
   // Range fetched = the visible 6×7 grid, which can spill into adjacent
   // months. Use the grid's anchor cells so events in the prev/next month
@@ -224,11 +229,94 @@ function CalendarView() {
   const goPrevMonth = () => setViewMonth(addMonths(viewMonth, -1, userTimezone));
   const goNextMonth = () => setViewMonth(addMonths(viewMonth, 1, userTimezone));
   const goToday = () => setViewMonth(firstOfMonth(new Date(), userTimezone));
+  // The agenda's day drives the fetched month, so the day's events are loaded.
+  const showDay = (key: string) => {
+    setDayKey(key);
+    const month = monthStartForKey(key);
+    if (month && month.getTime() !== viewMonth.getTime()) setViewMonth(month);
+  };
+  const goPhoneToday = () => showDay(todayKey);
+  const changePhoneView = (view: PhoneCalendarView) => {
+    setPhoneView(view);
+    if (view === "agenda") showDay(dayKey);
+  };
+  const openNewEvent = () => {
+    invalidateVoiceRequests();
+    setVoiceInitial(null);
+    setNewEventOpen(true);
+  };
+  // Voice, New event and Sync as 44px round buttons: the phone header and the
+  // compact (600–767px) header share them.
+  const compactActions = (
+    <>
+      <VoiceButton
+        onTranscript={(text) => void handleVoiceTranscript(text)}
+        className="flex h-11 w-11 items-center justify-center rounded-full border border-line"
+      />
+      <button
+        type="button"
+        onClick={openNewEvent}
+        aria-label={t("calendar.newEvent")}
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-solid text-accent-solid-ink transition active:bg-accent-solid-hover"
+      >
+        <svg
+          aria-hidden="true"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+        >
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={syncNow}
+        disabled={syncing}
+        aria-label={t("calendar.sync")}
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-raised text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
+      >
+        <svg
+          aria-hidden="true"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={syncing ? "motion-safe:animate-spin" : ""}
+        >
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+          <polyline points="21 3 21 9 15 9" />
+        </svg>
+      </button>
+    </>
+  );
 
   return (
-    <div className={PAGE_SHELL}>
-      {/* MOBILE — native large-title header (desktop hero below, untouched) */}
-      <header className="mb-5 flex items-end justify-between gap-3 md:hidden">
+    // On a phone the day comes first: linked calendars move below it (order-last).
+    <div className={`${PAGE_SHELL} max-rail:flex max-rail:flex-col`}>
+      {/* PHONE (below 600px) — the day header of the agenda (phone-agenda.tsx). */}
+      <div className="rail:hidden">
+        <PhoneDayHeader
+          dayKey={dayKey}
+          events={loading ? null : (eventsByDay.get(dayKey) ?? [])}
+          view={phoneView}
+          onViewChange={changePhoneView}
+          onShiftDay={(delta) => showDay(shiftDayKey(dayKey, delta))}
+          onToday={goPhoneToday}
+          actions={compactActions}
+        />
+      </div>
+
+      {/* COMPACT (600–767px) — native large-title header (desktop hero below, untouched) */}
+      <header className="mb-5 hidden items-end justify-between gap-3 rail:flex md:hidden">
         <div className="min-w-0">
           <h1 className="text-role-page text-ink">{t("nav.calendar")}</h1>
           <p className="mt-1.5 truncate text-role-body text-ink-mid">
@@ -237,59 +325,7 @@ function CalendarView() {
               : t("calendar.next14Days")}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <VoiceButton
-            onTranscript={(text) => void handleVoiceTranscript(text)}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-line"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              invalidateVoiceRequests();
-              setVoiceInitial(null);
-              setNewEventOpen(true);
-            }}
-            aria-label={t("calendar.newEvent")}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-accent-solid text-accent-solid-ink transition active:bg-accent-solid-hover"
-          >
-            <svg
-              aria-hidden="true"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-            >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            onClick={syncNow}
-            disabled={syncing}
-            aria-label={t("calendar.sync")}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-raised text-ink-mid transition active:bg-surface-hover disabled:opacity-50"
-          >
-            <svg
-              aria-hidden="true"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={syncing ? "animate-spin" : ""}
-            >
-              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-              <polyline points="21 3 21 9 15 9" />
-            </svg>
-          </button>
-        </div>
+        <div className="flex shrink-0 items-center gap-2">{compactActions}</div>
       </header>
 
       {/* DESKTOP — flat text header on the canvas, no boxed hero. New event is
@@ -323,11 +359,7 @@ function CalendarView() {
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            onClick={() => {
-              invalidateVoiceRequests();
-              setVoiceInitial(null);
-              setNewEventOpen(true);
-            }}
+            onClick={openNewEvent}
             className="glow-primary ease-strong inline-flex h-9 pointer-coarse:h-11 items-center gap-1.5 rounded-control bg-accent-solid px-3.5 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97]"
           >
             <svg
@@ -376,7 +408,7 @@ function CalendarView() {
         </div>
       </header>
 
-      <div className="mb-6">
+      <div className="mb-6 max-rail:order-last max-rail:mt-6 max-rail:mb-0">
         <Suspense fallback={null}>
           <LinkedCalendars />
         </Suspense>
@@ -397,7 +429,12 @@ function CalendarView() {
       )}
 
       {!loading && !error && events.length === 0 && (
-        <div className="panel-elevated rounded-card border border-line/70 bg-surface-panel p-6 text-center">
+        <div
+          className={`panel-elevated rounded-card border border-line/70 bg-surface-panel p-6 text-center ${
+            // On a phone the agenda says the day is empty; only "connect" is news.
+            googleConnected === false ? "" : "max-rail:hidden"
+          }`}
+        >
           <p className="mb-1 text-role-body text-ink-mid">
             {googleConnected === false
               ? t("calendar.empty.notConnected")
@@ -438,8 +475,20 @@ function CalendarView() {
           events listed below (founder decision, option A). A fine pointer on
           a wide screen keeps the grid unchanged. Pure CSS switching, so there
           is no layout flash on load. */}
+      {!loading && phoneView === "agenda" && (
+        <div className="rail:hidden">
+          <PhoneAgenda
+            // A new day starts with no event sheet open.
+            key={dayKey}
+            dayKey={dayKey}
+            events={eventsByDay.get(dayKey) ?? []}
+            timeZone={userTimezone}
+          />
+        </div>
+      )}
+
       {!loading && (
-        <div className="@container">
+        <div className={`@container ${phoneView === "agenda" ? "max-rail:hidden" : ""}`}>
           <div className="block @max-[600px]:hidden pointer-coarse:hidden">
             <MonthGrid
               viewMonth={viewMonth}

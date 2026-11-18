@@ -225,6 +225,16 @@ function ReplyDock({ open, onClose, subject, original, children, ...rest }: Comp
 const BACK_MARK = "klornReplyComposer";
 
 /**
+ * True while the open composer's own history entry is the current one. A
+ * navigation away from the mail then replaces that entry instead of pushing
+ * past it: pushed, it would stay behind the next page, and Back would land on
+ * the same mail twice (once on the entry, once on the mail's own).
+ */
+export function composerEntryOnTop(): boolean {
+  return typeof window !== "undefined" && window.history.state?.[BACK_MARK] === true;
+}
+
+/**
  * Back (the browser's, Android's) closes the composer instead of leaving the
  * mail: opening adds a history entry for the same URL (the router's own state
  * is kept, so the app router treats Back as a same-page restore); closing any

@@ -117,7 +117,7 @@ export function CompactMonth({
   const selectedLabel = dayLabelFor(selectedKey, locale, timeZone);
 
   return (
-    <div className="space-y-4">
+    <div data-testid="compact-month" className="space-y-4">
       <div className="panel-elevated overflow-hidden rounded-card border border-line/70 bg-surface-panel">
         <div className="flex items-center justify-between gap-2 border-b border-line-soft px-2 py-1.5">
           <div className="flex min-w-0 items-center gap-1">

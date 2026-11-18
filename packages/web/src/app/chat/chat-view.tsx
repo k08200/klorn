@@ -5,7 +5,7 @@
 // drafts render as confirm cards (EventDraftCard); the save stays on the
 // Pro-gated POST /api/calendar.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DailyCapLine } from "../../components/daily-cap-line";
 import EventDraftCard from "../../components/event-draft-card";
 import ErrorAlert from "../../components/ui/error-alert";
@@ -17,6 +17,35 @@ import {
   type AssistantChatMessage as ChatMessage,
   useAssistantChat,
 } from "../../lib/use-assistant-chat";
+import { useMediaQuery } from "../../lib/use-media-query";
+import { useVisualViewport } from "../../lib/use-visual-viewport";
+
+/** Below the rail step (globals.css, --breakpoint-rail): the phone shell. */
+const PHONE_QUERY = "(width < 37.5rem)";
+/** Room left between the composer and the top of the on-screen keyboard. */
+const KEYBOARD_GAP_PX = 8;
+
+/**
+ * The hub chat on a phone (mobile redesign PR5): while the on-screen keyboard
+ * is up, the page is capped at the top of the keyboard so the composer stays
+ * in view (the keyboard shrinks only the visual viewport, so the page's own
+ * height would leave the composer under it). Undefined otherwise.
+ */
+function useKeyboardCap(active: boolean, sectionRef: { current: HTMLElement | null }) {
+  const keyboard = useVisualViewport(active);
+  const [cap, setCap] = useState<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    const section = sectionRef.current;
+    if (!section || !keyboard || keyboard.bottomInset === 0) {
+      setCap(undefined);
+      return;
+    }
+    const visibleBottom = window.innerHeight - keyboard.bottomInset;
+    const top = section.getBoundingClientRect().top;
+    setCap(Math.max(0, Math.round(visibleBottom - top - KEYBOARD_GAP_PX)));
+  }, [keyboard, sectionRef]);
+  return cap;
+}
 
 // Suggestion labels resolve via t() inside the component.
 const SUGGESTION_KEYS = [
@@ -54,6 +83,9 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
   } = useAssistantChat();
   const threadEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const phone = useMediaQuery(PHONE_QUERY);
+  const keyboardCap = useKeyboardCap(hub && phone, sectionRef);
 
   // Keep the newest message in view as the thread grows.
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on thread growth
@@ -63,6 +95,8 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
 
   return (
     <section
+      ref={sectionRef}
+      style={keyboardCap === undefined ? undefined : { maxHeight: keyboardCap }}
       className={
         hub
           ? "flex h-[calc(100dvh-154px-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-3xl flex-col pb-4 pt-6 md:h-dvh md:pb-6 md:pt-8"
@@ -168,7 +202,7 @@ export function ChatView({ hub = false }: { hub?: boolean }) {
             aria-label={hub ? t("today.ask.label") : "Message the assistant"}
             // The hub's composer avoids iOS zoom-on-focus (16px on touch, P10).
             className={`max-h-32 flex-1 resize-none bg-transparent text-role-body text-ink outline-none placeholder:text-ink-dim${
-              hub ? " pointer-coarse:text-field" : ""
+              hub ? " pointer-coarse:text-field max-rail:text-field" : ""
             }`}
           />
           <VoiceButton

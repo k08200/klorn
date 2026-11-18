@@ -29,7 +29,7 @@ import { REMINDER_LABEL_KEYS } from "../_v2/reminders";
 import { useLaneMove } from "../use-lane-move";
 import { readerLeaveHref } from "./_v2/reader-model";
 import { ReaderV2 } from "./_v2/reader-v2";
-import type { ReplyLayout } from "./_v2/reply-composer";
+import { composerEntryOnTop, type ReplyLayout } from "./_v2/reply-composer";
 import { useDoneFeedback } from "./_v2/use-done-feedback";
 import { useReaderContext } from "./_v2/use-reader-context";
 import { useReaderTriage } from "./_v2/use-reader-triage";
@@ -194,6 +194,8 @@ export default function EmailDetailPage() {
 function EmailDetailView() {
   const { t, locale } = useT();
   const router = useRouter();
+  // Leaving the mail: over the open reply composer's history entry, not past it.
+  const leave = (href: string) => (composerEntryOnTop() ? router.replace(href) : router.push(href));
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { confirm } = useConfirm();
@@ -586,19 +588,19 @@ function EmailDetailView() {
       const params = new URLSearchParams();
       if (undoAction) appendUndoParams(params, undoAction, email);
       const target = reader.context?.olderId ?? reader.context?.newerId ?? null;
-      router.push(readerLeaveHref(target, params));
+      leave(readerLeaveHref(target, params));
       return;
     }
     if (nextEmail) {
       toast(nextMessage, "success");
       const params = new URLSearchParams({ markRead: "false", queue });
       if (undoAction) appendUndoParams(params, undoAction, email);
-      router.push(`/email/${nextEmail.id}?${params.toString()}`);
+      leave(`/email/${nextEmail.id}?${params.toString()}`);
     } else {
       toast(doneMessage, "success");
       const params = new URLSearchParams({ done: queue });
       if (undoAction) appendUndoParams(params, undoAction, email);
-      router.push(`/email?${params.toString()}`);
+      leave(`/email?${params.toString()}`);
     }
   };
 
@@ -757,13 +759,13 @@ function EmailDetailView() {
         : null,
     hasNext: nextEmail !== null,
     openNext: () => goToNextOrList(t("emailDetail.toast.movingToNext")),
-    back: () => router.push("/email"),
+    back: () => leave("/email"),
     archive: () => void archiveEmailNow(),
     laneMove,
     undoLastAction: undoNotice ? () => void undoLastAction() : null,
   });
 
-  const openInReader = (emailId: string) => router.push(readerLeaveHref(emailId));
+  const openInReader = (emailId: string) => leave(readerLeaveHref(emailId));
   useReaderTriage({
     active: keyboardTriage && mailV2,
     email: email ? { id: email.id, subject: email.subject || null } : null,
@@ -776,7 +778,7 @@ function EmailDetailView() {
     olderId: reader.context?.olderId ?? null,
     newerId: reader.context?.newerId ?? null,
     open: openInReader,
-    back: () => router.push("/email"),
+    back: () => leave("/email"),
     archive: () => void doneFromV2Reader(),
     laneMove,
     undoLastAction: undoNotice ? () => void undoLastAction() : null,
@@ -1675,6 +1677,7 @@ function ReplyDraftBox({
         id={REPLY_INTENT_INPUT_ID}
         value={intent}
         onChange={(e) => onIntentChange(e.target.value)}
+        aria-label={t("emailDetail.replyDraft.intentLabel")}
         placeholder={t("emailDetail.replyDraft.intentPlaceholder")}
         className={`mb-3 w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 pointer-coarse:min-h-11 text-role-caption text-ink-soft placeholder-ink-dim outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
       />

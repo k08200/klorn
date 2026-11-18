@@ -148,3 +148,34 @@ describe("role-preserving placeholders (instrument correctness)", () => {
     expect(lintPii(JSON.stringify({ from: "noreply@vercel.com" })).length).toBe(1);
   });
 });
+
+describe("scrubText / lintPii — linear on hostile input", () => {
+  // The address pattern was unbounded (`[…]+@[…]+\.[…]{2,}`): quadratic on a
+  // long run, minutes at 1 MB. Bounded by RFC 5321's lengths it is linear.
+  // Finishing at all is the proof, so these assert output, not time.
+  const MB = 1_000_000;
+
+  it.each([
+    ["a run of local-part characters with no @", () => "a".repeat(MB)],
+    ["an @ before a megabyte of one-letter labels", () => `a@${"b.".repeat(MB / 2)}`],
+    ["an @ before a dotless megabyte", () => `a@${"b".repeat(MB)}`],
+    ["alternating a@ pairs", () => "a@".repeat(MB / 2)],
+  ])("%s: nothing to scrub, nothing flagged", (_name, build) => {
+    const input = build();
+    expect(scrubText(input, createScrubContext()).text).toBe(input);
+    expect(lintPii(JSON.stringify({ body: input }))).toEqual([]);
+  });
+
+  it("a local part past RFC 5321's 64 characters: the scrub takes the last 64, the linter flags the rest", () => {
+    const head = "a".repeat(MB - 64);
+    const input = `${head}${"a".repeat(64)}@example.com`;
+    const out = scrubText(input, createScrubContext()).text;
+    expect(out).toBe(`${head}person-1@domain-1.example`);
+    expect(lintPii(JSON.stringify({ body: out }))).toHaveLength(1);
+  });
+
+  it("a megabyte of back-to-back addresses all become placeholders", () => {
+    const out = scrubText("a@b.co ".repeat(MB / 7), createScrubContext()).text;
+    expect(out).toBe("person-1@domain-1.example ".repeat(MB / 7));
+  });
+});

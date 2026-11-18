@@ -246,7 +246,10 @@ export default function CommandPalette() {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[20vh]">
+    <div
+      data-overlay
+      className="fixed inset-0 z-[120] flex items-start justify-center px-4 pt-[20vh]"
+    >
       <button
         type="button"
         className="absolute inset-0 bg-black/60"

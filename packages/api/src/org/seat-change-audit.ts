@@ -10,7 +10,10 @@
  * after Paddle accepted). A write that fails stops the call. Because the row
  * is visible while its call is still running, a request whose live read
  * started within SEAT_CHANGE_IN_FLIGHT_MS of it is refused too: Paddle may
- * have answered that read before applying the change. When Paddle answers
+ * have answered that read before applying the change. That refusal, and the
+ * one for an unconfirmed change below, answer SEATS_CHANGE_IN_FLIGHT, not
+ * SEATS_CHANGED: nothing changed since the request looked; an earlier change
+ * is still settling, and the same request succeeds once it has. When Paddle answers
  * and refuses (4xx: nothing changed there) the row is taken back, so a
  * refused call still leaves no row. When no answer says either way — a
  * timeout, a dropped connection, a Paddle 5xx — the new count may be live or
@@ -120,6 +123,13 @@ const SEATS_CHANGED = () =>
     "The seat count changed while this request was waiting. Check the count and try again.",
   );
 
+const SEATS_CHANGE_IN_FLIGHT = () =>
+  new OrgError(
+    409,
+    "SEATS_CHANGE_IN_FLIGHT",
+    "An earlier seat change is still being processed, so the current count is not certain yet. Try again in a few minutes.",
+  );
+
 function agoFrom(when: Date, ms: number): Date {
   return new Date(when.getTime() - ms);
 }
@@ -127,10 +137,11 @@ function agoFrom(when: Date, ms: number): Date {
 /**
  * Under the lock: the live quantity read before the lock is stale — and with
  * it the increase-or-decrease call, so two concurrent decreases cannot add up
- * to an unchecked increase — when a seat change was requested since the
- * mark, or so shortly before the read that its Paddle call may still have
- * been running, or when a recent change is still unconfirmed (Paddle may
- * apply it yet).
+ * to an unchecked increase — when a seat change was requested since the mark
+ * (SEATS_CHANGED), or when an earlier change may still move the count: its
+ * request came so shortly before the read that its Paddle call may still have
+ * been running, or it is recent and unconfirmed, so Paddle may apply it yet
+ * (SEATS_CHANGE_IN_FLIGHT). A change since the mark wins when both hold.
  */
 export async function assertNoSeatChangeSince(
   tx: OrgTx,
@@ -147,11 +158,15 @@ export async function assertNoSeatChangeSince(
         ],
       }
     : {};
-  const newer = await tx.orgAuditEvent.findFirst({
+  const changed = await tx.orgAuditEvent.findFirst({
+    where: { orgId, action: SEATS_CHANGE_ACTION, ...since },
+    select: { id: true },
+  });
+  if (changed) throw SEATS_CHANGED();
+  const settling = await tx.orgAuditEvent.findFirst({
     where: {
       orgId,
       OR: [
-        { action: SEATS_CHANGE_ACTION, ...since },
         {
           action: SEATS_CHANGE_ACTION,
           createdAt: { gt: agoFrom(read.startedAt, SEAT_CHANGE_IN_FLIGHT_MS) },
@@ -164,7 +179,7 @@ export async function assertNoSeatChangeSince(
     },
     select: { id: true },
   });
-  if (newer) throw SEATS_CHANGED();
+  if (settling) throw SEATS_CHANGE_IN_FLIGHT();
 }
 
 /** Commit the request row now, on its own connection; its id, to take it back after a refusal. */
