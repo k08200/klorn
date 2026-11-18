@@ -229,7 +229,8 @@ func imapConnectSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     // MARK: 6. entry points
     let prefs = text("PreferencesView.swift")
     check("settings ▸ Accounts draws one connect button per offered provider",
-          prefs.contains("ForEach(offeredImapProviders(model.availableImapProviders))")
+          prefs.contains(
+              "ForEach(offeredImapProviders(model.availableImapProviders, closed: model.imapConnectClosed))")
               && prefs.contains("connectButton(provider, title: provider.connectLabel)"))
     check("every provider opens the one parameterized form",
           prefs.contains("ImapConnectForm(provider: provider") && prefs.contains("connectingProvider = provider"))
@@ -239,6 +240,34 @@ func imapConnectSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
               && offeredImapProviders(Set(ImapMailProvider.allCases)) == ImapMailProvider.allCases)
     check("a fresh session offers Naver only — the presets wait for their probe",
           AppModel(tokenStore: InMemoryTokenStore()).availableImapProviders == [.naver])
+
+    // MARK: 6b. a connect route closed to an owner (#1785: connectOpen false)
+    func decodedStatus(_ json: String) -> ImapStatusResponse? {
+        try? JSONDecoder().decode(ImapStatusResponse.self, from: Data(json.utf8))
+    }
+    check("status: connectOpen false closes the connect form; absent (older server) or true keeps it",
+          decodedStatus(#"{"connected":true,"accounts":[],"connectOpen":false}"#)?.acceptsConnects == false
+              && decodedStatus(#"{"connected":true,"accounts":[],"connectOpen":true}"#)?.acceptsConnects == true
+              && decodedStatus(#"{"connected":true,"accounts":[]}"#)?.acceptsConnects == true)
+    check("a provider closed to the owner gets no connect button, Naver included",
+          offeredImapProviders([.icloud, .daum], closed: [.icloud]) == [.naver, .daum]
+              && offeredImapProviders([], closed: [.naver]) == []
+              && offeredImapProviders([.icloud], closed: []) == [.naver, .icloud])
+    check("the closed providers are explained in display order",
+          connectClosedImapProviders([.zoho, .icloud]) == [.icloud, .zoho]
+              && connectClosedImapProviders([]).isEmpty)
+    check("a fresh session has no closed provider",
+          AppModel(tokenStore: InMemoryTokenStore()).imapConnectClosed.isEmpty)
+    check("the status probe records connectOpen, and a 404 forgets it",
+          model.contains("imapConnectClosed = status.acceptsConnects")
+              && model.contains("imapConnectClosed = imapConnectClosed.subtracting([provider])"))
+    check("settings ▸ Accounts hides the form for a closed provider, explains it, keeps disconnect, drops its stale needs-reconnect",
+          prefs.contains("if let provider = connectingProvider, !model.imapConnectClosed.contains(provider)")
+              && prefs.contains("ForEach(connectClosedImapProviders(model.imapConnectClosed))")
+              && prefs.contains("L(\"account.imap.connectClosed\", providerLabel(provider.rawValue))")
+              && prefs.contains("pendingDisconnect = PendingImapDisconnect(provider: provider, email: account.email)")
+              && prefs.contains("if let provider = connectingProvider, closed.contains(provider) { connectingProvider = nil }")
+              && prefs.contains("needsReconnect: account.needsReconnect && !model.imapConnectClosed.contains(provider)"))
     check("the status probe covers every provider; a 404 hides any but Naver",
           model.contains("for provider in ImapMailProvider.allCases { await refreshImapAccounts(provider) }")
               && model.contains("guard isCurrent(session), provider != .naver else { return }"))
@@ -281,6 +310,11 @@ func imapConnectSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
                 || value.replacingOccurrences(of: "%@", with: "").contains("%")
         }
         check("\(language): each preset sentence takes exactly one %@ (the name)", badFormats.isEmpty)
+        let closedNotice = table["account.imap.connectClosed"] ?? ""
+        check("\(language): the paused-sync notice takes exactly one %@ (the provider) and reads",
+              closedNotice.components(separatedBy: "%@").count == 2
+                  && !closedNotice.replacingOccurrences(of: "%@", with: "").contains("%")
+                  && String(format: closedNotice, "iCloud").contains("iCloud"))
         if !badFormats.isEmpty { print("      bad formats: \(badFormats.joined(separator: ", "))") }
         let unfilled = presetStems.flatMap { stem in
             presetFormats.compactMap { key -> String? in
