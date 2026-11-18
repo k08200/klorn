@@ -4,7 +4,7 @@
  * renders the problem from `rulesDsl.problem.*` keys in every shipped locale.
  *
  * This is the guard that keeps the two sides in step:
- *  - every message the parser or compiler can emit has a key in all 7 locales
+ *  - every message the parser or compiler can emit has a key in all 3 locales
  *    (and no locale carries a stale one);
  *  - English from the key table reads exactly as the API's own message, so
  *    the table cannot drift from the source of truth;
@@ -18,11 +18,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { dslErrorText } from "../../../web/src/app/settings/_sections/rules-dsl";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 import {
@@ -34,7 +30,7 @@ import {
   RULES_DSL_LIMITS,
 } from "../rules-dsl/index.js";
 
-const TABLES: Record<string, Record<string, string>> = { en, ko, ja, zh, es, fr, de };
+const TABLES: Record<string, Record<string, string>> = { en, ko, zh };
 const LOCALES = Object.keys(TABLES);
 const PREFIX = "rulesDsl.problem.";
 /** Short phrases the web slots into "Expected {expected}, found {found}". */
@@ -450,7 +446,7 @@ describe("locale tables", () => {
       .map((f) => f.slice(0, 2))
       .sort();
     expect(files).toEqual([...LOCALES].sort());
-    expect(LOCALES).toHaveLength(7);
+    expect(LOCALES).toHaveLength(3);
   });
 
   it.each(LOCALES)("%s has a key for every message and no stale ones", (locale) => {

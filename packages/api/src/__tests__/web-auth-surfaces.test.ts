@@ -5,15 +5,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { IOS_INSTALL_SNOOZE_MS, shouldOfferIosInstall } from "../../../web/src/lib/ios-install";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 
-const LOCALES = { en, ko, ja, zh, de, fr, es } as const;
+const LOCALES = { en, ko, zh } as const;
 
 const IPHONE_SAFARI =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
@@ -86,11 +82,7 @@ function authSurfaceEntries(table: Record<string, string>): Array<[string, strin
 const RETIRED_DECISION_QUEUE: Record<keyof typeof LOCALES, string> = {
   en: "Decision queue",
   ko: "결정 큐",
-  ja: "判断キュー",
   zh: "决策队列",
-  de: "Entscheidungsliste",
-  fr: "File de décisions",
-  es: "Cola de decisiones",
 };
 
 describe("sign-in surface vocabulary", () => {

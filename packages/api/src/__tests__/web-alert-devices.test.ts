@@ -11,11 +11,7 @@ import {
   PHONE_SETUP_URL,
   shouldOfferPushBanner,
 } from "../../../web/src/lib/alert-devices";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 
@@ -195,8 +191,8 @@ describe("phone setup", () => {
   });
 });
 
-describe("copy (N7/N8), all 7 locales", () => {
-  const LOCALES = { en, ko, ja, zh, de, fr, es } as const;
+describe("copy (N7/N8), all 3 locales", () => {
+  const LOCALES = { en, ko, zh } as const;
   const KEYS = [
     "pwa.ios.title",
     "pwa.ios.step1",

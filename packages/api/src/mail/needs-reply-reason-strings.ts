@@ -12,40 +12,25 @@
  * "no reply signal" under "needs reply" would contradict it.
  */
 
-import {
-  type NotificationLanguage,
-  resolveNotificationLanguage,
-} from "../notify/notification-strings.js";
+import { type ShippedLanguage, toShippedLanguage } from "../shipped-languages.js";
 
 export const NEEDS_REPLY_REASON_COPY = {
   action_items_present: {
     en: "Asks you to do something",
     ko: "처리할 요청이 들어 있음",
-    ja: "対応が必要な依頼があります",
     zh: "包含需要你处理的请求",
-    es: "Te pide que hagas algo",
-    fr: "Vous demande de faire quelque chose",
-    de: "Bittet dich, etwas zu erledigen",
   },
   reply_language_in_subject: {
     en: "The subject asks for a reply",
     ko: "제목에서 회신을 요청함",
-    ja: "件名で返信を求めています",
     zh: "主题要求回复",
-    es: "El asunto pide una respuesta",
-    fr: "L'objet demande une réponse",
-    de: "Der Betreff bittet um eine Antwort",
   },
   urgent_human_context: {
     en: "Urgent mail from a person",
     ko: "사람이 보낸 급한 메일",
-    ja: "人からの急ぎのメール",
     zh: "来自真人的紧急邮件",
-    es: "Correo urgente de una persona",
-    fr: "E-mail urgent d'une personne",
-    de: "Dringende Mail von einer Person",
   },
-} as const satisfies Record<string, Record<NotificationLanguage, string>>;
+} as const satisfies Record<string, Record<ShippedLanguage, string>>;
 
 type NeedsReplyReasonCode = keyof typeof NEEDS_REPLY_REASON_COPY;
 
@@ -59,5 +44,5 @@ export function needsReplyReasonText(
   language?: string | null,
 ): string | null {
   if (!code || !hasCopy(code)) return null;
-  return NEEDS_REPLY_REASON_COPY[code][resolveNotificationLanguage(language)];
+  return NEEDS_REPLY_REASON_COPY[code][toShippedLanguage(language)];
 }

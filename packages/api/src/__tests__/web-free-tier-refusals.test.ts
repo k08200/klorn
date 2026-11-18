@@ -12,11 +12,7 @@ import {
   isEntitlementRefusal,
   isEntitlementResponse,
 } from "../../../web/src/lib/entitlement";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 
@@ -164,7 +160,7 @@ describe("capCodeForMessage", () => {
   });
 });
 
-const LOCALES = { de, en, es, fr, ja, ko, zh } as const;
+const LOCALES = { en, ko, zh } as const;
 
 describe("free-tier copy", () => {
   const NEW_KEYS = [

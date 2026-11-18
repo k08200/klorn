@@ -78,11 +78,7 @@ type PickerWindow = Window & {
 const PICKER_LOCALES: Readonly<Record<string, string>> = {
   en: "en",
   ko: "ko",
-  ja: "ja",
   zh: "zh-CN",
-  es: "es",
-  fr: "fr",
-  de: "de",
 };
 
 /** How long Google's loader may take to bring the Picker before the click fails. */

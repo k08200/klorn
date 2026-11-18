@@ -18,6 +18,7 @@ import { getUserLlmCredentials } from "../llm/llm-credentials.js";
 import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
 import { getProviderChain } from "../providers/index.js";
+import { OUTPUT_LANGUAGE_NAME, type ShippedLanguage } from "../shipped-languages.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { extractEmailAddress } from "./email-address.js";
 
@@ -38,8 +39,8 @@ const BODY_SLICE = 500;
 const SUMMARY_MAX = 600;
 const PROMISE_MAX = 300;
 
-function dossierPrompt(lang: "en" | "ko"): string {
-  const language = lang === "ko" ? "Korean" : "English";
+function dossierPrompt(lang: ShippedLanguage): string {
+  const language = OUTPUT_LANGUAGE_NAME[lang];
   return `You are Klorn's relationship analyst. From the email exchange below, distill WHY this sender writes to the user and what is currently in flight.
 
 Return ONLY this JSON object:
@@ -63,7 +64,7 @@ Rules:
 export async function getSenderDossier(
   userId: string,
   senderEmail: string,
-  lang: "en" | "ko",
+  lang: ShippedLanguage,
 ): Promise<SenderDossier | null> {
   const credentials = await getUserLlmCredentials(userId);
   if (getProviderChain(credentials).length === 0) return null;

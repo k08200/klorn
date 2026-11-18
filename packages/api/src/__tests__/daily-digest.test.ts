@@ -37,6 +37,7 @@ vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 import {
   collectDigest,
   dayKeyUtc,
+  digestSubject,
   formatDigest,
   isDailyDigestEnabled,
   sendDailyDigests,
@@ -131,6 +132,17 @@ describe("formatDigest", () => {
     const ko = formatDigest({ filed: 3, senders: [] }, "ko");
     const en = formatDigest({ filed: 3, senders: [] }, "en");
     expect(ko).not.toBe(en);
+    const zh = formatDigest({ filed: 3, senders: [] }, "zh");
+    expect(zh).toContain("3 封邮件");
+    expect(zh).not.toBe(en);
+    expect(digestSubject({ filed: 3, senders: [] }, "zh")).toBe("Klorn 今天整理了 3 封邮件");
+  });
+
+  it("writes a retired language (ja/es/fr/de) in English", () => {
+    const en = formatDigest({ filed: 3, senders: [] }, "en");
+    for (const lang of ["ja", "es", "fr", "de"] as const) {
+      expect(formatDigest({ filed: 3, senders: [] }, lang), lang).toBe(en);
+    }
   });
 
   it("makes no claim it has not measured — no 'time saved'", () => {
