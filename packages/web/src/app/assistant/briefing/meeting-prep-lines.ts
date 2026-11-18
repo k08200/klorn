@@ -27,7 +27,7 @@ const K = {
 } as const;
 
 export const PREP_KEYS = K;
-/** Every string the prep block uses; all seven locales must have each. */
+/** Every string the prep block uses; all three locales must have each. */
 export const PREP_LOCALE_KEYS: readonly string[] = Object.values(K);
 
 export interface PrepLineView {

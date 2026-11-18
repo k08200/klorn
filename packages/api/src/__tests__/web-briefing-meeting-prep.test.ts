@@ -1,7 +1,7 @@
 /**
  * Web rendering of meeting prep in the briefing card: every line links to its
  * own source (the mail, or the commitment ledger), a suggestion is labelled
- * as one, and every string it uses exists in all seven locales.
+ * as one, and every string it uses exists in all three locales.
  * Run from the api suite because the web package has no unit-test runner.
  */
 
@@ -11,11 +11,7 @@ import {
   PREP_LOCALE_KEYS,
   prepItemLine,
 } from "../../../web/src/app/assistant/briefing/meeting-prep-lines";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 
@@ -83,11 +79,7 @@ describe("prepItemLine", () => {
 
 describe("locale parity for meeting prep", () => {
   it.each([
-    ["de", de],
     ["en", en],
-    ["es", es],
-    ["fr", fr],
-    ["ja", ja],
     ["ko", ko],
     ["zh", zh],
   ])("%s has every key", (_lang, table) => {

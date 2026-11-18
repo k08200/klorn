@@ -20,11 +20,7 @@ import {
   startBatch,
 } from "../../../web/src/app/files/upload-model";
 import { boundToSession, warnsOnLeave } from "../../../web/src/app/files/upload-run";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 
@@ -141,7 +137,7 @@ describe("Load more's focus marker", () => {
 });
 
 describe("the new messages", () => {
-  it("exist, non-empty, in all seven locales", () => {
+  it("exist, non-empty, in all three locales", () => {
     const keys = [
       "files.drive.error.cancelled",
       "files.drive.error.timeoutCreate",
@@ -149,7 +145,7 @@ describe("the new messages", () => {
       "files.drive.upload.backgroundSome",
       "files.drive.upload.cancel",
     ];
-    for (const [name, table] of Object.entries({ de, en, es, fr, ja, ko, zh })) {
+    for (const [name, table] of Object.entries({ en, ko, zh })) {
       for (const key of keys) expect(table[key], `${name}: ${key}`).toBeTruthy();
     }
   });

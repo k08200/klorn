@@ -15,6 +15,7 @@ import {
   resolveNotificationLanguage,
   URGENT_EMAIL_TITLES,
 } from "../notify/notification-strings.js";
+import { SHIPPED_LANGUAGES } from "../shipped-languages.js";
 
 describe("shipped languages", () => {
   it("ships the seven launch languages", () => {
@@ -76,9 +77,9 @@ describe("shipped languages", () => {
     expect(new Set(URGENT_EMAIL_TITLES).size).toBe(URGENT_EMAIL_TITLES.length);
   });
 
-  it("translates every static tier reason into every language", () => {
+  it("translates every static tier reason into every shipped language", () => {
     for (const [key, byLang] of Object.entries(STATIC_TIER_REASONS)) {
-      for (const lang of NOTIFICATION_LANGUAGES) {
+      for (const lang of SHIPPED_LANGUAGES) {
         const text = (byLang as Record<string, string>)[lang];
         expect(text, `${key}.${lang}`).toBeTruthy();
         if (lang === "en") continue;

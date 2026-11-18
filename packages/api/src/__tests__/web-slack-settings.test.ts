@@ -1,6 +1,6 @@
 /**
  * Settings → Integrations → Slack (web): the panel's pure helpers, and every
- * `slack.*` key the panel uses exists in all seven locales with its
+ * `slack.*` key the panel uses exists in all three locales with its
  * placeholders intact.
  */
 
@@ -12,15 +12,11 @@ import {
   slackPanelVisible,
   slackWorkspaceHost,
 } from "../../../web/src/app/settings/_sections/slack-settings";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 
-const LOCALES: Record<string, Record<string, string>> = { de, en, es, fr, ja, ko, zh };
+const LOCALES: Record<string, Record<string, string>> = { en, ko, zh };
 
 describe("slackPanelVisible", () => {
   it("is true only when /me says Slack is open to this user", () => {

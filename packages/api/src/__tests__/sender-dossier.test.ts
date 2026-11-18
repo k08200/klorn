@@ -187,4 +187,14 @@ describe("getSenderDossier", () => {
     expect(user).not.toMatch(/^Subject: Re: KYC blocked/m);
     expect(system).toContain("Korean");
   });
+
+  it("asks for Simplified Chinese with lang=zh", async () => {
+    await getSenderDossier("user-1", "sellers@paddle.com", "zh");
+    const req = state.createCompletionCalls[0] as {
+      messages: { role: string; content: string }[];
+    };
+    const system = req.messages.find((m) => m.role === "system")?.content ?? "";
+    expect(system).toContain("Simplified Chinese");
+    expect(system).not.toContain("Korean");
+  });
 });

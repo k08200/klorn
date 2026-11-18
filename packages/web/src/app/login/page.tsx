@@ -423,7 +423,7 @@ function LoginForm() {
  * path leaves the page immediately.
  *
  * One template with two placeholders rather than three concatenated fragments:
- * the clause order differs across the seven languages Klorn ships, and
+ * the clause order differs across the three languages Klorn ships, and
  * splitting on the tokens lets each locale put the links where its own grammar
  * wants them. The order is resolved from the string instead of assumed, so a
  * locale that names the privacy policy first still renders correctly.

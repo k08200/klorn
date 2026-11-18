@@ -448,7 +448,9 @@ struct InboxAccountsSection: View {
                         email: account.email,
                         provider: providerLabel(provider.rawValue),
                         beta: MailSourceCatalog.isBeta(provider.rawValue),
-                        needsReconnect: account.needsReconnect,
+                        // A paused provider is not polled: its flag is stale,
+                        // and reconnecting is not offered (the notice says so).
+                        needsReconnect: account.needsReconnect && !model.imapConnectClosed.contains(provider),
                         detail: account.host,
                         onDisconnect: {
                             pendingDisconnect = PendingImapDisconnect(provider: provider, email: account.email)
@@ -460,16 +462,24 @@ struct InboxAccountsSection: View {
                     .font(.caption).foregroundStyle(Theme.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let provider = connectingProvider {
+            if let provider = connectingProvider, !model.imapConnectClosed.contains(provider) {
                 ImapConnectForm(provider: provider, model: model) { connectingProvider = nil }
                     .id(provider)
             } else {
                 // One button per provider the server has, in display order: a
                 // gated provider's status 404s while its flag is off (or the
-                // user is outside its cohort), which drops it from the set.
-                ForEach(offeredImapProviders(model.availableImapProviders)) { provider in
+                // user is outside its cohort), which drops it from the set. An
+                // owner it is closed to gets 200 with connectOpen false: no
+                // button (the connect would 404), a notice, and disconnect.
+                ForEach(offeredImapProviders(model.availableImapProviders, closed: model.imapConnectClosed)) {
+                    provider in
                     connectButton(provider, title: provider.connectLabel)
                 }
+            }
+            ForEach(connectClosedImapProviders(model.imapConnectClosed)) { provider in
+                Text(L("account.imap.connectClosed", providerLabel(provider.rawValue)))
+                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let error = model.imapError {
                 Text(error).font(.caption).foregroundStyle(Theme.textDim)
@@ -477,6 +487,11 @@ struct InboxAccountsSection: View {
             }
         }
         .task { await model.refreshImapAccounts() }
+        // A form left open for a provider that closed must not come back on
+        // its own if the provider opens again later.
+        .onChange(of: model.imapConnectClosed) { _, closed in
+            if let provider = connectingProvider, closed.contains(provider) { connectingProvider = nil }
+        }
         .confirmationDialog(
             L("account.disconnect.confirm", pendingDisconnect?.email ?? ""),
             isPresented: Binding(

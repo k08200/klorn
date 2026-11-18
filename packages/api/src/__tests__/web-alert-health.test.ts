@@ -14,11 +14,7 @@ import {
   NO_CHANNEL_SNOOZE_MS,
   parseChannelHealth,
 } from "../../../web/src/lib/alert-health";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 
@@ -192,8 +188,8 @@ describe("service worker action receipt", () => {
   });
 });
 
-describe("copy, all 7 locales", () => {
-  const LOCALES = { en, ko, ja, zh, de, fr, es } as const;
+describe("copy, all 3 locales", () => {
+  const LOCALES = { en, ko, zh } as const;
   const KEYS = [
     "alertHealth.noChannel.title",
     "alertHealth.noChannel.body",

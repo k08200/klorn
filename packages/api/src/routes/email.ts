@@ -105,6 +105,7 @@ import { effectivePlan } from "../org/effective-tier.js";
 import { createTask } from "../pim/tasks.js";
 import { publicFailure } from "../public-failure.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
+import { toShippedLanguage } from "../shipped-languages.js";
 import { registerEmailAttachmentsRoutes } from "./email-attachments.js";
 import { registerEmailBulkRoutes } from "./email-bulk.js";
 import { registerEmailCandidatesRoutes } from "./email-candidates.js";
@@ -2028,7 +2029,7 @@ export async function emailRoutes(app: FastifyInstance) {
       if (!dbEmail.threadId) return { brief: null };
 
       const brief = await getThreadBrief(uid, dbEmail.threadId, {
-        lang: lang === "ko" ? "ko" : "en",
+        lang: toShippedLanguage(lang),
       });
       return { brief: brief.whyNow ? brief : null };
     },
@@ -2057,7 +2058,7 @@ export async function emailRoutes(app: FastifyInstance) {
       if (!sender) return reply.code(404).send({ error: "No sender address" });
 
       try {
-        const dossier = await getSenderDossier(uid, sender, lang === "ko" ? "ko" : "en");
+        const dossier = await getSenderDossier(uid, sender, toShippedLanguage(lang));
         if (!dossier) {
           return reply
             .code(503)
@@ -2108,7 +2109,7 @@ export async function emailRoutes(app: FastifyInstance) {
       if (!dbEmail) return reply.code(404).send({ error: "Email not found" });
 
       try {
-        const result = await summarizeEmailOnDemand(uid, dbEmail, lang === "ko" ? "ko" : "en");
+        const result = await summarizeEmailOnDemand(uid, dbEmail, toShippedLanguage(lang));
         if (!result) {
           return reply
             .code(503)

@@ -12,6 +12,7 @@ import {
   LAST_RESORT_TIME_ZONE,
   timeZonePreferenceBody,
 } from "../../../lib/time-zone";
+import { isUiLocale } from "../../../lib/ui-locale";
 import {
   mergeStoredProfile,
   PROFILE_KEY,
@@ -48,7 +49,12 @@ export function useProfile(config: AutomationConfig | null) {
         localStorage.removeItem(LEGACY_PROFILE_KEY);
         const parsed = JSON.parse(stored);
         // Timezone is server-owned (mode + zone); only language is read back.
-        setProfile((p) => ({ ...p, language: parsed.language || p.language }));
+        // A retired locale (ja/es/fr/de) or junk is not offered by the picker:
+        // show English, the language the app is actually rendering in.
+        setProfile((p) => ({
+          ...p,
+          language: isUiLocale(parsed.language) ? parsed.language : "en",
+        }));
       }
     } catch {
       // ignore

@@ -42,6 +42,7 @@ import {
   type NotificationLanguage,
 } from "../notify/notification-strings.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
+import { type ShippedLanguage, toShippedLanguage } from "../shipped-languages.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -134,7 +135,7 @@ interface DigestCopy {
   screener: (n: number) => string;
 }
 
-const COPY: Record<"en" | "ko", DigestCopy> = {
+const COPY: Record<ShippedLanguage, DigestCopy> = {
   en: {
     subject: (n: number) => `Klorn filed ${n} message${n === 1 ? "" : "s"} today`,
     lead: (n: number) =>
@@ -156,11 +157,21 @@ const COPY: Record<"en" | "ko", DigestCopy> = {
     screener: (n: number) =>
       `처음 온 발신자 ${n}명이 판단을 기다리고 있습니다. 한 번 정하면 계속 적용됩니다: ${WEB_URL}/inbox`,
   },
+  zh: {
+    subject: (n: number) => `Klorn 今天整理了 ${n} 封邮件`,
+    lead: (n: number) =>
+      `过去 24 小时内有 ${n} 封邮件进入 Silent 或 Info。` +
+      `只是归档，并未删除——下面的邮件都还在你的邮箱里。`,
+    from: "发件人：",
+    more: "没有发现异常的话，就无需任何操作。",
+    screener: (n: number) =>
+      `${n} 位首次来信的发件人正在等待你的判断。一次决定，长期有效：${WEB_URL}/inbox`,
+  },
 };
 
-/** en/ko are written; the other five ship languages fall back to English. */
+/** A language outside en/ko/zh (or a retired one still stored) reads as English. */
 function copyFor(language: NotificationLanguage): DigestCopy {
-  return language === "ko" ? COPY.ko : COPY.en;
+  return COPY[toShippedLanguage(language)];
 }
 
 /** Plain text body. Density over decoration, matching the weekly report. */

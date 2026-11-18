@@ -122,10 +122,16 @@ afterEach(() => {
 });
 
 describe("GET /api/email/:id/reader-context — reader language", () => {
-  it.each(["en", "ko", "ja", "zh", "es", "fr", "de"] as const)("lang=%s", async (lang) => {
+  it.each(["en", "ko", "zh"] as const)("lang=%s", async (lang) => {
     const res = await get(`/api/email/e5/reader-context?lang=${lang}`);
     expect(res.statusCode).toBe(200);
     expect(res.json().tierReason).toBe(TIER_COPY[lang]);
+  });
+
+  it.each(["ja", "es", "fr", "de"])("a retired lang=%s reads as English", async (lang) => {
+    const res = await get(`/api/email/e5/reader-context?lang=${lang}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().tierReason).toBe(TIER_COPY.en);
   });
 
   it("an unknown lang is ignored; Accept-Language then decides", async () => {
@@ -136,20 +142,20 @@ describe("GET /api/email/:id/reader-context — reader language", () => {
   });
 
   it("falls back to the stored notification language", async () => {
-    configFindUnique.mockResolvedValue({ notificationLanguage: "ja" });
+    configFindUnique.mockResolvedValue({ notificationLanguage: "zh" });
     const res = await get("/api/email/e5/reader-context");
-    expect(res.json().tierReason).toBe(TIER_COPY.ja);
+    expect(res.json().tierReason).toBe(TIER_COPY.zh);
   });
 
   it("composes with the list-view params", async () => {
-    const res = await get("/api/email/e5/reader-context?tier=QUEUE&lang=de");
+    const res = await get("/api/email/e5/reader-context?tier=QUEUE&lang=zh");
     expect(res.statusCode).toBe(200);
-    expect(res.json().tierReason).toBe(TIER_COPY.de);
+    expect(res.json().tierReason).toBe(TIER_COPY.zh);
   });
 });
 
 describe("GET /api/email/:id — reader language", () => {
-  it.each(["en", "ko", "ja", "zh", "es", "fr", "de"] as const)("lang=%s", async (lang) => {
+  it.each(["en", "ko", "zh"] as const)("lang=%s", async (lang) => {
     const res = await get(`/api/email/e5?lang=${lang}`);
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -166,14 +172,14 @@ describe("GET /api/email/:id — reader language", () => {
   });
 
   it("precedence: lang beats Accept-Language beats the stored setting", async () => {
-    configFindUnique.mockResolvedValue({ notificationLanguage: "es" });
+    configFindUnique.mockResolvedValue({ notificationLanguage: "zh" });
     expect(
-      (await get("/api/email/e5?lang=fr", { "accept-language": "ko" })).json().needsReplyReasonText,
-    ).toBe(REPLY_COPY.fr);
+      (await get("/api/email/e5?lang=en", { "accept-language": "ko" })).json().needsReplyReasonText,
+    ).toBe(REPLY_COPY.en);
     expect(
       (await get("/api/email/e5", { "accept-language": "ko" })).json().needsReplyReasonText,
     ).toBe(REPLY_COPY.ko);
-    expect((await get("/api/email/e5?lang=xx")).json().needsReplyReasonText).toBe(REPLY_COPY.es);
+    expect((await get("/api/email/e5?lang=xx")).json().needsReplyReasonText).toBe(REPLY_COPY.zh);
   });
 
   it("a code without reader copy sends no line", async () => {

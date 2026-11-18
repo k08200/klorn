@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 const TODAY = resolve(__dirname, "../../../web/src/app/today");
 const BLOCK = readFileSync(resolve(TODAY, "block.tsx"), "utf8");
 const MAIL = readFileSync(resolve(TODAY, "mail-column.tsx"), "utf8");
-const LOCALES = ["en", "ko", "ja", "zh", "de", "fr", "es"].map((code) =>
+const LOCALES = ["en", "ko", "zh"].map((code) =>
   readFileSync(resolve(__dirname, `../../../web/src/lib/locales/${code}.ts`), "utf8"),
 );
 
