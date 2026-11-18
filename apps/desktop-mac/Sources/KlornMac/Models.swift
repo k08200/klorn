@@ -935,6 +935,14 @@ struct ImapAccount: Codable, Sendable, Identifiable, Hashable {
 struct ImapStatusResponse: Codable, Sendable {
     let connected: Bool
     let accounts: [ImapAccount]?
+    /// False while the provider's connect route is closed to this user (its
+    /// flag or cohort is off) and only the way out — status and disconnect —
+    /// is open (routes/imap-connect.ts). Absent from an older server.
+    var connectOpen: Bool? = nil
+
+    /// Whether the connect (and reconnect) form may be offered: an older
+    /// server that does not say counts as open.
+    var acceptsConnects: Bool { connectOpen != false }
 
     /// Accounts, tolerating an older server that only sent the single-account
     /// shape (`connected` + `email`).

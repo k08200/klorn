@@ -44,11 +44,7 @@ import {
   uploadForm,
   uploadSizeErrorKey,
 } from "../../../web/src/app/files/upload-model";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 import { KLORN_DRIVE_ERROR_STATUS } from "../drive/klorn-errors.js";
@@ -184,8 +180,8 @@ describe("driveErrorKey: a failed drive request as a localized message key", () 
     expect(isUnexpectedDriveError("files.drive.error.signedOut")).toBe(false);
   });
 
-  it("every message key exists, non-empty, in all seven locales", () => {
-    const locales = { de, en, es, fr, ja, ko, zh };
+  it("every message key exists, non-empty, in all three locales", () => {
+    const locales = { en, ko, zh };
     for (const key of DRIVE_MESSAGE_KEYS) {
       for (const [name, table] of Object.entries(locales)) {
         expect(table[key], `${name}: ${key}`).toBeTruthy();
@@ -449,8 +445,8 @@ describe("names: the client's check before the server's", () => {
     expect(nameErrorKey("보고서")).toBeNull();
   });
 
-  it("has every name message in all seven locales", () => {
-    const locales = { de, en, es, fr, ja, ko, zh };
+  it("has every name message in all three locales", () => {
+    const locales = { en, ko, zh };
     for (const key of [
       "files.drive.name.required",
       "files.drive.name.reserved",

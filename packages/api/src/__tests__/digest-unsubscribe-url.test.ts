@@ -114,15 +114,19 @@ describe("digestUnsubscribeLabel", () => {
     expect(digestUnsubscribeLabel("ko")).toContain("수신거부");
   });
 
+  it("speaks Simplified Chinese for zh and its regional tags", () => {
+    expect(digestUnsubscribeLabel("zh")).toContain("退订");
+    expect(digestUnsubscribeLabel("zh-TW")).toBe(digestUnsubscribeLabel("zh"));
+  });
+
   it.each([
     "de",
     "fr",
     "es",
     "ja",
-    "zh",
     "",
     "nonsense",
-  ])("falls back to English for %s rather than inventing unreviewed copy", (lang) => {
+  ])("falls back to English for %s, which Klorn does not ship", (lang) => {
     expect(digestUnsubscribeLabel(lang)).toBe(digestUnsubscribeLabel("en"));
   });
 });

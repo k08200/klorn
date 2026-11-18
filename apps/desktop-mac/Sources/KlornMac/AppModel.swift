@@ -621,6 +621,10 @@ final class AppModel {
     /// IMAP_PRESETS_ENABLED is off or the user is outside its cohort — and
     /// their entry points stay hidden.
     private(set) var availableImapProviders: Set<ImapMailProvider> = [.naver]
+    /// Providers whose status answered `connectOpen: false`: the user still
+    /// owns a mailbox there, but the connect route is closed to them, so
+    /// Settings offers disconnect and a notice instead of the connect form.
+    private(set) var imapConnectClosed: Set<ImapMailProvider> = []
     private(set) var imapError: String?
     private(set) var isConnectingImap = false
 
@@ -702,10 +706,14 @@ final class AppModel {
             imapAccounts = imapAccounts.merging(
                 [provider: status.resolvedAccounts(fallbackEmail: nil)]) { $1 }
             availableImapProviders = availableImapProviders.union([provider])
+            imapConnectClosed = status.acceptsConnects
+                ? imapConnectClosed.subtracting([provider])
+                : imapConnectClosed.union([provider])
         } catch APIError.http(404, _) {
             guard isCurrent(session), provider != .naver else { return }
             imapAccounts = imapAccounts.filter { $0.key != provider }
             availableImapProviders = availableImapProviders.subtracting([provider])
+            imapConnectClosed = imapConnectClosed.subtracting([provider])
         } catch {
             Log.app.debug("imap status fetch failed: \(String(describing: error), privacy: .private)")
         }
@@ -2195,10 +2203,12 @@ final class AppModel {
 
     /// Render-probe seam: the IMAP accounts and which providers the server has.
     func seedImapForRender(
-        accounts: [ImapMailProvider: [ImapAccount]], available: Set<ImapMailProvider>
+        accounts: [ImapMailProvider: [ImapAccount]], available: Set<ImapMailProvider>,
+        connectClosed: Set<ImapMailProvider> = []
     ) {
         imapAccounts = accounts
         availableImapProviders = available
+        imapConnectClosed = connectClosed
     }
 
     /// Render-probe seam: the offscreen calendar shots need events without a
@@ -2686,6 +2696,7 @@ final class AppModel {
             text("teamBookingResult", \.teamBookingResult),
             field("imapAccounts", \.imapAccounts, [:], dirty: [.icloud: []]),
             field("availableImapProviders", \.availableImapProviders, [.naver], dirty: [.naver, .icloud]),
+            field("imapConnectClosed", \.imapConnectClosed, [], dirty: [.icloud]),
             text("imapError", \.imapError),
             flag("isConnectingImap", \.isConnectingImap),
             flag("isLinkingAccount", \.isLinkingAccount),

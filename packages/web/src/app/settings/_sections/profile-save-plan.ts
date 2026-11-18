@@ -6,11 +6,13 @@
  * React so it can be unit-tested from the api package.
  */
 
+import type { UiLocale } from "../../../lib/ui-locale";
+
 export const PROFILE_KEY = "klorn-profile";
 
 export interface UserProfile {
   name: string;
-  language: "en" | "ko" | "auto";
+  language: UiLocale;
   timezone: string;
 }
 

@@ -617,3 +617,81 @@ describe("POST /api/automations/guideline-advice", () => {
     await app.close();
   });
 });
+
+describe("notificationLanguage — en, ko and zh only", () => {
+  const baseConfig = {
+    userId: "test-user-id",
+    meetingAutoJoin: true,
+    meetingAutoSummarize: true,
+    emailAutoClassify: false,
+    reminderAutoCheck: true,
+    dailyBriefing: true,
+    briefingTime: "09:00",
+    downloadAutoOrganize: false,
+    autonomousAgent: false,
+    agentMode: "SUGGEST",
+    agentIntervalMin: 5,
+    alwaysAllowedTools: [],
+  };
+
+  beforeEach(() => {
+    upsertSpy.mockReset();
+    findUniqueSpy.mockReset();
+    upsertSpy.mockImplementation(async (args: { update: Record<string, unknown> }) => ({
+      ...baseConfig,
+      notificationLanguage: args.update.notificationLanguage as string,
+    }));
+  });
+
+  const patch = async (notificationLanguage: unknown) => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/automations",
+      payload: { notificationLanguage },
+    });
+    await app.close();
+    return res;
+  };
+
+  it.each(["en", "ko", "zh"])("stores the shipped %s", async (language) => {
+    const res = await patch(language);
+    expect(res.statusCode).toBe(200);
+    expect(upsertSpy.mock.calls[0][0].update.notificationLanguage).toBe(language);
+    expect(res.json().notificationLanguage).toBe(language);
+  });
+
+  it("folds a regional Chinese tag onto zh", async () => {
+    await patch("zh-TW");
+    expect(upsertSpy.mock.calls[0][0].update.notificationLanguage).toBe("zh");
+  });
+
+  it.each([
+    "ja",
+    "es",
+    "fr",
+    "de",
+    "pt",
+    42,
+  ])("stores English for %s, which Klorn does not ship", async (language) => {
+    await patch(language);
+    expect(upsertSpy.mock.calls[0][0].update.notificationLanguage).toBe("en");
+  });
+
+  it("offers exactly the three shipped languages", async () => {
+    findUniqueSpy.mockResolvedValue({ ...baseConfig, notificationLanguage: "zh" });
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/automations" });
+    await app.close();
+    expect(res.json().notificationLanguages).toEqual(["en", "ko", "zh"]);
+    expect(res.json().notificationLanguage).toBe("zh");
+  });
+
+  it("reads a stored retired language as English, so the picker shows a real option", async () => {
+    findUniqueSpy.mockResolvedValue({ ...baseConfig, notificationLanguage: "ja" });
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/api/automations" });
+    await app.close();
+    expect(res.json().notificationLanguage).toBe("en");
+  });
+});

@@ -1349,7 +1349,7 @@ model AutomationConfig {
   // no browser or Mac to read a locale from — the clients' own language
   // settings only ever governed their own UI chrome. NOT the reply language:
   // a reply follows the mail it answers (mail/email-reply.ts).
-  notificationLanguage   String   @default("en") // "en" | "ko"
+  notificationLanguage   String   @default("en") // "en" | "ko" | "zh" (shipped-languages.ts)
   // Gmail read-state opt-in: when true, Eve marks the original email as read
   // after AUTO-replying to it. Default off so Gmail's "unread" remains a user signal.
   autoMarkReadEnabled    Boolean  @default(false)

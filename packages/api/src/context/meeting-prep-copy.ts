@@ -8,6 +8,7 @@
 
 import type { MeetingPrep, MeetingPrepItem, MeetingPrepSource } from "@klorn/contract";
 import type { NotificationLanguage } from "../notify/notification-strings.js";
+import { type ShippedLanguage, toShippedLanguage } from "../shipped-languages.js";
 
 export interface PrepLine {
   readonly text: string;
@@ -31,7 +32,7 @@ interface PrepCopy {
 }
 
 /** One column per shipped language: tsc names any entry a new language misses. */
-const COPY: Record<NotificationLanguage, PrepCopy> = {
+const COPY: Record<ShippedLanguage, PrepCopy> = {
   en: {
     title: "Prep for tomorrow morning",
     header: (time, title) => `Before ${time} ${title}`,
@@ -58,19 +59,6 @@ const COPY: Record<NotificationLanguage, PrepCopy> = {
     noSubject: "(제목 없음)",
     locale: "ko-KR",
   },
-  ja: {
-    title: "明朝の会議の準備",
-    header: (time, title) => `${time} ${title} の前に`,
-    promised: (t) => `約束したこと: ${t}`,
-    theyOwe: (who, t) => `${who}からの約束: ${t}`,
-    they: "相手",
-    due: (d) => `（${d}まで）`,
-    suggestion: (line) => `候補: ${line}`,
-    unanswered: (f, s) => `未返信: ${f} — ${s}`,
-    recent: (f, s) => `最近: ${f} — ${s}`,
-    noSubject: "（件名なし）",
-    locale: "ja-JP",
-  },
   zh: {
     title: "明早会议准备",
     header: (time, title) => `${time} ${title} 之前`,
@@ -84,49 +72,10 @@ const COPY: Record<NotificationLanguage, PrepCopy> = {
     noSubject: "（无主题）",
     locale: "zh-CN",
   },
-  es: {
-    title: "Preparación para mañana por la mañana",
-    header: (time, title) => `Antes de las ${time}: ${title}`,
-    promised: (t) => `Prometiste: ${t}`,
-    theyOwe: (who, t) => `${who} te debe: ${t}`,
-    they: "La otra parte",
-    due: (d) => ` (para el ${d})`,
-    suggestion: (line) => `Sugerencia: ${line}`,
-    unanswered: (f, s) => `Sin responder: ${f} — ${s}`,
-    recent: (f, s) => `Reciente: ${f} — ${s}`,
-    noSubject: "(sin asunto)",
-    locale: "es-ES",
-  },
-  fr: {
-    title: "À préparer pour demain matin",
-    header: (time, title) => `Avant ${time} : ${title}`,
-    promised: (t) => `Promis : ${t}`,
-    theyOwe: (who, t) => `${who} vous doit : ${t}`,
-    they: "L'autre partie",
-    due: (d) => ` (pour le ${d})`,
-    suggestion: (line) => `Suggestion : ${line}`,
-    unanswered: (f, s) => `Sans réponse : ${f} — ${s}`,
-    recent: (f, s) => `Récent : ${f} — ${s}`,
-    noSubject: "(sans objet)",
-    locale: "fr-FR",
-  },
-  de: {
-    title: "Vorbereitung für morgen früh",
-    header: (time, title) => `Vor ${time}: ${title}`,
-    promised: (t) => `Zugesagt: ${t}`,
-    theyOwe: (who, t) => `${who} schuldet Ihnen: ${t}`,
-    they: "Die Gegenseite",
-    due: (d) => ` (bis ${d})`,
-    suggestion: (line) => `Vorschlag: ${line}`,
-    unanswered: (f, s) => `Unbeantwortet: ${f} — ${s}`,
-    recent: (f, s) => `Kürzlich: ${f} — ${s}`,
-    noSubject: "(kein Betreff)",
-    locale: "de-DE",
-  },
 };
 
 export function prepCopy(lang: NotificationLanguage): PrepCopy {
-  return COPY[lang] ?? COPY.en;
+  return COPY[toShippedLanguage(lang)];
 }
 
 function formatDay(iso: string, timeZone: string, locale: string): string {

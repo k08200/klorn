@@ -4,13 +4,18 @@
  * server-composed reasons arrive in the language the screen is in, not the
  * stored notification language (packages/api/src/notify/request-language.ts).
  *
- * English is the default and every other locale is opt-in — a Japanese
- * browser still lands in English unless the user picks 日本語. We
- * intentionally do NOT follow navigator.language.
+ * English is the default and every other locale is opt-in — a Korean or
+ * Chinese browser still lands in English unless the user picks 한국어 or
+ * 中文（简体）. We intentionally do NOT follow navigator.language, so a browser
+ * in a language Klorn does not ship (ja, es, fr, de, …) is English too.
+ *
+ * Shipped: en, ko and zh (Simplified Chinese). ja/es/fr/de were retired on
+ * 2026-11-17; a profile still holding one of them fails isUiLocale and reads
+ * as English.
  */
 
-/** Mirrors the server's NOTIFICATION_LANGUAGES. */
-export const UI_LOCALES = ["en", "ko", "ja", "zh", "es", "fr", "de"] as const;
+/** Mirrors the server's SHIPPED_LANGUAGES (packages/api/src/shipped-languages.ts). */
+export const UI_LOCALES = ["en", "ko", "zh"] as const;
 export type UiLocale = (typeof UI_LOCALES)[number];
 
 export const PROFILE_KEY = "klorn-profile";

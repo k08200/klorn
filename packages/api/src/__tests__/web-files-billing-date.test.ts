@@ -10,13 +10,13 @@ import { describe, expect, it } from "vitest";
 import type { Locale } from "../../../web/src/lib/i18n";
 import { formatBillingDate } from "../../../web/src/lib/subscription";
 
-const LOCALES: readonly Locale[] = ["en", "ko", "ja", "zh", "es", "fr", "de"];
+const LOCALES: readonly Locale[] = ["en", "ko", "zh"];
 // Midday UTC: the same calendar day in every time zone the tests run in.
 const ISO = "2026-12-14T12:00:00.000Z";
 const OPTIONS: Intl.DateTimeFormatOptions = { year: "numeric", month: "short", day: "numeric" };
 
 describe("billing dates in the reader's locale", () => {
-  it("formats the date in each of the seven UI locales", () => {
+  it("formats the date in each of the three UI locales", () => {
     for (const locale of LOCALES) {
       expect(formatBillingDate(ISO, locale), locale).toBe(
         new Intl.DateTimeFormat(locale, OPTIONS).format(new Date(ISO)),
@@ -33,8 +33,8 @@ describe("billing dates in the reader's locale", () => {
   });
 
   it("still answers null for a missing or unparseable date", () => {
-    expect(formatBillingDate(null, "de")).toBeNull();
-    expect(formatBillingDate(undefined, "ja")).toBeNull();
-    expect(formatBillingDate("not a date", "fr")).toBeNull();
+    expect(formatBillingDate(null, "en")).toBeNull();
+    expect(formatBillingDate(undefined, "ko")).toBeNull();
+    expect(formatBillingDate("not a date", "zh")).toBeNull();
   });
 });

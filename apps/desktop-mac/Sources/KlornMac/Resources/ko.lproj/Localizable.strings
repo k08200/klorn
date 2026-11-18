@@ -419,6 +419,7 @@
 "account.naver.error.unavailable" = "이 서버에서는 아직 네이버 메일을 사용할 수 없습니다.";
 "account.imap.error.insecure" = "Klorn은 앱 암호를 보안(HTTPS) 연결로만 보냅니다.";
 "account.imap.submit" = "연결";
+"account.imap.connectClosed" = "Klorn이 %@ 동기화를 일시 중지했습니다. 메일함 연결은 계속 해제할 수 있습니다.";
 "account.preset.connect" = "%@ 메일함 연결…";
 "account.preset.title" = "%@ 메일함 연결";
 "account.preset.body" = "이 메일함은 IMAP으로 연결됩니다(beta). 새 메일은 Gmail과 같은 레인으로 분류됩니다.";
