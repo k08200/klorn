@@ -84,13 +84,15 @@ const SEES_CLEARED: Record<string, { reads: number; why: string }> = {
     reads: 1,
     why: "dedupe: mail an urgent alert already covered",
   },
-  "agentcore/proactive-actions.ts#checkFollowUpSuggestions": { reads: 1, why: "dedupe: daily" },
   "agentcore/proactive-actions.ts#checkUpcomingMeetings": { reads: 1, why: "dedupe: per meeting" },
   "agentcore/proactive-actions.ts#checkOverdueTasks": { reads: 1, why: "dedupe: daily" },
   "agentcore/proactive-actions.ts#checkWeeklyReview": { reads: 1, why: "dedupe: weekly" },
   "agentcore/proactive-actions.ts#checkEndOfDayReview": { reads: 1, why: "dedupe: daily" },
   "agentcore/proactive-actions.ts#checkDeadlineCountdown": { reads: 1, why: "dedupe: daily" },
-  "agentcore/proactive-actions.ts#checkUnansweredEmails": { reads: 1, why: "dedupe: daily" },
+  "agentcore/proactive-actions.ts#sentReplyWaitToday": {
+    reads: 1,
+    why: "dedupe: one reply-wait reminder a day (unanswered, follow-up, merged)",
+  },
   "agentcore/proactive-actions.ts#checkBackToBackMeetings": { reads: 1, why: "dedupe: daily" },
   "automation-scheduler.ts#hasBriefingBeenSentToday": {
     reads: 1,

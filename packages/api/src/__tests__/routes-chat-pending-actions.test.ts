@@ -78,9 +78,16 @@ vi.mock("../db.js", () => {
       return staleReads ? { ...row, status: "PENDING" } : { ...row };
     }),
     updateMany: vi.fn(
-      async (args: { where: { id: string; status: string }; data: Record<string, unknown> }) => {
+      async (args: {
+        where: { id: string; status: string; userId?: string };
+        data: Record<string, unknown>;
+      }) => {
         updateManyCalls.push(args.data);
-        if (args.where.id !== row.id || args.where.status !== row.status) {
+        if (
+          args.where.id !== row.id ||
+          args.where.status !== row.status ||
+          (args.where.userId !== undefined && args.where.userId !== row.userId)
+        ) {
           return { count: 0 };
         }
         row = { ...row, ...(args.data as Partial<Row>) };
@@ -448,6 +455,55 @@ describe("another user's ids answer the not-found 404", () => {
     expect(updateManyCalls).toEqual([]);
     expect(executeToolCallSpy).not.toHaveBeenCalled();
     expect(recordFeedbackSpy).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  // Defense in depth: the ownership read above is what keeps another user's
+  // row out today; the write names the caller as well, so a claim can never
+  // land on a row the read did not prove is theirs.
+  it.each([
+    ["approve", "/api/chat/pending-actions/pa-1/approve", undefined],
+    ["reject", "/api/chat/pending-actions/pa-1/reject", { reason: "not mine" }],
+  ] as const)("%s: the claim itself is scoped to the caller", async (_n, url, payload) => {
+    const { prisma } = await import("../db.js");
+    // The read sees the caller's row; the row the claim reaches is someone else's.
+    vi.mocked(prisma.pendingAction.findUnique).mockResolvedValueOnce(makeRow() as never);
+    row = makeRow({ userId: "someone-else" });
+    const before = { ...row };
+    const app = await buildApp();
+
+    const res = await app.inject({ method: "POST", url, ...(payload ? { payload } : {}) });
+
+    expect(res.statusCode).toBe(409);
+    expect(vi.mocked(prisma.pendingAction.updateMany).mock.calls.at(-1)?.[0]).toMatchObject({
+      where: { id: "pa-1", userId: "test-user-id", status: "PENDING" },
+    });
+    expect(row).toEqual(before);
+    expect(executeToolCallSpy).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("approve: the receipt write is scoped to the caller too", async () => {
+    const { prisma } = await import("../db.js");
+    vi.mocked(prisma.pendingAction.update).mockClear();
+    row = makeRow({
+      toolName: "send_email",
+      toolArgs: { to: "boss@corp.example", subject: "Re: Q4", body: "Sounds good." },
+    });
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/chat/pending-actions/pa-1/approve",
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    const receiptWrites = vi
+      .mocked(prisma.pendingAction.update)
+      .mock.calls.filter(([args]) => "actionReceipt" in (args as { data: object }).data);
+    expect(receiptWrites).toHaveLength(1);
+    expect(receiptWrites[0]?.[0]).toMatchObject({ where: { id: "pa-1", userId: "test-user-id" } });
     await app.close();
   });
 

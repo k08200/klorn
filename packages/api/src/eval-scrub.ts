@@ -39,7 +39,11 @@ export function createScrubContext(): ScrubContext {
   };
 }
 
-const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+// Bounded by RFC 5321's lengths (local part 64, domain 253, a label 63): the
+// unbounded `[…]+@[…]+\.[…]{2,}` is quadratic on a long run (minutes at 1 MB).
+// A local part past 64 characters is scrubbed from its last 64 only; the head
+// left glued to the placeholder is no placeholder, so lintPii still flags it.
+const EMAIL_RE = /[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}/g;
 const URL_RE = /https?:\/\/[^\s"'<>)\]]+/g;
 // Phone-shaped: international prefix and/or separator-grouped digit runs.
 // Two separated groups of 3+ digits (e.g. 555 0100, 010-1234-5678) qualify;

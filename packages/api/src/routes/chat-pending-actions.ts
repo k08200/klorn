@@ -270,7 +270,9 @@ export async function chatRoutes(app: FastifyInstance) {
             updateMany: (a: unknown) => Promise<{ count: number }>;
           }
         ).updateMany({
-          where: { id: actionId, status: "PENDING" },
+          // userId as well as the id: the ownership read above is what keeps
+          // another user's row out; the write never relies on it alone.
+          where: { id: actionId, userId, status: "PENDING" },
           data: { status: "EXECUTED", updatedAt: new Date() },
         });
         if (claim.count === 0) return false;
@@ -286,7 +288,7 @@ export async function chatRoutes(app: FastifyInstance) {
           await (
             tx.pendingAction as unknown as { update: (a: unknown) => Promise<unknown> }
           ).update({
-            where: { id: actionId },
+            where: { id: actionId, userId },
             data: { actionReceipt: receipt as unknown as object },
           });
         }
@@ -383,7 +385,8 @@ export async function chatRoutes(app: FastifyInstance) {
       // Atomic status claim — prevents race condition with concurrent approve/reject
       const trimmedReason = reason?.trim() || null;
       const claimed = await db.pendingAction.updateMany({
-        where: { id: actionId, status: "PENDING" },
+        // Scoped to the caller as well as the id (defense in depth, as approve).
+        where: { id: actionId, userId, status: "PENDING" },
         data: {
           status: "REJECTED",
           result: trimmedReason ? `Rejected: ${trimmedReason}` : "User rejected without reason",

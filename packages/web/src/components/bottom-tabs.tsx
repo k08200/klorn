@@ -15,6 +15,7 @@ import {
 import { useT } from "../lib/i18n";
 import { isFullScreenReader } from "../lib/mail-routes";
 import { NavIcon, type NavIconType } from "./nav-icons";
+import { OverlayPortal } from "./ui/overlay-portal";
 
 type AuthUser = ReturnType<typeof useAuth>["user"];
 
@@ -167,81 +168,90 @@ export function AccountSheet({ onClose, initials }: { onClose: () => void; initi
   const isAdmin = user?.role === "ADMIN";
 
   return (
-    <div className="fixed inset-0 z-50">
-      {/* Backdrop */}
-      <button
-        type="button"
-        aria-label={t("bottomTabs.closeAccount")}
-        onClick={onClose}
-        className="absolute inset-0 bg-black/60"
-      />
-      {/* Sheet */}
-      <div
-        ref={sheetRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("bottomTabs.account")}
-        tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 animate-slide-up rounded-t-sheet border-t border-line bg-surface-panel pb-safe shadow-2xl shadow-slate-900/15 focus:outline-none rail:inset-x-auto rail:bottom-[calc(12px+env(safe-area-inset-bottom))] rail:left-[calc(var(--shell-nav-w)+8px)] rail:w-80 rail:rounded-sheet rail:border rail:pb-0"
-      >
-        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
+    <OverlayPortal>
+      <div data-overlay className="fixed inset-0 z-[120]">
+        {/* Backdrop */}
+        <button
+          type="button"
+          aria-label={t("bottomTabs.closeAccount")}
+          onClick={onClose}
+          className="absolute inset-0 bg-black/60"
+        />
+        {/* Sheet */}
+        <div
+          ref={sheetRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("bottomTabs.account")}
+          tabIndex={-1}
+          className="absolute inset-x-0 bottom-0 animate-slide-up rounded-t-sheet border-t border-line bg-surface-panel pb-safe shadow-2xl shadow-slate-900/15 focus:outline-none rail:inset-x-auto rail:bottom-[calc(12px+env(safe-area-inset-bottom))] rail:left-[calc(var(--shell-nav-w)+8px)] rail:w-80 rail:rounded-sheet rail:border rail:pb-0"
+        >
+          <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
 
-        {user && (
-          <div className="flex items-center gap-3 px-5 py-4">
-            <span
-              aria-hidden="true"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-role-caption font-bold text-accent-solid-ink"
-            >
-              {initials || "?"}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-role-body font-semibold text-ink">
-                {user.name || user.email}
-              </p>
-              {user.name && <p className="truncate text-role-caption text-ink-dim">{user.email}</p>}
-            </div>
-          </div>
-        )}
-
-        <div className="border-t border-line px-2 py-2">
-          <SheetLink
-            href="/settings"
-            icon="settings"
-            label={t("settings.title")}
-            onNavigate={onClose}
-          />
-          {isAdmin && (
-            <SheetLink href="/admin" icon="settings" label={t("nav.admin")} onNavigate={onClose} />
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              logout();
-            }}
-            className="focus-ring flex min-h-11 w-full items-center gap-3 rounded-control px-3 py-2.5 text-left text-role-body text-state-danger-ink transition hover:bg-red-500/10"
-          >
-            <span className="flex h-5 w-5 items-center justify-center" aria-hidden="true">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+          {user && (
+            <div className="flex items-center gap-3 px-5 py-4">
+              <span
+                aria-hidden="true"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-accent-solid to-accent-solid-hover text-role-caption font-bold text-accent-solid-ink"
               >
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-            </span>
-            {t("nav.logout")}
-          </button>
+                {initials || "?"}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-role-body font-semibold text-ink">
+                  {user.name || user.email}
+                </p>
+                {user.name && (
+                  <p className="truncate text-role-caption text-ink-dim">{user.email}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-line px-2 py-2">
+            <SheetLink
+              href="/settings"
+              icon="settings"
+              label={t("settings.title")}
+              onNavigate={onClose}
+            />
+            {isAdmin && (
+              <SheetLink
+                href="/admin"
+                icon="settings"
+                label={t("nav.admin")}
+                onNavigate={onClose}
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                logout();
+              }}
+              className="focus-ring flex min-h-11 w-full items-center gap-3 rounded-control px-3 py-2.5 text-left text-role-body text-state-danger-ink transition hover:bg-red-500/10"
+            >
+              <span className="flex h-5 w-5 items-center justify-center" aria-hidden="true">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </span>
+              {t("nav.logout")}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </OverlayPortal>
   );
 }
 

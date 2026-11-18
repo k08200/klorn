@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import formbody from "@fastify/formbody";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import {
   beginDesktopConfirmation,
   desktopConfirmExpiredPage,
@@ -97,6 +97,10 @@ import {
   loginThrottleRemainingMs,
   recordLoginAttempt,
 } from "../security/login-throttle.js";
+import {
+  recordRegisterAttempt,
+  registerThrottleRemainingMs,
+} from "../security/register-throttle.js";
 import { localMinuteOfDay, normalizeTimeZone, normalizeTimeZoneMode } from "../time-zone.js";
 import { deleteUserAndAllData } from "../user-deletion.js";
 import { isGoogleLinkMarker } from "./google-link-finish.js";
@@ -343,6 +347,24 @@ export async function effectiveTierOrOwnPlan(userId: string, plan: string): Prom
   }
 }
 
+/**
+ * The 429 for a per-account lock (login-throttle.ts, register-throttle.ts):
+ * the `{ error: "Rate limit exceeded, retry in …" }` shape the central error
+ * handler renders for the per-IP limiter (the time here is whole minutes, and
+ * only `retry-after` is set). It depends on the address's attempts alone, so
+ * a lock never tells an address with an account from one without.
+ */
+function sendAccountThrottled(reply: FastifyReply, remainingMs: number) {
+  const retryAfterSec = Math.ceil(remainingMs / 1000);
+  const retryAfterMin = Math.ceil(retryAfterSec / 60);
+  return reply
+    .code(429)
+    .header("retry-after", String(retryAfterSec))
+    .send({
+      error: `Rate limit exceeded, retry in ${retryAfterMin} minute${retryAfterMin === 1 ? "" : "s"}`,
+    });
+}
+
 export function authRoutes(app: FastifyInstance) {
   // GET /api/auth/signup-status — Public probe so the login UI can hide the
   // sign-up tab when BETA_GATE_ENABLED is on. Returning a boolean keeps the
@@ -412,6 +434,20 @@ export function authRoutes(app: FastifyInstance) {
           error: "Early access is invite-only. Request access at /early-access.",
         });
       }
+
+      // Per-address window on top of the per-IP limit (register-throttle.ts):
+      // checked and recorded with no await between, before the account
+      // lookup, for every address alike, so the lock is no existence oracle of
+      // its own. After the beta gate: an attempt it refuses is not counted.
+      const registerThrottleMs = registerThrottleRemainingMs(normalizedEmail);
+      if (registerThrottleMs > 0) {
+        request.log.warn(
+          { account: addressLogTag(normalizedEmail) },
+          "per-address register throttle tripped",
+        );
+        return sendAccountThrottled(reply, registerThrottleMs);
+      }
+      recordRegisterAttempt(normalizedEmail);
 
       const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
       if (existing) {
@@ -523,18 +559,11 @@ export function authRoutes(app: FastifyInstance) {
       // against a list of guessed addresses).
       const throttleRemainingMs = loginThrottleRemainingMs(normalizedEmail);
       if (throttleRemainingMs > 0) {
-        const retryAfterSec = Math.ceil(throttleRemainingMs / 1000);
-        const retryAfterMin = Math.ceil(retryAfterSec / 60);
         request.log.warn(
           { account: addressLogTag(normalizedEmail) },
           "per-account login throttle tripped",
         );
-        return reply
-          .code(429)
-          .header("retry-after", String(retryAfterSec))
-          .send({
-            error: `Rate limit exceeded, retry in ${retryAfterMin} minute${retryAfterMin === 1 ? "" : "s"}`,
-          });
+        return sendAccountThrottled(reply, throttleRemainingMs);
       }
       recordLoginAttempt(normalizedEmail);
 
