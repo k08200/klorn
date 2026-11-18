@@ -56,7 +56,10 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
   }
 
   try {
-    await resend.emails.send({
+    // Resend answers a refused or failed send (4xx/5xx, rate limit, network)
+    // with `{ error }` rather than a throw. The caller puts the previous reset
+    // link back when this mail did not go out, so it must hear about it.
+    const { error } = await resend.emails.send({
       from: FROM_EMAIL,
       to,
       subject: "Reset your Klorn password",
@@ -79,6 +82,10 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
         </div>
       `,
     });
+    if (error) {
+      logDbFailure("[EMAIL] Resend refused the reset email", error, { level: "error" });
+      return false;
+    }
     console.log("[EMAIL] Password reset email sent to", addressTag);
     return true;
   } catch (err) {

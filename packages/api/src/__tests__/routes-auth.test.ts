@@ -157,7 +157,7 @@ vi.mock("../db.js", () => {
         }: {
           where: {
             id?: string;
-            resetToken?: string;
+            resetToken?: string | null;
             verifyToken?: string;
             resetTokenExp?: { gte: Date };
             verifyTokenExp?: { gte: Date };
@@ -167,7 +167,10 @@ vi.mock("../db.js", () => {
           let count = 0;
           for (const [id, user] of userStore.entries()) {
             if (where.id && id !== where.id) continue;
-            if (where.resetToken && user.resetToken !== where.resetToken) continue;
+            // Prisma: undefined filters nothing, null matches IS NULL.
+            if (where.resetToken !== undefined && (user.resetToken ?? null) !== where.resetToken) {
+              continue;
+            }
             if (where.verifyToken && user.verifyToken !== where.verifyToken) continue;
             if (where.resetTokenExp && (!user.resetTokenExp || user.resetTokenExp < new Date())) {
               continue;
@@ -2192,6 +2195,45 @@ describe("POST /api/auth/forgot-password — per-address window and link reuse",
     expect(raced.json()).toEqual({ success: true });
     expect(sendPasswordResetEmailSpy).toHaveBeenCalledTimes(1);
     expect(userStore.get("user-1")?.resetToken).toBe(hashOf(first));
+    await app.close();
+  });
+
+  it("does not mail when it read no link but a concurrent request has since stored one", async () => {
+    const app = await buildApp();
+    const { prisma } = await import("../db.js");
+    await registerAndGetToken(app, "race-null@example.com");
+
+    await forgot(app, "race-null@example.com");
+    const first = mailedToken(0);
+    vi.setSystemTime(T0 + STEP);
+    const stored = userStore.get("user-1");
+    vi.mocked(prisma.user.findUnique).mockImplementationOnce((async () => ({
+      ...stored,
+      resetToken: null,
+      resetTokenExp: null,
+    })) as never);
+    await forgot(app, "race-null@example.com");
+
+    expect(sendPasswordResetEmailSpy).toHaveBeenCalledTimes(1);
+    expect(userStore.get("user-1")?.resetToken).toBe(hashOf(first));
+    await app.close();
+  });
+
+  it("does not bring back the previous link when the new one was replaced or used meanwhile", async () => {
+    const app = await buildApp();
+    await registerAndGetToken(app, "replaced@example.com");
+
+    await forgot(app, "replaced@example.com");
+    vi.setSystemTime(T0 + STEP);
+    // The send reports failure, but the new link was used before that answer.
+    sendPasswordResetEmailSpy.mockImplementationOnce(async (...args: unknown[]) => {
+      await reset(app, args[1] as string);
+      return false;
+    });
+    await forgot(app, "replaced@example.com");
+
+    expect(userStore.get("user-1")?.resetToken).toBeNull();
+    expect(userStore.get("user-1")?.resetTokenExp).toBeNull();
     await app.close();
   });
 

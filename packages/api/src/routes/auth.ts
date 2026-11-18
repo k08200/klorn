@@ -354,6 +354,36 @@ export async function effectiveTierOrOwnPlan(userId: string, plan: string): Prom
 }
 
 /**
+ * Replace the user's reset link with a new one and mail it. Only the hash is
+ * stored (one-time-token.ts); the raw token exists only in the mail.
+ *
+ * The swap is compare-and-swap on the link the caller read, so of two
+ * concurrent requests (a double submit) only one replaces it and mails. When
+ * the mail does not go out, nobody holds the new token: the previous link is
+ * put back (only while the new one is still the stored one), so a failed send
+ * neither kills a link already mailed nor holds off a retry as "fresh".
+ */
+async function issueResetLink(
+  user: { id: string; resetToken: string | null; resetTokenExp: Date | null },
+  normalizedEmail: string,
+): Promise<void> {
+  const { token: rawResetToken, tokenHash: resetTokenHash } = mintOneTimeToken();
+  const resetTokenExp = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
+  const claimed = await prisma.user.updateMany({
+    where: { id: user.id, resetToken: user.resetToken },
+    data: { resetToken: resetTokenHash, resetTokenExp },
+  });
+  if (claimed.count === 0) return;
+
+  const sent = await sendPasswordResetEmail(normalizedEmail, rawResetToken);
+  if (sent) return;
+  await prisma.user.updateMany({
+    where: { id: user.id, resetToken: resetTokenHash },
+    data: { resetToken: user.resetToken, resetTokenExp: user.resetTokenExp },
+  });
+}
+
+/**
  * The 429 for a per-account lock (login-throttle.ts, register-throttle.ts):
  * the `{ error: "Rate limit exceeded, retry in …" }` shape the central error
  * handler renders for the per-IP limiter (the time here is whole minutes, and
@@ -1732,31 +1762,7 @@ export function authRoutes(app: FastifyInstance) {
 
       // A link mailed moments ago stays the live one: no second mail that
       // would retire the first (password-reset-throttle.ts).
-      if (resetLinkIsFresh(user)) return reply.send({ success: true });
-
-      // Only the hash is stored (one-time-token.ts); the raw token exists
-      // only in the reset email.
-      const { token: rawResetToken, tokenHash: resetTokenHash } = mintOneTimeToken();
-      const resetTokenExp = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
-
-      // Compare-and-swap on the link this request read: of two concurrent
-      // requests (a double submit) only one replaces it and mails.
-      const claimed = await prisma.user.updateMany({
-        where: { id: user.id, resetToken: user.resetToken },
-        data: { resetToken: resetTokenHash, resetTokenExp },
-      });
-      if (claimed.count === 0) return reply.send({ success: true });
-
-      const sent = await sendPasswordResetEmail(normalizedEmail, rawResetToken);
-      if (!sent) {
-        // Nobody holds the new token, so put the previous link back (only if
-        // this request's token is still the stored one): a failed send must
-        // neither kill a link already mailed nor hold off a retry as "fresh".
-        await prisma.user.updateMany({
-          where: { id: user.id, resetToken: resetTokenHash },
-          data: { resetToken: user.resetToken, resetTokenExp: user.resetTokenExp },
-        });
-      }
+      if (!resetLinkIsFresh(user)) await issueResetLink(user, normalizedEmail);
 
       return reply.send({ success: true });
     },

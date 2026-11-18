@@ -36,6 +36,11 @@ describe("resetLinkIsFresh", () => {
     expect(resetLinkIsFresh({ resetToken: "x", resetTokenExp: null }, NOW)).toBe(false);
     expect(resetLinkIsFresh({ resetToken: "x", resetTokenExp: new Date(NOW) }, NOW)).toBe(false);
   });
+
+  it("is not fresh when the issue time lies in the future (clock step, another TTL)", () => {
+    expect(resetLinkIsFresh(issuedAgo(-1), NOW)).toBe(false);
+    expect(resetLinkIsFresh(issuedAgo(-PASSWORD_RESET_TOKEN_TTL_MS), NOW)).toBe(false);
+  });
 });
 
 describe("password reset window", () => {
@@ -53,8 +58,9 @@ describe("password reset window", () => {
     expect(passwordResetThrottleRemainingMs("other@example.com")).toBe(0);
   });
 
-  it("lasts as long as a link lives, so the newest mailed link outlives a lock", () => {
-    expect(PASSWORD_RESET_WINDOW_MS).toBe(PASSWORD_RESET_TOKEN_TTL_MS);
-    expect(PASSWORD_RESET_REUSE_MS).toBeLessThan(PASSWORD_RESET_TOKEN_TTL_MS);
+  it("is no longer than a link lives, so a link mailed in a window outlives its lock", () => {
+    // A link issued at or after the window start expires at or after its end.
+    expect(PASSWORD_RESET_WINDOW_MS).toBeLessThanOrEqual(PASSWORD_RESET_TOKEN_TTL_MS);
+    expect(PASSWORD_RESET_REUSE_MS).toBeLessThan(PASSWORD_RESET_WINDOW_MS);
   });
 });

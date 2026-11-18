@@ -64,8 +64,10 @@ address before the account lookup. A locked address answers the same 200
 `{ success: true }` as any other request and sends no mail, so there is no
 per-address 429 to tell addresses apart; the per-IP 429 is unchanged. A
 request within 5 minutes of the last mailed link keeps that link and sends
-nothing. Residual: anyone can spend an address's hour, and the owner gets no
-new mail until it ends; the newest mailed link stays valid meanwhile.
+nothing (it still counts toward the hour). Residual: anyone can spend an
+address's hour, and the owner gets no new mail until it ends; a link mailed
+during that hour stays valid until it ends, since the hour is no longer than a
+link lives.
 
 ## Timing residuals, not addressed
 
@@ -75,7 +77,9 @@ closed:
 - Login skips the bcrypt compare for an unknown address, so a known one
   answers measurably slower.
 - Forgot-password returns at once for an unknown address and awaits a token
-  write and the reset mail for a known one.
+  write and the reset mail for a known one — except when the address's
+  window is spent or a link went out in the last 5 minutes, when a known
+  address answers as fast as an unknown one.
 
 Equalizing these (a dummy compare; a fire-and-forget mail) only pays off once
 register stops answering.
