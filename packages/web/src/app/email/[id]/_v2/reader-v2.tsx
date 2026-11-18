@@ -16,13 +16,16 @@
  * On a phone (mobile redesign PR3, MB1, LOCKED 2026-11-14) the reader is full
  * screen: the shell drops its header, tab bar and floating assistant button
  * (app-shell.tsx), the top bar carries Back, the assistant and More, and
- * Reply · Later · Done sit on the bottom edge (reader-actions.tsx).
+ * Reply · Later · Done sit on the bottom edge (reader-actions.tsx). There,
+ * and on a half-folded screen, Reply opens the reply box in a sheet / the
+ * bottom segment instead of inline (reply-composer.tsx, PR4).
  */
 
 import type { LiveTier } from "@klorn/contract";
 import Link from "next/link";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import MailHtmlBody from "../../../../components/mail-html-body";
+import { useToast } from "../../../../components/toast";
 import Button from "../../../../components/ui/button";
 import EmptyState from "../../../../components/ui/empty-state";
 import { useLaneName } from "../../../../components/ui/lane-chip";
@@ -36,6 +39,7 @@ import type { ReminderKey } from "../../_v2/reminders";
 import { UndoBar } from "../../_v2/undo-bar";
 import { UNDO_NOTICE_SECONDS, type useLaneMove } from "../../use-lane-move";
 import type { EmailDetail, UndoNotice } from "../types";
+import { REPLY_ENTRY_EVENT, takeReplyEntryRequest } from "../use-detail-triage";
 import {
   type ReaderActionsProps,
   ReaderActionsRow,
@@ -43,12 +47,19 @@ import {
   ReaderPhoneMore,
 } from "./reader-actions";
 import { type ReaderFacts, ReaderHeader } from "./reader-header";
+import {
+  DOCKED_READER_PADDING,
+  ReplyComposer,
+  type ReplyLayout,
+  useComposerMode,
+} from "./reply-composer";
 import { SenderLabelMenu } from "./sender-label-menu";
 import type { ReaderContext } from "./use-reader-context";
 import { useSenderLabelCorrection } from "./use-sender-label";
 
 export interface ReaderSlots {
-  reply: ReactNode;
+  /** The reply box, laid out for the reader (inline) or the phone sheet / folded dock. */
+  reply: (layout: ReplyLayout) => ReactNode;
   thread: ReactNode;
   attachments: ReactNode;
   candidate: ReactNode;
@@ -77,6 +88,8 @@ export interface ReaderV2Props {
   /** Ask Klorn for a reply draft (the reply box's own Draft action). */
   onDraft: () => void;
   drafting: boolean;
+  /** Bumped by each sent reply; the phone sheet / folded dock closes on it. */
+  replySentCount: number;
   onArchive: () => void;
   onDelete: () => void;
   onToggleRead: () => void;
@@ -238,6 +251,36 @@ export function ReaderV2(props: ReaderV2Props) {
   const current = email && (email.id === emailId || email.gmailId === emailId) ? email : null;
   const tier = reader.context?.tier ?? null;
   const senderLabel = useSenderLabelCorrection(emailId, reader);
+  const composerMode = useComposerMode();
+  const [replyOpen, setReplyOpen] = useState(false);
+  const composing = composerMode !== "inline";
+  const docked = composerMode === "dock" && replyOpen;
+  // Another mail, or a width where the box is inline again: the sheet closes.
+  // The draft itself lives in the page and is kept.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the mail id and mode are the triggers
+  useEffect(() => {
+    setReplyOpen(false);
+  }, [emailId, composing]);
+  // ?focus=reply and the R key ask for the reply box (focusReplyEntry); with no
+  // inline box on the page, that request opens the sheet / dock.
+  useEffect(() => {
+    if (!composing) return;
+    const open = () => {
+      if (takeReplyEntryRequest()) setReplyOpen(true);
+    };
+    open();
+    window.addEventListener(REPLY_ENTRY_EVENT, open);
+    return () => window.removeEventListener(REPLY_ENTRY_EVENT, open);
+  }, [composing]);
+  // A sent reply closes the sheet / dock and says so (the inline box just empties).
+  const { toast } = useToast();
+  const sentCount = props.replySentCount;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the count is the trigger
+  useEffect(() => {
+    if (sentCount === 0 || !composing) return;
+    setReplyOpen(false);
+    toast(t("compose.toast.sent"), "success");
+  }, [sentCount]);
   const moveLane = (lane: LiveTier) => {
     if (current && tier) {
       laneMove.move({ id: current.id, subject: current.subject || null, tier }, lane);
@@ -251,8 +294,13 @@ export function ReaderV2(props: ReaderV2Props) {
     isDemo: current.id.startsWith("demo-"),
     accountNeedsReconnect: reader.account?.needsReconnect === true,
     keyboardTriage: props.keyboardTriage,
-    onReply: props.onReply,
-    onDraft: props.onDraft,
+    onReply: composing ? () => setReplyOpen(true) : props.onReply,
+    onDraft: composing
+      ? () => {
+          setReplyOpen(true);
+          props.onDraft();
+        }
+      : props.onDraft,
     drafting: props.drafting,
     onArchive: props.onArchive,
     onDelete: props.onDelete,
@@ -264,7 +312,10 @@ export function ReaderV2(props: ReaderV2Props) {
   };
 
   return (
-    <div className="flex w-full max-w-[calc(1120px+4rem)] flex-col px-4 pb-28 md:px-8 md:pb-10">
+    <div
+      className="flex w-full max-w-[calc(1120px+4rem)] flex-col px-4 pb-28 md:px-8 md:pb-10"
+      style={docked ? { paddingBottom: DOCKED_READER_PADDING } : undefined}
+    >
       <TopBar {...props} actions={actions || null} />
 
       {props.error && current && (
@@ -342,7 +393,7 @@ export function ReaderV2(props: ReaderV2Props) {
                 ) : null}
                 {slots.attachments}
                 {slots.candidate}
-                {slots.reply}
+                {!composing && slots.reply("inline")}
               </div>
               <aside className="flex min-w-0 flex-col gap-4 *:m-0">
                 {slots.analysis}
@@ -352,6 +403,19 @@ export function ReaderV2(props: ReaderV2Props) {
             </div>
           </div>
           <ReaderBottomBar {...actions} />
+          {composerMode !== "inline" && (
+            <ReplyComposer
+              mode={composerMode}
+              open={replyOpen}
+              onClose={() => setReplyOpen(false)}
+              error={props.error}
+              onDismissError={props.onDismissError}
+              subject={current.subject || t("common.noSubject")}
+              original={current.body || current.snippet || null}
+            >
+              {slots.reply("sheet")}
+            </ReplyComposer>
+          )}
         </article>
       )}
 

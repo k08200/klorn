@@ -1339,6 +1339,7 @@ const zh: Record<string, string> = {
   "emailDetail.replyDraft.saveGmailDraft": "保存 Gmail 草稿",
   "emailDetail.replyDraft.sending": "发送中...",
   "emailDetail.replyDraft.sendButton": "发送这封回复",
+  "emailDetail.replyDraft.bodyLabel": "回复正文",
   "emailDetail.analysis.notAnalyzed": "Klorn 还没有分析这封邮件。同步后稍等片刻再看。",
   "emailDetail.analysis.title": "Klorn 的判断",
   "emailDetail.analysis.keyPoints": "要点",
@@ -1767,6 +1768,7 @@ const zh: Record<string, string> = {
   "mailV2.reader.error.title": "无法打开这封邮件",
   "mailV2.reader.reconnectToArchive": "重新连接此账户后才能归档邮件。",
   "mailV2.reader.tone": "语气与模板",
+  "mailV2.reply.original": "原始邮件",
   // Assistant hub (productization plan P7, UNIFIED_HOME): /assistant/*.
   "nav.v2.activity": "动态",
   "nav.v2.chat": "对话",

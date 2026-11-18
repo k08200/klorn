@@ -1424,6 +1424,7 @@ const ja: Record<string, string> = {
   "emailDetail.replyDraft.saveGmailDraft": "Gmailの下書きを保存",
   "emailDetail.replyDraft.sending": "送信中...",
   "emailDetail.replyDraft.sendButton": "この返信を送る",
+  "emailDetail.replyDraft.bodyLabel": "返信の本文",
   "emailDetail.analysis.notAnalyzed":
     "Klornはまだこのメールを分析していません。同期してから少し待って確認してください。",
   "emailDetail.analysis.title": "Klornの判断",
@@ -1866,6 +1867,7 @@ const ja: Record<string, string> = {
   "mailV2.reader.error.title": "このメールを開けませんでした",
   "mailV2.reader.reconnectToArchive": "アーカイブするには、このアカウントを再接続してください。",
   "mailV2.reader.tone": "トーンとテンプレート",
+  "mailV2.reply.original": "元のメール",
   // Assistant hub (productization plan P7, UNIFIED_HOME): /assistant/*.
   "nav.v2.activity": "アクティビティ",
   "nav.v2.chat": "チャット",

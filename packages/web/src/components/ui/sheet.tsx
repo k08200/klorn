@@ -19,9 +19,23 @@
  * TOP overlay handles Escape / Tab, so a confirm or a second sheet opened over
  * this one owns the keyboard. Body scroll uses the shared ref-counted lock,
  * held until the exit transition finishes.
+ *
+ * `handle` adds a drag handle on top of the bottom sheet (phones): drag it
+ * down past DISMISS_DRAG_PX to close; the close button stays the single-tap
+ * way to do the same (WCAG 2.5.7). `panelStyle` lets a caller place the panel,
+ * e.g. above the on-screen keyboard (lib/use-visual-viewport).
  */
 
-import { type ReactNode, type RefObject, useEffect, useId, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type PointerEvent,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { getFocusableElements, trapTab } from "../../lib/focusable";
 import { bodyScrollLock, isPlainEscape, modalStack } from "../../lib/modal-stack";
@@ -29,6 +43,8 @@ import Button from "./button";
 
 /** Matches --motion-sheet; the panel unmounts after the exit transition. */
 const EXIT_MS = 320;
+/** How far the handle must be dragged down before letting go closes the sheet. */
+const DISMISS_DRAG_PX = 96;
 
 type Phase = "closed" | "enter" | "open" | "exit";
 
@@ -58,6 +74,52 @@ export interface SheetProps {
   closeUnavailable?: boolean;
   /** Label for the close button. */
   closeLabel?: string;
+  /** A drag handle on top of the bottom sheet: drag down to close. */
+  handle?: boolean;
+  /** Inline style for the panel (position above the keyboard, max height). */
+  panelStyle?: CSSProperties;
+}
+
+/** Drag-down-to-close on the handle; the panel follows the finger, then snaps back or closes. */
+function useDismissDrag(panelRef: RefObject<HTMLDivElement | null>, onClose: () => void) {
+  const startRef = useRef<number | null>(null);
+  const offsetRef = useRef(0);
+  const place = (dy: number) => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    panel.style.transform = dy > 0 ? `translateY(${dy}px)` : "";
+    panel.style.transitionDuration = dy > 0 ? "0ms" : "";
+  };
+  return {
+    onPointerDown(event: PointerEvent<HTMLDivElement>) {
+      startRef.current = event.clientY;
+      offsetRef.current = 0;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    onPointerMove(event: PointerEvent<HTMLDivElement>) {
+      if (startRef.current === null) return;
+      offsetRef.current = Math.max(0, event.clientY - startRef.current);
+      place(offsetRef.current);
+    },
+    onPointerUp() {
+      const dragged = offsetRef.current;
+      startRef.current = null;
+      offsetRef.current = 0;
+      if (dragged > DISMISS_DRAG_PX) {
+        // Leave the panel where the finger let go; the exit transition takes it from there.
+        const panel = panelRef.current;
+        if (panel) panel.style.transitionDuration = "";
+        onClose();
+        return;
+      }
+      place(0);
+    },
+    onPointerCancel() {
+      startRef.current = null;
+      offsetRef.current = 0;
+      place(0);
+    },
+  };
 }
 
 function CloseGlyph() {
@@ -88,6 +150,8 @@ export function Sheet({
   fallbackFocusRef,
   closeUnavailable = false,
   closeLabel = "Close",
+  handle = false,
+  panelStyle,
 }: SheetProps) {
   const [phase, setPhase] = useState<Phase>("closed");
   const panelRef = useRef<HTMLDivElement>(null);
@@ -100,6 +164,7 @@ export function Sheet({
   const wasOpenRef = useRef(false);
   const titleId = useId();
   const descriptionId = useId();
+  const drag = useDismissDrag(panelRef, onClose);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -198,13 +263,26 @@ export function Sheet({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
+        style={panelStyle}
         className={`absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-sheet border border-line bg-surface-elevated text-ink shadow-sheet outline-none transition-[transform,opacity] ease-fluid md:inset-x-auto md:top-2 md:right-2 md:bottom-2 md:max-h-none md:w-[28rem] md:max-w-[calc(100vw-1rem)] md:rounded-sheet duration-320 ${
           shown
             ? "translate-x-0 translate-y-0 opacity-100"
             : "opacity-0 motion-safe:translate-y-full motion-safe:md:translate-x-full motion-safe:md:translate-y-0"
         }`}
       >
-        <div className="flex shrink-0 items-start gap-3 border-b border-line-soft py-3 pr-2 pl-5">
+        {handle && (
+          <div
+            aria-hidden="true"
+            data-testid="sheet-handle"
+            {...drag}
+            className="flex h-6 shrink-0 cursor-grab touch-none items-end justify-center md:hidden"
+          >
+            <span className="h-1 w-9 rounded-full bg-line-strong" />
+          </div>
+        )}
+        <div
+          className={`flex shrink-0 items-start gap-3 border-b border-line-soft pr-2 pl-5 ${handle ? "pt-1 pb-3 md:pt-3" : "py-3"}`}
+        >
           <div className="min-w-0 flex-1 pt-2.5">
             <h2
               id={titleId}

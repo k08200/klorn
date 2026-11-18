@@ -11,12 +11,39 @@ import { type HotkeyHandler, LANE_HOTKEY_ORDER, laneHotkeyId } from "../../../li
 import { useT } from "../../../lib/i18n";
 import { useHotkeys } from "../../../lib/use-hotkeys";
 import type { useLaneMove } from "../use-lane-move";
+import { FOLDED_QUERY, PHONE_QUERY } from "./_v2/reply-composer";
 
 /** The reply draft box's intent field: the reader's reply entry point. */
 export const REPLY_INTENT_INPUT_ID = "email-reply-intent";
 
+/**
+ * Fired when the reply box is asked for but is not on the page: on a phone
+ * (and a half-folded screen) it lives in a sheet the reader opens on this
+ * event (_v2/reply-composer.tsx).
+ */
+export const REPLY_ENTRY_EVENT = "klorn:reply-entry";
+
+/**
+ * A request made before the reader has switched to the sheet (its media query
+ * is read after the first render): kept until the reader takes it.
+ */
+let pendingReplyEntry = false;
+
+export function takeReplyEntryRequest(): boolean {
+  const pending = pendingReplyEntry;
+  pendingReplyEntry = false;
+  return pending;
+}
+
 export function focusReplyEntry(): void {
+  const composerElsewhere =
+    window.matchMedia(PHONE_QUERY).matches || window.matchMedia(FOLDED_QUERY).matches;
   const input = document.getElementById(REPLY_INTENT_INPUT_ID);
+  if (composerElsewhere && !input?.closest('[role="dialog"]')) {
+    pendingReplyEntry = true;
+    window.dispatchEvent(new Event(REPLY_ENTRY_EVENT));
+    return;
+  }
   if (!(input instanceof HTMLElement)) return;
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   input.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
