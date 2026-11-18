@@ -4,7 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } fr
 import { signToken, verifyToken } from "../auth.js";
 import { getLoginAuthUrl, getOAuth2Client } from "../mail/gmail.js";
 import { isAllowedNativeScheme } from "../routes/auth.js";
+import {
+  _resetRegisterThrottleForTests,
+  REGISTER_THROTTLE_MAX_ATTEMPTS,
+} from "../security/register-throttle.js";
 import { deleteUserAndAllData } from "../user-deletion.js";
+
+// The per-address register throttle is process-wide: without a reset, the
+// tests that register the same address would add up across the file.
+beforeEach(() => _resetRegisterThrottleForTests());
 
 // Stub email sender — auth register fires it non-blocking and swallows errors,
 // but we want to assert it was called with the right token.
@@ -568,6 +576,85 @@ describe("POST /api/auth/register", () => {
     });
     expect(res.statusCode).toBe(409);
     await app.close();
+  });
+
+  // Register answers 409 for a taken address and hands a session back at once
+  // (no verification step), so it stays an existence oracle by design
+  // (docs/security/account-enumeration.md). The per-IP limit prices a sweep of
+  // many addresses; this per-address window prices hammering one from many IPs.
+  describe("per-address throttle", () => {
+    async function attempt(app: Awaited<ReturnType<typeof buildApp>>, email: string, ip: string) {
+      return app.inject({
+        method: "POST",
+        url: "/api/auth/register",
+        remoteAddress: ip,
+        payload: { email, password: "longenoughpw" },
+      });
+    }
+
+    it("locks one address after the window's attempts, from any source, with the per-IP limiter's body", async () => {
+      const app = await buildApp();
+      const statuses: number[] = [];
+      for (let i = 0; i < REGISTER_THROTTLE_MAX_ATTEMPTS; i++) {
+        statuses.push((await attempt(app, "Target@Example.com", `10.0.0.${i + 1}`)).statusCode);
+      }
+      expect(statuses[0]).toBe(201);
+      expect(new Set(statuses.slice(1))).toEqual(new Set([409]));
+
+      const locked = await attempt(app, "  target@example.com ", "10.0.1.1");
+      expect(locked.statusCode).toBe(429);
+      expect(Number(locked.headers["retry-after"])).toBeGreaterThan(0);
+      expect(locked.json()).toEqual({
+        error: expect.stringMatching(/^Rate limit exceeded, retry in \d+ minutes?$/),
+      });
+      await app.close();
+    });
+
+    it("answers a locked attempt before any lookup: nothing is created and no mail goes out", async () => {
+      const app = await buildApp();
+      // Fill one fresh address's window with refused attempts (beta gate on):
+      // it never existed, so the lock cannot be told apart from a taken one.
+      process.env.BETA_GATE_ENABLED = "true";
+      for (let i = 0; i < REGISTER_THROTTLE_MAX_ATTEMPTS; i++) {
+        expect((await attempt(app, "fresh@example.com", `10.0.2.${i + 1}`)).statusCode).toBe(403);
+      }
+      delete process.env.BETA_GATE_ENABLED;
+      sendVerificationEmailSpy.mockClear();
+      const { prisma } = await import("../db.js");
+      const lookups = vi.mocked(prisma.user.findUnique).mock.calls.length;
+
+      const locked = await attempt(app, "fresh@example.com", "10.0.3.1");
+
+      expect(locked.statusCode).toBe(429);
+      expect(vi.mocked(prisma.user.findUnique).mock.calls.length).toBe(lookups);
+      expect(userByEmail.has("fresh@example.com")).toBe(false);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(sendVerificationEmailSpy).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it("leaves every other address alone", async () => {
+      const app = await buildApp();
+      for (let i = 0; i < REGISTER_THROTTLE_MAX_ATTEMPTS + 1; i++) {
+        await attempt(app, "busy@example.com", `10.0.0.${i + 1}`);
+      }
+      expect((await attempt(app, "other@example.com", "10.0.0.1")).statusCode).toBe(201);
+      await app.close();
+    });
+
+    it("does not count a request refused for its input", async () => {
+      const app = await buildApp();
+      for (let i = 0; i < REGISTER_THROTTLE_MAX_ATTEMPTS + 2; i++) {
+        const res = await app.inject({
+          method: "POST",
+          url: "/api/auth/register",
+          payload: { email: "typo@example.com", password: "short" },
+        });
+        expect(res.statusCode).toBe(400);
+      }
+      expect((await attempt(app, "typo@example.com", "10.0.0.1")).statusCode).toBe(201);
+      await app.close();
+    });
   });
 
   it("normalizes email and trims name on register", async () => {
