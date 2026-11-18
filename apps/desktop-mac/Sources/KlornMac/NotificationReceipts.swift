@@ -82,8 +82,9 @@ enum NotificationReceiptRules {
     }
 
     /// The event a banner response reports: the default action (the user
-    /// opened the banner) is a click. Klorn registers no action buttons, and a
-    /// dismissal is not delivered (no custom-dismiss category).
+    /// opened the banner) is a click. A button press (Reply / Later / Done /
+    /// Join, 2026-11-17) reports nothing, and a dismissal is not delivered
+    /// (no custom-dismiss category).
     nonisolated static func event(forAction actionIdentifier: String) -> NotificationReceipt.Event? {
         actionIdentifier == UNNotificationDefaultActionIdentifier ? .clicked : nil
     }

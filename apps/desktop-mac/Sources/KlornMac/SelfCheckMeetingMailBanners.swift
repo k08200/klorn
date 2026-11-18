@@ -152,12 +152,13 @@ func meetingMailBannerSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     check("a MEETING-mail banner names its lane; a PUSH banner is unchanged",
           meetingMailBanner.subtitle == Tier.meeting.label
           && meetingMailBanner.title == "Sender" && meetingMailBanner.body == "s-m9"
+          && PushBanner.make(for: push("p9")).body == "s-p9"
           && PushBanner.make(for: push("p9")).subtitle == nil)
     check("tapping a MEETING-mail banner opens that mail, like PUSH",
           meetingMailBanner.identifier == PushNotifier.notificationIdentifier(for: "m9")
           && PushNotifier.tapAction(identifier: meetingMailBanner.identifier, isKnownItem: { $0 == "m9" })
               == .open(itemID: "m9"))
-    check("SystemPushNotifier shows the lane line only when there is one",
+    check("SystemPushNotifier shows the subtitle line only when there is one",
           bannerSourceText(sourceDir, "Notifications.swift").contains("if let subtitle = banner.subtitle { content.subtitle = subtitle }"))
     check("VoiceOver names each lane with its own count",
           PushAlerter.announcement(for: [push("a"), meeting("b"), meeting("c")])

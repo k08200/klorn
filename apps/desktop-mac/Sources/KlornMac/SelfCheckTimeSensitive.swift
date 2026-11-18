@@ -6,7 +6,8 @@ import UserNotifications
 //
 // A banner about one PUSH- or MEETING-lane mail posts at the Time Sensitive
 // interruption level, so a Focus mode the user lets Klorn through does not
-// silence it. Summaries and meeting reminders keep the default level. The
+// silence it, and so is a meeting reminder (imminent, 2026-11-17). Summaries
+// keep the default level. The
 // level needs the restricted entitlement, which only the Developer ID release
 // claims, authorized by its embedded provisioning profile; every other build
 // posts at the default level instead of relying on what macOS does with an
@@ -55,9 +56,10 @@ func timeSensitiveSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         id: "ev-1",
         title: "Standup", startTime: "2026-11-07T09:10:00Z", endTime: "2026-11-07T09:30:00Z",
         location: nil, meetingLink: nil, allDay: false)
-    check("a meeting reminder keeps the default level",
+    // NT3 (2026-11-17): a meeting inside its lead window is imminent.
+    check("a meeting reminder is Time Sensitive (imminent)",
           MeetingBanner.make(for: standup, now: ISO8601DateFormatter().date(from: "2026-11-07T09:02:00Z")!)
-              .interruption == .standard)
+              .interruption == .timeSensitive)
 
     // MARK: the level actually posted
 
@@ -77,7 +79,7 @@ func timeSensitiveSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     check("the content is otherwise unchanged: title, lane line, body, sound, thread",
           meetingContent.title == "Name-m1" && meetingContent.subtitle == Tier.meeting.label
           && meetingContent.body == "s-m1" && meetingContent.sound != nil
-          && meetingContent.threadIdentifier == PushNotifier.threadIdentifier
+          && meetingContent.threadIdentifier == PushNotifier.mailThreadIdentifier(for: "d-m1")
           && entitledPush.subtitle.isEmpty)
     check("the shipped notifier posts that content, read against this build's own signature",
           text("Notifications.swift").contains(

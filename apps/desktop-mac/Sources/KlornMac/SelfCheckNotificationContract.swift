@@ -147,12 +147,13 @@ func notificationContractSelfChecks() async -> [(String, Bool)] {
         #"{"text":"Signature deadline today","verified":true,"quote":"Please sign before 17:00","quoteIn":"body"}"#)
     let unverifiedRow = parityRow(emailId: "e1", reason: #"{"text":"Model words","verified":false,"quote":"x"}"#)
     check("a banner uses the bell row's verified quote when the store has the row",
-          PushBanner.make(for: item, row: verifiedRow).body == "s-e1\n“Please sign before 17:00”")
+          PushBanner.make(for: item, row: verifiedRow).body == "“Please sign before 17:00”"
+          && PushBanner.make(for: item, row: verifiedRow).subtitle == "s-e1")
     check("without a verified quote (no row, or unverified), the banner keeps the item's tier reason",
-          PushBanner.make(for: item).body == "s-e1\nSignature deadline today"
-          && PushBanner.make(for: item, row: unverifiedRow).body == "s-e1\nSignature deadline today")
+          PushBanner.make(for: item).body == "Signature deadline today"
+          && PushBanner.make(for: item, row: unverifiedRow).body == "Signature deadline today")
     let banners = BannerBatch.banners(for: [item]) { $0.email?.emailDbId == "e1" ? verifiedRow : nil }
-    check("BannerBatch passes each mail's row through", banners.first?.body == "s-e1\n“Please sign before 17:00”")
+    check("BannerBatch passes each mail's row through", banners.first?.body == "“Please sign before 17:00”")
     let store = NotificationCenterStore(api: APIClient(base: "http://127.0.0.1:9", token: { nil }))
     store.seedForRender(rows: [verifiedRow].compactMap { $0 }, channels: nil)
     check("the store finds a mail's bell row by sourceEmailId, from memory",
