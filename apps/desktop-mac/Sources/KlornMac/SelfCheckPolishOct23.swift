@@ -87,9 +87,11 @@ func polishOct23SelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     check("a MANUAL zone pins the display zone", pinnedZone == "America/Los_Angeles")
     check("day buckets follow the pinned zone (00:00 UTC is the 28th in LA)", pinnedKey == "2026-07-28")
     check("mail times follow the pinned zone (08:12 UTC → 01:12 in LA)", pinnedLabel == "01:12")
-    check("the editor and banners read the display zone",
+    // Meeting banners say "in N min" since NT3 (2026-11-17): no clock time
+    // to put in a zone.
+    check("the editor reads the display zone; banners show no clock time",
           text("CalendarEditor.swift").contains(".environment(\\.timeZone, DisplayTimeZone.current)")
-              && text("Notifications.swift").contains("style.timeZone = DisplayTimeZone.current"))
+              && !text("Notifications.swift").contains("Date.FormatStyle"))
     model.applyDisplayZone(DisplayZonePreference(timezone: "America/Los_Angeles", timezoneMode: "AUTO"))
     check("AUTO un-pins back to this Mac's zone",
           model.displayTimeZoneID == nil && DisplayTimeZone.current == TimeZone.current)

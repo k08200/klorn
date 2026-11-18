@@ -13,6 +13,13 @@
  * for linked inboxes) plus the create-catch-P2002 idiom shared with
  * briefing.ts / automation-scheduler.ts — concurrent failing syncs can never
  * double-alert; at most one alert per account per UTC day.
+ *
+ * One exception, the stop of an IMAP poll (mail/imap-accounts.ts, after the
+ * 4th refused login): founder decision LOCKED 2026-11-17, it alerts once per
+ * stop under its own key, "reconnect:<slug>:<account>:stopped:<epoch ms>", so
+ * a stop on the same UTC day as the 1st refusal's alert is no longer
+ * swallowed by the daily key. The push still passes every gate of
+ * sendPushNotification, quiet hours included.
  */
 
 import { prisma } from "../db.js";
@@ -62,23 +69,39 @@ export function gmailReconnectDayKey(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
 
+export interface ReconnectAlertOptions {
+  linkedInboxAccountId?: string;
+  provider?: ReconnectProvider;
+  /**
+   * The instant an IMAP poll stopped for this linked account (its 4th refused
+   * login): the alert is keyed by that stop instead of the UTC day. Ignored
+   * without linkedInboxAccountId.
+   */
+  stoppedAt?: Date;
+}
+
+function reconnectDedupeKey(slug: string, opts: ReconnectAlertOptions | undefined): string {
+  const accountId = opts?.linkedInboxAccountId;
+  if (!accountId) return `reconnect:${slug}:${gmailReconnectDayKey()}`;
+  if (opts?.stoppedAt) return `reconnect:${slug}:${accountId}:stopped:${opts.stoppedAt.getTime()}`;
+  return `reconnect:${slug}:${accountId}:${gmailReconnectDayKey()}`;
+}
+
 /**
  * Create + broadcast + web-push the reconnect alert. Returns the created
- * notification, or null when today's alert for this account already exists
- * (the P2002 loser — no duplicate push on any channel). Non-P2002 failures
- * propagate; call sites treat the whole alert as best-effort and log.
+ * notification, or null when the alert under this key already exists (today's
+ * for this account, or this stop's: the P2002 loser — no duplicate push on any
+ * channel). Non-P2002 failures propagate; call sites treat the whole alert as
+ * best-effort and log.
  */
 export async function ensureGmailReconnectNotification(
   userId: string,
-  opts?: { linkedInboxAccountId?: string; provider?: ReconnectProvider },
+  opts?: ReconnectAlertOptions,
 ): Promise<{ id: string; createdAt: Date } | null> {
   const { slug, label } = PROVIDER_COPY[opts?.provider ?? "GOOGLE"];
   const title = reconnectTitle(label);
   const message = reconnectMessage(label);
-  const dayKey = gmailReconnectDayKey();
-  const dedupeKey = opts?.linkedInboxAccountId
-    ? `reconnect:${slug}:${opts.linkedInboxAccountId}:${dayKey}`
-    : `reconnect:${slug}:${dayKey}`;
+  const dedupeKey = reconnectDedupeKey(slug, opts);
 
   let notification: { id: string; createdAt: Date };
   try {
@@ -94,7 +117,7 @@ export async function ensureGmailReconnectNotification(
       select: { id: true, createdAt: true },
     });
   } catch (err) {
-    // Already alerted for this account today — the winner pushed; stay silent.
+    // Already alerted under this key (today, or this stop) — the winner pushed; stay silent.
     if ((err as { code?: string })?.code === "P2002") return null;
     throw err;
   }

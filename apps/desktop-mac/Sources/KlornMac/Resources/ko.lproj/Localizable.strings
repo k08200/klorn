@@ -344,7 +344,15 @@
 
 /* Meeting <-> calendar cross-reference (2026-08-13) */
 "meeting.alternatives" = "함께 가능한 시간: %@";
-"meeting.banner.body" = "%d분 후 시작합니다.";
+"meeting.banner.soon" = "%d분 후";
+"banner.action.reply" = "답장";
+"banner.action.later" = "나중에";
+"banner.action.done" = "완료";
+"banner.action.join" = "참가";
+"meeting.provider.meet" = "Google Meet";
+"meeting.provider.zoom" = "Zoom";
+"meeting.provider.teams" = "Microsoft Teams";
+"meeting.provider.webex" = "Webex";
 "meeting.proposedSlot" = "제안 시간: %@";
 "meeting.slotFree" = "캘린더에서 비어 있는 시간";
 "meeting.slotBusy" = "기존 일정과 겹침";

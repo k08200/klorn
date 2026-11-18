@@ -30,7 +30,8 @@
 
 import type { DesktopCatchUpResponse, DesktopMissedSlack } from "@klorn/contract";
 import { prisma } from "../db.js";
-import { SLACK_NOTIFICATION_TYPE } from "../slack/push-strings.js";
+import { SLACK_NOTIFICATION_TYPE, SLACK_ROW_KEY_PREFIX } from "../slack/push-strings.js";
+import { withoutAnsweredEpisodes } from "./held-slack-rows.js";
 import { evaluateNotificationGate } from "./notification-prefs.js";
 import { getUserNotificationLanguage, notificationCopy } from "./notification-strings.js";
 import { openPushMail, unreadUrgentMailRows } from "./open-push-mail.js";
@@ -41,12 +42,11 @@ export const DESKTOP_CATCHUP_WINDOW_MS = 72 * 60 * 60 * 1000;
 export const DESKTOP_CATCHUP_MAX_IDS = 30;
 const ID_MAX = 64;
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
-/** A Slack bell row names its episode as dedupeKey "slack:<episodeId>" (slack/notify.ts). */
-const SLACK_ROW_KEY_PREFIX = "slack:";
 /**
  * Rows a will-not-ring push wrote ("slack:<episodeId>", or none before the
  * episode was named). A rung row holds an interrupt-budget slot key instead:
- * it already alerted, so it is never toasted late, whatever the shell asks.
+ * it already alerted, so it is never toasted late, whatever the shell asks;
+ * a row held for good ("slack-held:<episodeId>") never alerts at all.
  */
 const UNRUNG_SLACK_ROW = {
   OR: [{ dedupeKey: null }, { dedupeKey: { startsWith: SLACK_ROW_KEY_PREFIX } }],
@@ -124,34 +124,11 @@ async function heldSlackRows(
     select: { id: true, title: true, message: true, createdAt: true, dedupeKey: true },
     orderBy: { createdAt: "desc" },
   });
-  if (rows.length === 0) return [];
-  const answered = await answeredEpisodeIds(userId, rows);
-  return rows
-    .filter((row) => !answered.has(episodeIdOf(row.dedupeKey) ?? ""))
-    .map((row) => ({
-      id: row.id,
-      title: row.title,
-      body: row.message,
-      createdAt: row.createdAt.toISOString(),
-    }));
-}
-
-function episodeIdOf(dedupeKey: string | null): string | null {
-  return dedupeKey?.startsWith(SLACK_ROW_KEY_PREFIX)
-    ? dedupeKey.slice(SLACK_ROW_KEY_PREFIX.length)
-    : null;
-}
-
-/** Of these rows' episodes, the ones the user replied to in Slack since. */
-async function answeredEpisodeIds(
-  userId: string,
-  rows: ReadonlyArray<{ dedupeKey: string | null }>,
-): Promise<Set<string>> {
-  const episodeIds = rows.map((row) => episodeIdOf(row.dedupeKey)).filter((id) => id !== null);
-  if (episodeIds.length === 0) return new Set();
-  const answered = await prisma.slackEpisode.findMany({
-    where: { userId, id: { in: episodeIds }, answeredAt: { not: null } },
-    select: { id: true },
-  });
-  return new Set(answered.map((episode) => episode.id));
+  const deserving = await withoutAnsweredEpisodes(userId, rows);
+  return deserving.map((row) => ({
+    id: row.id,
+    title: row.title,
+    body: row.message,
+    createdAt: row.createdAt.toISOString(),
+  }));
 }

@@ -90,13 +90,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
-    /// A tapped banner lands on the mail it announced (WindowRouter).
+    /// A tapped banner lands on the mail it announced; a button (Reply,
+    /// Later, Done, Join) does what it says (WindowRouter).
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let identifier = response.notification.request.identifier
+        // Plain strings, read here: neither the response nor its userInfo
+        // is Sendable, so neither crosses into the main-actor task.
+        let actionIdentifier = response.actionIdentifier
+        let info = BannerActions.stringInfo(response.notification.request.content.userInfo)
         // The click's receipt, worked out here from plain strings (none for a
         // summary or another app's banner); reported fire-and-forget.
         let receipt = NotificationReceiptRules.event(forAction: response.actionIdentifier)
@@ -107,7 +112,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // "delivery handled" — opening the window does not need to precede it.
         Task { @MainActor [weak self] in
             if let receipt { self?.model.receipts.report(receipt) }
-            self?.router?.handleNotificationTap(identifier: identifier)
+            self?.router?.handleNotificationResponse(
+                identifier: identifier, actionIdentifier: actionIdentifier, info: info)
         }
         completionHandler()
     }
@@ -145,6 +151,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if PushNotifier.isAvailable {
             UNUserNotificationCenter.current().delegate = self
         }
+        // The banner buttons (Reply / Later / Done, Join), before any banner,
+        // and again in the new language after an in-app language change.
+        SystemPushNotifier.registerCategories()
+        model.settings.onLanguageChanged = { SystemPushNotifier.registerCategories() }
         // Settings scene (M0): one opener for the shell, the in-app
         // Preferences buttons, and anything else outside SwiftUI's own ⌘,.
         let opener = SettingsOpener()

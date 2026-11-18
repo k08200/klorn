@@ -315,8 +315,9 @@ text comes from `slackPushContent` (`slack/push-content.ts`, sibling of
 `mailPushContent`): title "Slack · Direct message / Group message / You were
 mentioned / Followed channel" in all 7 notification languages, body the
 first message as one plain line (180 chars) and the judge's reason. A push
-the budget holds is written as a bell row (deduped per episode) and does not
-ring.
+the budget holds is written as a bell row (deduped per episode, named
+`slack-held:<episodeId>`) and does not ring, then or later; so is one past the
+rings cap and a late re-judge's bell-row-only alert.
 
 A push that will not ring (quiet hours, focus window, the urgent-push
 opt-out) writes the bell row, named after its episode (`slack:<episodeId>`),
@@ -333,6 +334,15 @@ is caught up: a Slack push that rang (its row holds a budget slot, refused
 server-side too) or that the budget held never toasts late, and one that came
 while the shell was not running is not toasted later either (unlike mail,
 which the shell can ask about by its row alone).
+
+The server's own channels (web push, Telegram, FCM, APNs) catch it up too:
+the quiet-hours summary (`notify/quiet-hours-summary.ts`) counts every
+`slack:<episodeId>` row written inside the quiet window that just ended,
+unread and not answered in Slack since, beside the held PUSH mail. One held
+Slack row alone rings as its live push (opening Today); a summary holding one
+is "N urgent messages during quiet hours". Once per window, ambient bucket,
+like the mail summary. With Slack off (or the user outside its cohort) the
+summary reads nothing of Slack and is exactly the mail-only one.
 
 Slack's share is bounded so other people's messages cannot crowd out
 mail: at most **2 Slack rings** and **20 Slack bell rows** per user per UTC

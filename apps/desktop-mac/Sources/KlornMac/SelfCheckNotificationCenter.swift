@@ -299,11 +299,13 @@ func notificationCenterSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     // The full server-parity fixtures live in SelfCheckNotificationContract.swift.
     let banner = PushBanner.make(for: item("d9", reason: "you replied 6 times"))
     check("a PUSH banner carries the reason line; a meeting reminder keeps its own words",
-          banner.title == "kim" && banner.body == "s-d9\nyou replied 6 times"
-          && text("Notifications.swift").contains("body: L(\"meeting.banner.body\", minutes))"))
-    check("the banner composition lives in one function, and banners still add no actions",
-          text("Notifications.swift").components(separatedBy: "MailBannerContent.compose(").count == 2
-          && !text("Notifications.swift").contains("UNNotificationAction"))
+          banner.title == "kim" && banner.subtitle == "s-d9" && banner.body == "you replied 6 times"
+          && text("Notifications.swift").contains("L(\"meeting.banner.soon\", minutes)"))
+    // Actions were lifted 2026-11-17 (SelfCheckBannerActions pins them); the
+    // words still come from the one server-mirror function.
+    check("the banner words come from the one server-mirror function; no button sends text",
+          text("Notifications.swift").components(separatedBy: "MailBannerContent.lines(").count == 2
+          && !text("Notifications.swift").contains("UNTextInputNotificationAction"))
 
     // MARK: strings
 

@@ -263,8 +263,14 @@ describe("notifySlackPush", () => {
   it("held by the budget: a bell row only, no ring", async () => {
     budget.admitPushNotification.mockResolvedValueOnce({ status: "held", limit: 5 });
     expect(await notifySlackPush(input)).toBe("held");
+    // Named apart from a will-not-ring row (`slack:`): it never rings later,
+    // neither in the quiet-hours summary nor in the Windows catch-up.
     expect(db.prisma.notification.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ userId: "user-1", type: "slack", dedupeKey: "slack:ep-1" }),
+      data: expect.objectContaining({
+        userId: "user-1",
+        type: "slack",
+        dedupeKey: "slack-held:ep-1",
+      }),
       select: { id: true },
     });
     expect(ring.sendPushNotification).not.toHaveBeenCalled();
