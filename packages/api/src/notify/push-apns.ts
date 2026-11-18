@@ -25,7 +25,12 @@ import { prisma } from "../db.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import type { NotifCategory } from "./notification-prefs.js";
 import { type DevicePushPayload, type DevicePushSummary, mailPushTarget } from "./push-device.js";
-import { apnsCustomKeys, apnsPresentation, isPassiveKind } from "./push-presentation.js";
+import {
+  apnsCustomKeys,
+  apnsPresentation,
+  fitWithinBudget,
+  isPassiveKind,
+} from "./push-presentation.js";
 
 const APNS_KEY_P8 = (process.env.APNS_KEY_P8 || "").replace(/\\n/g, "\n");
 const APNS_KEY_ID = process.env.APNS_KEY_ID || "";
@@ -192,14 +197,17 @@ export function buildApnsBody(
       : {}),
     ...(laidOut?.aps ?? {}),
   };
-  return JSON.stringify({
+  const base = {
     aps,
     ...(payload.url ? { url: payload.url } : {}),
     ...(payload.notificationId ? { notificationId: payload.notificationId } : {}),
     category,
     ...(mail ?? {}),
-    ...apnsCustomKeys(payload.presentation),
-  });
+  };
+  const custom = fitWithinBudget(apnsCustomKeys(payload.presentation), (keys) =>
+    Buffer.byteLength(JSON.stringify({ ...base, ...keys }), "utf8"),
+  );
+  return JSON.stringify({ ...base, ...custom });
 }
 
 /**

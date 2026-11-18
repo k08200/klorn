@@ -21,6 +21,7 @@ import {
   DEADLINE_WARNING_DAYS,
   EOD_HOUR,
   MEETING_PREP_MINUTES,
+  pushQuoteOpenTo,
   UNANSWERED_THRESHOLD_HOURS,
   WEEKLY_REVIEW_DAY,
   waitDigestOpenTo,
@@ -37,9 +38,7 @@ import { sendSms } from "../notify/sms.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
 import { countCalendarRows } from "../pim/calendar-read.js";
 import { calendarSourceScope } from "../pim/calendar-scope.js";
-import { meetingLinkInText } from "../pim/meeting-link.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
-import { isBackgroundAgentsDisabled } from "../scheduler-heartbeat.js";
 import { isUniqueViolation } from "../slack/unique-violation.js";
 import {
   isLocalTimeWithin,
@@ -55,6 +54,7 @@ import {
   eveningReviewHasContent,
   gatherEveningReviewInput,
 } from "./evening-review.js";
+import { leftToStartRing, meetingStartRingCovers, ringsAtStart } from "./meeting-start-ring.js";
 import {
   contactContextLabel,
   followUpContent,
@@ -266,41 +266,11 @@ async function checkReplyWait(userId: string, tz: string): Promise<void> {
 }
 
 /**
- * Whether background.ts's start ring (T-5, interrupt bucket, with the join
- * link) covers this user's primary-calendar meetings that have a video link:
- * it runs for every user with a Google login token unless they turned
- * meetingAutoJoin off or background agents are disabled.
- */
-async function meetingStartRingCovers(userId: string): Promise<boolean> {
-  if (isBackgroundAgentsDisabled()) return false;
-  const [token, config] = await Promise.all([
-    prisma.userToken.findFirst({ where: { userId, provider: "google" }, select: { userId: true } }),
-    prisma.automationConfig.findUnique({ where: { userId }, select: { meetingAutoJoin: true } }),
-  ]);
-  return token !== null && (config === null || config.meetingAutoJoin !== false);
-}
-
-/**
- * A primary-calendar event with a link pim/meeting.ts would find: the start
- * ring's. Primary = no linked account and an external id (a LOCAL row has
- * none); the primary calendar is the Google login calendar.
- */
-function ringsAtStart(event: {
-  externalId: string | null;
-  sourceAccountId: string | null;
-  meetingLink: string | null;
-  description: string | null;
-  location: string | null;
-}): boolean {
-  if (event.sourceAccountId !== null || !event.externalId) return false;
-  return Boolean(event.meetingLink || meetingLinkInText(event.description, event.location));
-}
-
-/**
  * A heads-up MEETING_PREP_MINUTES before a meeting, once per meeting (NT0
  * item 11: one meeting, one notification). A meeting the start ring
- * (background.ts) will announce is left to it; an invite present in the
- * primary and a linked calendar (two rows, C2) counts once; and the bell row's
+ * (background.ts) will announce — and a linked-calendar copy of it — is left
+ * to it (meeting-start-ring.ts); an invite present in the primary and a linked
+ * calendar (two rows, C2) counts once; and the bell row's
  * dedupe key (the event row and its start) makes the write the dedupe, so
  * overlapping ticks cannot both ring and two meetings that share a title
  * prefix no longer hide each other.
@@ -333,10 +303,13 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
   });
   const events = dedupeCalendarEvents(rows);
   if (events.length === 0) return;
-  const startRing = events.some(ringsAtStart) && (await meetingStartRingCovers(userId));
+  const covers = events.some(ringsAtStart) && (await meetingStartRingCovers(userId, justAfter));
+  const leftOut = leftToStartRing(events, covers);
+  // The join link is meeting content: on Apple's / Google's push only under NOTIFY_PUSH_QUOTE.
+  const linkInPush = pushQuoteOpenTo(userId);
 
   for (const event of events) {
-    if (startRing && ringsAtStart(event)) continue;
+    if (leftOut.has(event)) continue;
     const time = event.startTime.toLocaleTimeString("en-US", {
       timeZone: tz,
       hour: "2-digit",
@@ -346,6 +319,7 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
     const link = event.meetingLink ? `\nJoin: ${event.meetingLink}` : "";
 
     const message = `${event.title} starts at ${time}${location}${link}`;
+    const pushBody = linkInPush ? message : `${event.title} starts at ${time}${location}`;
 
     const rang = await notify(
       userId,
@@ -354,6 +328,7 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
       message,
       "/briefing",
       {
+        pushBody,
         dedupeKey: `${MEETING_PREP_KEY_PREFIX}${event.id}:${event.startTime.getTime()}`,
         presentation: {
           kind: "meet",

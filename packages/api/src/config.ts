@@ -807,10 +807,11 @@ export function waitDigestOpenTo(userId: string): boolean {
 
 // NT0 push content (decided 2026-11-17): a mail's verified quote (NC1,
 // notify/notification-reason.ts) in a push body, and a meeting's join link in
-// the APNs / FCM payload. Both are mail or meeting content travelling through
-// Apple's and Google's push services; today a push carries the sender and the
-// subject only. OFF by default (repo doctrine): the push body's second line is
-// the judge's short reason. Every channel follows it, so all surfaces read the
+// the APNs / FCM payload and the proactive meeting heads-up's push body. Both
+// are mail or meeting content travelling through Apple's and Google's push
+// services; a mail push otherwise carries the sender, the subject and the
+// judge's short reason. OFF by default (repo doctrine): the push body's second
+// line is that short reason. Every channel follows it, so all surfaces read the
 // same (decision N1). `cohort` opens it only to ROLLOUT_COHORT_USER_IDS.
 export const PUSH_QUOTE_FLAG = "NOTIFY_PUSH_QUOTE";
 export function pushQuoteOpenTo(userId: string): boolean {

@@ -112,9 +112,56 @@ describe("APNs", () => {
 
   it("a push without fields is byte-identical to before, presentation on or off", () => {
     const plain = { title: "Klorn", body: "Done", url: "/today" };
-    expect(buildApnsBody(plain, "system", { presentation: true })).toBe(
-      buildApnsBody(plain, "system"),
-    );
+    const golden =
+      '{"aps":{"alert":{"title":"Klorn","body":"Done"},"sound":"default"},"url":"/today","category":"system"}';
+    expect(buildApnsBody(plain, "system")).toBe(golden);
+    expect(buildApnsBody(plain, "system", { presentation: true })).toBe(golden);
+  });
+
+  it("stays under the 4 KB APNs / FCM limits at every field's cap, CJK text, both flags on", () => {
+    const cjk = (n: number) => "가".repeat(n);
+    const id = "cm00000000000000000000000";
+    const payload = {
+      title: cjk(100),
+      body: `${cjk(180)}\n“${cjk(138)}”`,
+      url: `/email/${id}`,
+      notificationId: id,
+      emailId: id,
+      attentionItemId: id,
+      pendingActionId: id,
+      lane: "PUSH" as const,
+      presentation: {
+        kind: "push" as const,
+        senderDisplayName: cjk(100),
+        subject: cjk(180),
+        quote: cjk(138),
+        reasonLine: cjk(140),
+        threadId: "x".repeat(256),
+        joinUrl: `https://acme.zoom.us/j/${"1".repeat(400)}`,
+        attendeeCount: 999,
+      },
+    };
+    const apns = buildApnsBody(payload, "email_urgent", { presentation: true });
+    expect(Buffer.byteLength(apns, "utf8")).toBeLessThan(4096);
+    // The alert is laid out from the fields; repeats of it are what gave way.
+    const body = JSON.parse(apns);
+    expect(body.aps.alert.subtitle).toBe(cjk(180));
+    expect(body.kind).toBe("push");
+    for (const dataOnly of [true, false]) {
+      const fcm = buildFcmMessage("tok", payload, "email_urgent", { dataOnly });
+      const size = Buffer.byteLength(
+        JSON.stringify({ notification: fcm.notification, data: fcm.data }),
+        "utf8",
+      );
+      expect(size).toBeLessThan(4096);
+      expect(fcm.data?.kind).toBe("push");
+      expect(fcm.data?.channelId).toBe("push");
+    }
+  });
+
+  it("drops nothing from a payload that fits", () => {
+    const body = JSON.parse(buildApnsBody({ ...MAIL, presentation: PUSH_FIELDS }, "email_urgent"));
+    expect(body).toMatchObject(PUSH_FIELDS);
   });
 });
 
@@ -191,22 +238,45 @@ describe("presentationForChannels", () => {
     expect(presentationForChannels("u2", meet, "meeting").native?.joinUrl).toBeUndefined();
   });
 
-  it("drops a join link that is not https or too long", () => {
+  it("keeps a join link only on a known meeting host, https, no credentials, bounded", () => {
     process.env.NOTIFY_PUSH_QUOTE = "on";
-    const bad = (joinUrl: string) =>
+    const link = (joinUrl: string) =>
       presentationForChannels("u1", { kind: "meet", joinUrl }, "meeting").web?.joinUrl;
-    expect(bad("http://meet.example.com/x")).toBeUndefined();
-    expect(bad("javascript:alert(1)")).toBeUndefined();
-    expect(bad(`https://zoom.us/j/1?pwd=${"x".repeat(600)}`)).toBeUndefined();
+    expect(link("https://acme.zoom.us/j/123?pwd=abc")).toBe("https://acme.zoom.us/j/123?pwd=abc");
+    expect(link("https://teams.microsoft.com/l/meetup-join/x")).toBe(
+      "https://teams.microsoft.com/l/meetup-join/x",
+    );
+    expect(link("http://meet.google.com/abc")).toBeUndefined();
+    expect(link("javascript:alert(1)")).toBeUndefined();
+    expect(link("https://zoom.us.evil.example/j/1")).toBeUndefined();
+    expect(link("https://notzoom.us/j/1")).toBeUndefined();
+    expect(link("https://user:pw@meet.google.com/abc")).toBeUndefined();
+    expect(link("https://meet.google.com:8443/abc")).toBeUndefined();
+    expect(link(`https://zoom.us/j/1?pwd=${"x".repeat(600)}`)).toBeUndefined();
+  });
+
+  it("drops an oversized thread id", () => {
+    const out = presentationForChannels(
+      "u1",
+      { kind: "push", threadId: "t".repeat(257) },
+      "email_urgent",
+    );
+    expect(out.web?.threadId).toBeUndefined();
   });
 
   it("names a kind from the category only where it is unambiguous", () => {
-    expect(defaultKind("email_urgent")).toBe("push");
+    expect(defaultKind("email_urgent", "interrupt")).toBe("push");
+    // Held mail summarised after quiet hours, an agent's note: ambient, not an interrupt.
+    expect(defaultKind("email_urgent", "ambient")).toBeUndefined();
+    expect(defaultKind("email_urgent")).toBeUndefined();
     expect(defaultKind("daily_briefing")).toBe("brief");
     expect(defaultKind("agent_proposal")).toBe("agent");
     expect(defaultKind("meeting")).toBeUndefined();
     expect(defaultKind("system")).toBeUndefined();
     expect(presentationForChannels("u1", undefined, "system")).toEqual({});
-    expect(presentationForChannels("u1", undefined, "email_urgent").web).toEqual({ kind: "push" });
+    expect(presentationForChannels("u1", undefined, "email_urgent", "interrupt").web).toEqual({
+      kind: "push",
+    });
+    expect(presentationForChannels("u1", undefined, "email_urgent", "ambient")).toEqual({});
   });
 });

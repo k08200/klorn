@@ -27,7 +27,7 @@ import { prisma } from "../db.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import type { NotifCategory } from "./notification-prefs.js";
-import { fcmPresentationData } from "./push-presentation.js";
+import { fcmPresentationData, fitWithinBudget } from "./push-presentation.js";
 
 const FIREBASE_SERVICE_ACCOUNT = process.env.FIREBASE_SERVICE_ACCOUNT || "";
 
@@ -141,7 +141,7 @@ function buildDataPayload(payload: DevicePushPayload): Record<string, string> {
   const data: Record<string, string> = {};
   if (payload.url) data.url = payload.url;
   if (payload.notificationId) data.notificationId = payload.notificationId;
-  return { ...data, ...fcmPresentationData(payload.presentation) };
+  return data;
 }
 
 /**
@@ -163,25 +163,40 @@ export function buildFcmMessage(
 ): Message {
   const mail = mailPushTarget(payload);
   if (opts.dataOnly && mail) {
+    const data = {
+      ...buildDataPayload(payload),
+      category,
+      ...mail,
+      title: payload.title,
+      body: payload.body,
+      sentAt: String(opts.now ?? Date.now()),
+    };
     return {
       token,
-      data: {
-        ...buildDataPayload(payload),
-        category,
-        ...mail,
-        title: payload.title,
-        body: payload.body,
-        sentAt: String(opts.now ?? Date.now()),
-      },
+      data: { ...data, ...fittedPresentationData(payload, data) },
       android: { priority: "high" },
     };
   }
+  const notification = { title: payload.title, body: payload.body };
+  const data = { ...buildDataPayload(payload), category, ...(mail ?? {}) };
   return {
     token,
-    notification: { title: payload.title, body: payload.body },
-    data: { ...buildDataPayload(payload), category, ...(mail ?? {}) },
+    notification,
+    data: { ...data, ...fittedPresentationData(payload, data, notification) },
     android: { priority: "high" },
   };
+}
+
+/** The NT0 data keys that fit beside the rest of the message (push-presentation.ts budget). */
+function fittedPresentationData(
+  payload: DevicePushPayload,
+  data: Record<string, string>,
+  notification?: { title: string; body: string },
+): Record<string, string> {
+  const fitted = fitWithinBudget(fcmPresentationData(payload.presentation), (keys) =>
+    Buffer.byteLength(JSON.stringify({ notification, data: { ...data, ...keys } }), "utf8"),
+  );
+  return fitted as Record<string, string>;
 }
 
 function skipped(reason: string): DevicePushSummary {

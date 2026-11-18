@@ -23,7 +23,9 @@ import type {
   NotificationPresentation,
 } from "@klorn/contract";
 import { pushQuoteOpenTo } from "../config.js";
+import { safeHttpsLink } from "../safe-https-link.js";
 import type { NotifCategory } from "./notification-prefs.js";
+import type { PushBucket } from "./push-bucket.js";
 
 type InterruptionLevel = "active" | "passive" | "time-sensitive";
 
@@ -60,15 +62,34 @@ const ANDROID_CHANNEL: Record<NotificationKind, AndroidNotificationChannel> = {
 
 /** A join link longer than this is not sent (bounds the payload; real links are far shorter). */
 const JOIN_URL_MAX = 512;
+/** A thread id longer than this is not sent (provider ids are far shorter). */
+const THREAD_ID_MAX = 256;
+/**
+ * Hosts a join link may point at (the host itself or a sub-domain of it): a
+ * structured link a client can open in one tap, so a calendar entry naming
+ * any other host carries none.
+ */
+const JOIN_HOSTS = [
+  "zoom.us",
+  "meet.google.com",
+  "teams.microsoft.com",
+  "teams.live.com",
+  "webex.com",
+  "whereby.com",
+];
 
 /**
  * The kind of a push whose caller named none, from its category — only where
- * the category says it unambiguously: an urgent-mail push, the briefing, an
- * agent proposal. A "meeting" category push is not assumed to be a meeting
- * starting (a back-to-back warning is not), so it carries no kind.
+ * the category says it unambiguously: an urgent mail that rings the interrupt
+ * bucket (held mail summarised later, or an agent's note, rings ambient and is
+ * not one), the briefing, an agent proposal. A "meeting" category push is not
+ * assumed to be a meeting starting (a back-to-back warning is not).
  */
-export function defaultKind(category: NotifCategory): NotificationKind | undefined {
-  if (category === "email_urgent") return "push";
+export function defaultKind(
+  category: NotifCategory,
+  bucket?: PushBucket,
+): NotificationKind | undefined {
+  if (category === "email_urgent") return bucket === "interrupt" ? "push" : undefined;
   if (category === "daily_briefing") return "brief";
   if (category === "agent_proposal") return "agent";
   return undefined;
@@ -80,11 +101,11 @@ export function isPassiveKind(kind: NotificationKind | undefined): boolean {
 
 function safeJoinUrl(value: string | undefined): string | undefined {
   if (!value || value.length > JOIN_URL_MAX) return undefined;
-  try {
-    return new URL(value).protocol === "https:" ? value : undefined;
-  } catch {
-    return undefined;
-  }
+  const safe = safeHttpsLink(value);
+  if (!safe || safe.length > JOIN_URL_MAX) return undefined;
+  const { hostname, port } = new URL(safe);
+  const known = JOIN_HOSTS.some((host) => hostname === host || hostname.endsWith(`.${host}`));
+  return known && port === "" ? safe : undefined;
 }
 
 /** The fields each channel family may carry for this user. */
@@ -92,20 +113,53 @@ export function presentationForChannels(
   userId: string,
   presentation: NotificationPresentation | undefined,
   category: NotifCategory,
+  bucket?: PushBucket,
 ): { web?: NotificationPresentation; native?: NotificationPresentation } {
-  const kind = presentation?.kind ?? defaultKind(category);
+  const kind = presentation?.kind ?? defaultKind(category, bucket);
   if (!presentation && !kind) return {};
   const allowContent = pushQuoteOpenTo(userId);
-  const { quote, joinUrl, ...rest } = presentation ?? {};
+  const { quote, joinUrl, threadId, ...rest } = presentation ?? {};
   const link = safeJoinUrl(joinUrl);
   const web: NotificationPresentation = {
     ...rest,
     ...(kind ? { kind } : {}),
+    ...(threadId && threadId.length <= THREAD_ID_MAX ? { threadId } : {}),
     ...(allowContent && quote ? { quote } : {}),
     ...(link ? { joinUrl: link } : {}),
   };
   const { joinUrl: _contentOnly, ...withoutLink } = web;
   return { web, native: allowContent ? web : withoutLink };
+}
+
+/**
+ * APNs and FCM refuse a payload over 4096 bytes, and the push is then lost.
+ * The structured fields mostly repeat the notification's own text, so when a
+ * payload would pass this budget they are dropped — repeats first, then the
+ * ids — until it fits. The alert / notification text itself is never cut here.
+ */
+export const PUSH_PAYLOAD_BUDGET_BYTES = 3900;
+const DROP_ORDER = [
+  "reasonLine",
+  "quote",
+  "subject",
+  "senderDisplayName",
+  "joinUrl",
+  "threadId",
+  "groupKey",
+];
+
+/** `keys` without as many droppable fields as `measure` needs to stay within the budget. */
+export function fitWithinBudget<T extends Record<string, string | number>>(
+  keys: T,
+  measure: (keys: Partial<T>) => number,
+): Partial<T> {
+  let fitted: Partial<T> = keys;
+  for (const key of DROP_ORDER) {
+    if (measure(fitted) <= PUSH_PAYLOAD_BUDGET_BYTES) return fitted;
+    const { [key]: _dropped, ...rest } = fitted;
+    fitted = rest as Partial<T>;
+  }
+  return fitted;
 }
 
 /** APNs top-level custom keys: the fields as they are (attendeeCount a number). */

@@ -8,7 +8,7 @@
  * notificationId?, category } (`category` is the Klorn notification category).
  * A MAIL-driven push (firewall PUSH / MEETING, or an urgent sweep about one
  * mail) also carries the fields below; a push without them is not about one
- * email. All values are opaque ids and an in-app route.
+ * email. Those mail fields are opaque ids and an in-app route.
  *
  * Any push may also carry the NT0 structured fields (NotificationPresentation
  * below) as top-level APNs keys / FCM `data` keys, plus FCM `channelId` and

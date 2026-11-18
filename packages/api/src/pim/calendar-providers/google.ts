@@ -89,7 +89,8 @@ export function googleMeetingLinkOf(item: calendar_v3.Schema$Event): string | nu
 /**
  * CalendarEvent.attendeeCount of a Google event: the listed attendees minus
  * resources and those who declined. Null when the event lists none, or when
- * Google omitted the list (attendeesOmitted: a large meeting). Never an address.
+ * Google marks the list as cut (attendeesOmitted). Where guests cannot see each
+ * other Google may list only the user (a count of 1). Never an address.
  */
 export function googleAttendeeCount(item: calendar_v3.Schema$Event): number | null {
   if (item.attendeesOmitted === true) return null;

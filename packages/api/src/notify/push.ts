@@ -228,7 +228,7 @@ export async function sendPushNotification(
     presentation,
     ...channelPayload
   } = payload;
-  const shown = presentationForChannels(userId, presentation, category);
+  const shown = presentationForChannels(userId, presentation, category, options.bucket);
   const nativePayload = {
     ...channelPayload,
     ...(emailId ? { emailId } : {}),

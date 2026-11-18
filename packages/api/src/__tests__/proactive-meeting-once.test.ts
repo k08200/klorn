@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 type Row = Record<string, unknown>;
 const db = vi.hoisted(() => ({
   events: [] as Row[],
-  token: { userId: "u1" } as Row | null,
+  token: { accessToken: "enc-a", refreshToken: "enc-r", expiresAt: null } as Row | null,
   config: { timezone: "Asia/Seoul", meetingAutoJoin: true } as Row | null,
   created: [] as Row[],
   attempted: [] as Row[],
@@ -88,7 +88,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
   db.events = [];
-  db.token = { userId: "u1" };
+  db.token = { accessToken: "enc-a", refreshToken: "enc-r", expiresAt: null };
   db.config = { timezone: "Asia/Seoul", meetingAutoJoin: true };
   db.created = [];
   db.attempted = [];
@@ -138,10 +138,75 @@ describe("proactive meeting heads-up — one meeting, one notification", () => {
     expect(meetingRows()).toHaveLength(1);
 
     db.created = [];
-    db.token = { userId: "u1" };
+    db.token = { accessToken: "enc-a", refreshToken: "enc-r", expiresAt: null };
     process.env.BACKGROUND_AGENTS_DISABLED = "true";
     await runProactiveActions("u1");
     expect(meetingRows()).toHaveLength(1);
+  });
+
+  it("keeps the heads-up when the Google token cannot reach Google (the start ring would ring nothing)", async () => {
+    db.events = [event("call", { meetingLink: "https://meet.google.com/abc-defg-hij" })];
+    // Invalidated: mail/gmail.ts blanks both tokens.
+    db.token = { accessToken: "", refreshToken: null, expiresAt: null };
+    await runProactiveActions("u1");
+    expect(meetingRows()).toHaveLength(1);
+
+    db.created = [];
+    // No refresh token, and the access token lapses before the meeting starts.
+    db.token = {
+      accessToken: "enc-a",
+      refreshToken: null,
+      expiresAt: new Date(NOW.getTime() + 60_000),
+    };
+    await runProactiveActions("u1");
+    expect(meetingRows()).toHaveLength(1);
+  });
+
+  it("leaves a linked-calendar copy of a start-ring meeting to the start ring too", async () => {
+    db.events = [
+      event("g", {
+        title: "Design review",
+        meetingLink: "https://meet.google.com/abc-defg-hij",
+        externalId: "google-id",
+      }),
+      event("o", {
+        title: "Design Review ",
+        provider: "OUTLOOK",
+        externalId: "outlook-id",
+        sourceAccountId: "lca-outlook",
+      }),
+    ];
+    await runProactiveActions("u1");
+    expect(meetingRows()).toEqual([]);
+  });
+
+  it("keeps the join link out of the device push body unless NOTIFY_PUSH_QUOTE is open", async () => {
+    db.events = [
+      event("other-cal", {
+        meetingLink: "https://meet.google.com/abc-defg-hij",
+        sourceAccountId: "lca-1",
+      }),
+    ];
+    await runProactiveActions("u1");
+    const body = vi.mocked(sendPushNotification).mock.calls[0][1].body;
+    expect(body).not.toContain("meet.google.com");
+    // The bell row (first-party) keeps it.
+    expect(String(meetingRows()[0].message)).toContain("https://meet.google.com/abc-defg-hij");
+
+    vi.mocked(sendPushNotification).mockClear();
+    db.created = [];
+    process.env.NOTIFY_PUSH_QUOTE = "on";
+    db.events = [
+      event("other-cal-2", {
+        meetingLink: "https://meet.google.com/xyz",
+        sourceAccountId: "lca-1",
+      }),
+    ];
+    await runProactiveActions("u1");
+    expect(vi.mocked(sendPushNotification).mock.calls[0][1].body).toContain(
+      "https://meet.google.com/xyz",
+    );
+    delete process.env.NOTIFY_PUSH_QUOTE;
   });
 
   it("counts an invite in the primary and a linked calendar once", async () => {
