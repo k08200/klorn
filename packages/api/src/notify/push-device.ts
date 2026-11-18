@@ -19,7 +19,7 @@
  *   exactly like missing VAPID keys skips Web Push.
  */
 
-import type { NativePushMailFields } from "@klorn/contract";
+import type { NativePushMailFields, NotificationPresentation } from "@klorn/contract";
 import { type App, cert, getApps, initializeApp } from "firebase-admin/app";
 import { type BatchResponse, getMessaging, type Message } from "firebase-admin/messaging";
 import { androidDataPushEnabled } from "../config.js";
@@ -27,6 +27,7 @@ import { prisma } from "../db.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import type { NotifCategory } from "./notification-prefs.js";
+import { fcmPresentationData } from "./push-presentation.js";
 
 const FIREBASE_SERVICE_ACCOUNT = process.env.FIREBASE_SERVICE_ACCOUNT || "";
 
@@ -56,6 +57,11 @@ export interface DevicePushPayload {
   pendingActionId?: string;
   /** The mail's firewall lane (decision N1); only travels with `emailId`. */
   lane?: "PUSH" | "MEETING";
+  /**
+   * NT0 structured fields, already cut to what native channels may carry for
+   * this user (push-presentation.ts presentationForChannels).
+   */
+  presentation?: NotificationPresentation;
 }
 
 /** Opaque ids and an in-app route — nothing the notification text does not already show. */
@@ -135,7 +141,7 @@ function buildDataPayload(payload: DevicePushPayload): Record<string, string> {
   const data: Record<string, string> = {};
   if (payload.url) data.url = payload.url;
   if (payload.notificationId) data.notificationId = payload.notificationId;
-  return data;
+  return { ...data, ...fcmPresentationData(payload.presentation) };
 }
 
 /**

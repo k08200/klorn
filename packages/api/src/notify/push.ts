@@ -11,6 +11,7 @@
  */
 
 import crypto from "node:crypto";
+import type { NotificationPresentation } from "@klorn/contract";
 import webPush from "web-push";
 import { recordEvent } from "../analytics.js";
 import { pushZombieEvictionEnabled } from "../config.js";
@@ -38,6 +39,7 @@ import {
 import { sendDevicePush } from "./push-device.js";
 import { mintPushLaterToken } from "./push-later-token.js";
 import { isAllowedPushOrigin } from "./push-origin-allowlist.js";
+import { presentationForChannels } from "./push-presentation.js";
 import { recordPushAttempt } from "./push-rate-limit.js";
 import { evaluateZombieSubscription } from "./push-zombie.js";
 import { ssrfSafeHttpsAgent } from "./ssrf-safe-agent.js";
@@ -208,6 +210,10 @@ export async function sendPushNotification(
     // chose to be reminded of, so the inbound-mail noise heuristic must not
     // veto it. Every other gate still applies. Never sent to a channel.
     userSet?: boolean;
+    // NT0 structured fields (contract NotificationPresentation), carried flat
+    // by web push, APNs and FCM as push-presentation.ts allows for this user.
+    // Never sent to Telegram.
+    presentation?: NotificationPresentation;
   },
   category: NotifCategory = "system",
   options: PushSendOptions = {},
@@ -219,18 +225,22 @@ export async function sendPushNotification(
     lane,
     language,
     userSet,
+    presentation,
     ...channelPayload
   } = payload;
+  const shown = presentationForChannels(userId, presentation, category);
   const nativePayload = {
     ...channelPayload,
     ...(emailId ? { emailId } : {}),
     ...(pendingActionId ? { pendingActionId } : {}),
     ...(emailId && lane ? { lane } : {}),
+    ...(shown.native ? { presentation: shown.native } : {}),
   };
   const webPayload = {
     ...channelPayload,
     ...(bellNotificationId ? { bellNotificationId } : {}),
     ...webMailActionFields(userId, emailId, lane, language),
+    ...(shown.web ?? {}),
   };
   // First line of defense: drop housekeeping + noise pushes BEFORE any
   // other check. Six other modules call this function (briefing,

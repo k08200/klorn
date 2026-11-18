@@ -16,6 +16,7 @@
  * All actions are idempotent (dedup via DB notification check).
  */
 
+import type { NotificationKind, NotificationPresentation } from "@klorn/contract";
 import {
   DEADLINE_WARNING_DAYS,
   EOD_HOUR,
@@ -25,7 +26,6 @@ import {
   waitDigestOpenTo,
 } from "../config.js";
 import { prisma } from "../db.js";
-import { escapeLikePattern } from "../db-like.js";
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { parseAddress } from "../mail/email-address.js";
 import { clampText } from "../notify/clamp-text.js";
@@ -37,7 +37,10 @@ import { sendSms } from "../notify/sms.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
 import { countCalendarRows } from "../pim/calendar-read.js";
 import { calendarSourceScope } from "../pim/calendar-scope.js";
+import { meetingLinkInText } from "../pim/meeting-link.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
+import { isBackgroundAgentsDisabled } from "../scheduler-heartbeat.js";
+import { isUniqueViolation } from "../slack/unique-violation.js";
 import {
   isLocalTimeWithin,
   localDateKey,
@@ -91,6 +94,8 @@ const REPLY_WAIT_WINDOW_END_HOUR = 12;
 const REPLY_WAIT_WINDOW_MS = (REPLY_WAIT_WINDOW_END_HOUR - REPLY_WAIT_WINDOW_START_HOUR) * HOUR_MS;
 /** Both reminder types: the merged one dedupes against either, so a flip mid-day never sends twice. */
 const REPLY_WAIT_TYPES = ["email_followup", "followup"];
+/** Bell-row dedupe key of a meeting heads-up: one per calendar row and start time. */
+const MEETING_PREP_KEY_PREFIX = "meeting-prep:";
 /** The push body cap (the bell row keeps the whole message). */
 const PUSH_BODY_MAX = 200;
 
@@ -168,7 +173,9 @@ async function notifyReplyWait(userId: string, rows: WaitingMail[]): Promise<voi
   const language = await getUserNotificationLanguage(userId);
   const content = replyWaitContent(await withReason(userId, rows, language), language, new Date());
   if (!content) return;
-  await notify(userId, "email_followup", content.title, content.message, "/briefing");
+  await notify(userId, "email_followup", content.title, content.message, "/briefing", {
+    presentation: content.presentation,
+  });
 }
 
 /**
@@ -258,14 +265,49 @@ async function checkReplyWait(userId: string, tz: string): Promise<void> {
   await notifyReplyWait(userId, mails);
 }
 
-/** Send a notification 1 hour before meetings with a mini-brief */
+/**
+ * Whether background.ts's start ring (T-5, interrupt bucket, with the join
+ * link) covers this user's primary-calendar meetings that have a video link:
+ * it runs for every user with a Google login token unless they turned
+ * meetingAutoJoin off or background agents are disabled.
+ */
+async function meetingStartRingCovers(userId: string): Promise<boolean> {
+  if (isBackgroundAgentsDisabled()) return false;
+  const [token, config] = await Promise.all([
+    prisma.userToken.findFirst({ where: { userId, provider: "google" }, select: { userId: true } }),
+    prisma.automationConfig.findUnique({ where: { userId }, select: { meetingAutoJoin: true } }),
+  ]);
+  return token !== null && (config === null || config.meetingAutoJoin !== false);
+}
+
+/** A primary Google event with a link pim/meeting.ts would find: the start ring's. */
+function ringsAtStart(event: {
+  provider: string;
+  sourceAccountId: string | null;
+  meetingLink: string | null;
+  description: string | null;
+  location: string | null;
+}): boolean {
+  if (event.provider !== "GOOGLE" || event.sourceAccountId !== null) return false;
+  return Boolean(event.meetingLink || meetingLinkInText(event.description, event.location));
+}
+
+/**
+ * A heads-up MEETING_PREP_MINUTES before a meeting, once per meeting (NT0
+ * item 11: one meeting, one notification). A meeting the start ring
+ * (background.ts) will announce is left to it; an invite present in the
+ * primary and a linked calendar (two rows, C2) counts once; and the bell row's
+ * dedupe key (the event row and its start) makes the write the dedupe, so
+ * overlapping ticks cannot both ring and two meetings that share a title
+ * prefix no longer hide each other.
+ */
 async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> {
   const now = new Date();
   const soon = new Date(now.getTime() + MEETING_PREP_MINUTES * 60 * 1000);
   const justAfter = new Date(now.getTime() + (MEETING_PREP_MINUTES + 5) * 60 * 1000);
 
-  // Find meetings starting in ~60 minutes (5 min window to avoid duplicates)
-  const upcoming = await prisma.calendarEvent.findMany({
+  // Find meetings starting in ~60 minutes (5 min window; the dedupe key keeps it to one ring)
+  const rows = await prisma.calendarEvent.findMany({
     where: {
       userId,
       startTime: { gte: soon, lte: justAfter },
@@ -278,21 +320,19 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
       location: true,
       meetingLink: true,
       description: true,
+      provider: true,
+      externalId: true,
+      sourceAccountId: true,
+      attendeeCount: true,
     },
+    orderBy: [{ startTime: "asc" }, { id: "asc" }],
   });
+  const events = dedupeCalendarEvents(rows);
+  if (events.length === 0) return;
+  const startRing = events.some(ringsAtStart) && (await meetingStartRingCovers(userId));
 
-  for (const event of upcoming) {
-    // Dedup: check if we already sent a prep notification for this event
-    const existing = await prisma.notification.findFirst({
-      where: {
-        userId,
-        type: "calendar",
-        title: { contains: escapeLikePattern(event.title.slice(0, 20)) },
-        createdAt: { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-      },
-    });
-    if (existing) continue;
-
+  for (const event of events) {
+    if (startRing && ringsAtStart(event)) continue;
     const time = event.startTime.toLocaleTimeString("en-US", {
       timeZone: tz,
       hour: "2-digit",
@@ -303,13 +343,24 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
 
     const message = `${event.title} starts at ${time}${location}${link}`;
 
-    await notify(
+    const rang = await notify(
       userId,
       "calendar",
       `Meeting in 1 hour: ${event.title.slice(0, 30)}`,
       message,
       "/briefing",
+      {
+        dedupeKey: `${MEETING_PREP_KEY_PREFIX}${event.id}:${event.startTime.getTime()}`,
+        presentation: {
+          kind: "meet",
+          ...(event.meetingLink ? { joinUrl: event.meetingLink } : {}),
+          ...(typeof event.attendeeCount === "number"
+            ? { attendeeCount: event.attendeeCount }
+            : {}),
+        },
+      },
     );
+    if (!rang) continue;
 
     // Admin-only SMS escalation for time-sensitive meeting alerts. Gated
     // inside sendSms (admin + phone + daily cap). Best-effort: never throws.
@@ -420,7 +471,9 @@ async function checkEndOfDayReview(userId: string, tz: string): Promise<void> {
   const review = composeEveningReview(input, await getUserNotificationLanguage(userId), tz);
   if (!review) return;
 
-  await notify(userId, "eod_review", review.title, review.message, "/briefing", review.pushBody);
+  await notify(userId, "eod_review", review.title, review.message, "/briefing", {
+    pushBody: review.pushBody,
+  });
 }
 
 // ─── NEW: Deadline countdown (D-3) ─────────────────────────────────────
@@ -587,21 +640,32 @@ async function checkBackToBackMeetings(userId: string, tz: string): Promise<void
   );
 }
 
-/**
- * Create DB notification + WebSocket push + browser push. `pushBody` is the
- * device push's text when it should differ from the bell row's message.
- */
+interface NotifyOptions {
+  /** The device push's text when it should differ from the bell row's message. */
+  pushBody?: string;
+  /** NT0 structured fields; the type's kind (kindForType) when absent. */
+  presentation?: NotificationPresentation;
+  /**
+   * The bell row's unique key: a second write under it fails on the
+   * (userId, dedupeKey) unique, and nothing rings — so two overlapping ticks
+   * cannot both notify.
+   */
+  dedupeKey?: string;
+}
+
+/** Create DB notification + WebSocket push + browser push. False when the dedupe key was taken. */
 async function notify(
   userId: string,
   type: string,
   title: string,
   message: string,
   url: string,
-  pushBody?: string,
-): Promise<void> {
-  const notification = await prisma.notification.create({
-    data: { userId, type, title, message, link: url },
-  });
+  opts: NotifyOptions = {},
+): Promise<boolean> {
+  const notification = await createBellRow(userId, type, title, message, url, opts.dedupeKey);
+  if (!notification) return false;
+  const kind = kindForType(type);
+  const presentation = opts.presentation ?? (kind ? { kind } : undefined);
 
   pushNotification(userId, {
     id: notification.id,
@@ -610,13 +674,14 @@ async function notify(
     message,
     link: url,
     createdAt: notification.createdAt.toISOString(),
+    ...(presentation ?? {}),
   });
 
   // Unawaited (best-effort) but guarded — an unhandled rejection from the push
   // internals would otherwise crash the single dyno.
   sendPushNotification(
     userId,
-    { title, body: clampText(pushBody ?? message, PUSH_BODY_MAX), url },
+    { title, body: clampText(opts.pushBody ?? message, PUSH_BODY_MAX), url, presentation },
     categoryForType(type),
     // Heuristic-decided: ambient even for a "meeting" category (a back-to-back
     // warning is not a meeting starting), so it cannot use up the interrupt
@@ -628,6 +693,47 @@ async function notify(
       tags: { scope: "proactive.push", userId },
     });
   });
+  return true;
+}
+
+async function createBellRow(
+  userId: string,
+  type: string,
+  title: string,
+  message: string,
+  url: string,
+  dedupeKey: string | undefined,
+): Promise<{ id: string; createdAt: Date } | null> {
+  try {
+    return await prisma.notification.create({
+      data: { userId, type, title, message, link: url, ...(dedupeKey ? { dedupeKey } : {}) },
+    });
+  } catch (err) {
+    if (dedupeKey && isUniqueViolation(err)) return null;
+    throw err;
+  }
+}
+
+/**
+ * The NT0 kind of a proactive notification (contract NotificationKind). The
+ * reply-wait reminders name theirs; a meeting prep is a meeting; the rest are
+ * rule-based heads-ups, read like the briefing (passive).
+ */
+function kindForType(type: string): NotificationKind | undefined {
+  switch (type) {
+    case "calendar":
+      return "meet";
+    case "followup":
+      return "digest";
+    case "review":
+    case "eod_review":
+    case "task":
+    case "deadline":
+    case "schedule_warning":
+      return "brief";
+    default:
+      return undefined;
+  }
 }
 
 /** Preferences, quiet hours and label only; the push rings ambient regardless. */

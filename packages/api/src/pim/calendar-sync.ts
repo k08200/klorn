@@ -62,6 +62,7 @@ export function syncRowFields(event: ProviderCalendarEvent): CalendarEventFields
     location: event.location,
     meetingLink: event.meetingLink,
     allDay: event.allDay,
+    ...(event.attendeeCount !== undefined ? { attendeeCount: event.attendeeCount } : {}),
   };
 }
 

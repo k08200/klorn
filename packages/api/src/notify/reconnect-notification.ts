@@ -129,6 +129,7 @@ export async function ensureGmailReconnectNotification(
     message,
     createdAt: notification.createdAt.toISOString(),
     link: RECONNECT_LINK,
+    kind: "acct",
   });
 
   await sendPushNotification(
@@ -138,6 +139,8 @@ export async function ensureGmailReconnectNotification(
       body: message,
       url: RECONNECT_LINK,
       notificationId: notification.id,
+      // NT0: an account to reconnect (Android channel "account").
+      presentation: { kind: "acct" },
     },
     "system",
   );

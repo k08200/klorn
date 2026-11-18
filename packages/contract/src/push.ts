@@ -37,6 +37,60 @@ export interface NativePushMailFields {
 }
 
 /**
+ * What a notification is about (NT0 copy spec, decided 2026-11-17). One copy
+ * rule for every kind and device: title = the person (or the event), subtitle
+ * = the mail subject, body = the one-line request (a verified quote when one
+ * may be shown, else the reason line).
+ *   push   — a PUSH-lane mail            meet   — a meeting (or a MEETING-lane mail)
+ *   wait   — one mail still owing a reply digest — several mails owing replies
+ *   brief  — the daily briefing           agent  — a reply draft / proposal ready
+ *   acct   — an account needs reconnecting
+ */
+export type NotificationKind = "push" | "meet" | "wait" | "digest" | "brief" | "agent" | "acct";
+
+/**
+ * The Android notification channel a kind posts to, sent as FCM data
+ * `channelId` (the app creates the channels; an unknown id is the app's to
+ * map). push → push, meet → meetings, wait / digest / agent → waiting,
+ * brief → briefing, acct → account.
+ */
+export type AndroidNotificationChannel = "push" | "meetings" | "waiting" | "briefing" | "account";
+
+/**
+ * Structured fields beside a notification's text (NT0), so a client can lay it
+ * out per device instead of parsing `title` / `body`. Every field is optional
+ * and additive: a client that does not read them sees exactly what it did.
+ * Carried flat, under these names, as APNs top-level custom keys, FCM `data`
+ * keys (all values strings there, `attendeeCount` too), Web Push JSON keys and
+ * live websocket `notification` frame keys.
+ */
+export interface NotificationPresentation {
+  kind?: NotificationKind;
+  /** The sender's display name (cleaned, one line). Absent when the From header has none. */
+  senderDisplayName?: string;
+  /** The mail subject (cleaned, one line); the subtitle. */
+  subject?: string;
+  /**
+   * A verbatim, verified passage of the mail (NC1), without quotation marks.
+   * Only while the server's NOTIFY_PUSH_QUOTE flag is open to the user: it is
+   * mail text travelling through Apple's and Google's push services.
+   */
+  quote?: string;
+  /** The one-line request when there is no quote: the judge's short reason, or a wait line. */
+  reasonLine?: string;
+  /** The provider thread id of the mail (EmailMessage.threadId, as the web reader uses). */
+  threadId?: string;
+  /**
+   * A meeting's join link (https only). Mail and meeting content, so on APNs /
+   * FCM only while NOTIFY_PUSH_QUOTE is open to the user; Web Push (end-to-end
+   * encrypted) and live frames always carry it.
+   */
+  joinUrl?: string;
+  /** People invited to a meeting (see CalendarEvent.attendeeCount); never their addresses. */
+  attendeeCount?: number;
+}
+
+/**
  * APNs `aps.category` of a mail push: lock-screen action sets the app
  * registers (apps/mobile AppDelegate.swift). Decision N1 order:
  *   KLORN_PUSH_MAIL_DRAFT — Send draft · Later · Not urgent · Done

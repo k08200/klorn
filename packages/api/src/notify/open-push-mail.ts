@@ -15,6 +15,7 @@
  */
 
 import type { NotificationReason } from "@klorn/contract";
+import { pushQuoteOpenTo } from "../config.js";
 import { prisma } from "../db.js";
 import { NOT_AGENT_SET } from "../judge/agent-tier.js";
 import { isAutomatedSender } from "../judge/keyword-policy.js";
@@ -117,6 +118,7 @@ export async function openPushMail(
       subject: email.subject,
       reason: reasons.get(emailId) ?? null,
       language,
+      allowQuote: pushQuoteOpenTo(userId),
     });
     mail.push({
       bellId: row.id,
@@ -312,5 +314,11 @@ export async function urgentLeadPushContent(
     language,
   );
   const reason = reasons.get(lead.id) ?? null;
-  return mailPushContent({ from: lead.from ?? "", subject: lead.subject, reason, language });
+  return mailPushContent({
+    from: lead.from ?? "",
+    subject: lead.subject,
+    reason,
+    language,
+    allowQuote: pushQuoteOpenTo(userId),
+  });
 }

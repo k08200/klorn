@@ -19,3 +19,23 @@ export const MAX_MEETING_LINK_LENGTH = MAX_HTTPS_LINK_LENGTH;
  * dropped (see `safeHttpsLink`).
  */
 export const safeMeetingLink = safeHttpsLink;
+
+const ZOOM_LINK_IN_TEXT = /https:\/\/(?:[a-z0-9-]+\.)*zoom\.us\/[^\s]*/i;
+const MEET_LINK_IN_TEXT = /https:\/\/meet\.google\.com\/[^\s]*/;
+
+/**
+ * A Zoom or Meet link written in an event's description or location: the
+ * links pim/meeting.ts getUpcomingMeetings finds beyond the conference data.
+ * Shared so the proactive meeting heads-up can tell which synced rows the
+ * meeting-start ring (background.ts) covers.
+ */
+export function meetingLinkInText(
+  description: string | null | undefined,
+  location: string | null | undefined,
+): string | null {
+  const text = `${description || ""} ${location || ""}`;
+  return (
+    safeMeetingLink(text.match(ZOOM_LINK_IN_TEXT)?.[0]) ??
+    safeMeetingLink(text.match(MEET_LINK_IN_TEXT)?.[0])
+  );
+}

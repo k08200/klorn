@@ -97,6 +97,8 @@ export interface CalendarEventFields {
   readonly location: string | null;
   readonly meetingLink: string | null;
   readonly allDay: boolean;
+  /** Absent: the provider does not report attendees and the column is left as it is. */
+  readonly attendeeCount?: number | null;
 }
 
 /**

@@ -100,6 +100,11 @@ export interface ProviderCalendarEvent {
   readonly description: string | null;
   readonly location: string | null;
   readonly meetingLink: string | null;
+  /**
+   * People the invite lists (CalendarEvent.attendeeCount); null when it lists
+   * none or omitted them. Absent for a provider that does not report attendees.
+   */
+  readonly attendeeCount?: number | null;
   /** A date-time, or a YYYY-MM-DD date for an all-day event; '' when absent. */
   readonly start: string;
   readonly end: string;

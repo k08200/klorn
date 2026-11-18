@@ -698,6 +698,8 @@ export async function firewallRoutes(app: FastifyInstance) {
                 needsReply: true,
                 repliedAt: true,
                 proactiveDraft: true,
+                // The provider thread id: the preview's `threadId` (NT0).
+                threadId: true,
                 // The mailbox (also the `inbox=` scope) and the read flag.
                 ...accountFactsSelect,
               },
@@ -956,6 +958,7 @@ export async function firewallRoutes(app: FastifyInstance) {
                 const trust = addr ? trustMap.get(addr) : null;
                 item.email = {
                   emailDbId: email.id,
+                  threadId: email.threadId ?? null,
                   subject: email.subject ?? null,
                   from: email.from ?? null,
                   snippet: email.snippet ?? null,
@@ -1029,6 +1032,7 @@ export async function firewallRoutes(app: FastifyInstance) {
             const trust = addr ? trustMap.get(addr) : null;
             item.email = {
               emailDbId: email.id,
+              threadId: email.threadId ?? null,
               subject: email.subject ?? null,
               from: email.from ?? null,
               snippet: email.snippet ?? null,

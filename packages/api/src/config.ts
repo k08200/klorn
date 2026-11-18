@@ -805,6 +805,30 @@ export function waitDigestOpenTo(userId: string): boolean {
   return featureOpenTo(userId, [WAIT_DIGEST_FLAG]);
 }
 
+// NT0 push content (decided 2026-11-17): a mail's verified quote (NC1,
+// notify/notification-reason.ts) in a push body, and a meeting's join link in
+// the APNs / FCM payload. Both are mail or meeting content travelling through
+// Apple's and Google's push services; today a push carries the sender and the
+// subject only. OFF by default (repo doctrine): the push body's second line is
+// the judge's short reason. Every channel follows it, so all surfaces read the
+// same (decision N1). `cohort` opens it only to ROLLOUT_COHORT_USER_IDS.
+export const PUSH_QUOTE_FLAG = "NOTIFY_PUSH_QUOTE";
+export function pushQuoteOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [PUSH_QUOTE_FLAG]);
+}
+
+// NT0 push presentation (decided 2026-11-17): APNs `thread-id`, `subtitle`
+// (the subject, so the body is the one-line request only),
+// `interruption-level` (time-sensitive for push / meet, passive for wait,
+// digest and brief), `relevance-score`, and `apns-priority` 5 for a passive
+// kind. OFF by default: the APNs alert stays { title, body } at priority 10.
+// The structured custom keys (contract NotificationPresentation) ship either
+// way; a client that does not read them is unaffected.
+export const PUSH_PRESENTATION_FLAG = "NOTIFY_PUSH_PRESENTATION";
+export function pushPresentationOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [PUSH_PRESENTATION_FLAG]);
+}
+
 // KakaoTalk chat-export import v1 (docs/providers/kakaotalk-import.md): the
 // user uploads one exported chat; Klorn suggests commitments from its recent
 // window. OFF by default (repo doctrine). `cohort` opens the routes, the

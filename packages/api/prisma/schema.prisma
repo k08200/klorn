@@ -971,6 +971,12 @@ model CalendarEvent {
   endTime           DateTime
   location          String?
   meetingLink       String?
+  // NT0: how many people the invite lists — resources (rooms, equipment) and
+  // attendees who declined left out; the user and the organizer counted when
+  // listed. NULL = the provider listed none (a solo event), omitted the list
+  // (a large meeting), or does not report attendees (only Google sync sets it).
+  // A count only: attendee identities are never stored (context/meeting-prep-attendees.ts).
+  attendeeCount     Int?
   color             String?
   allDay            Boolean                @default(false)
   // Legacy Google key. Still what every read and sync lookup uses; it is

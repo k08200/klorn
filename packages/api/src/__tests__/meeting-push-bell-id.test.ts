@@ -10,6 +10,8 @@ import { DB_CANARY } from "./helpers/prisma-canary.js";
 
 const NOW = new Date("2026-11-07T09:00:00Z");
 
+type Row = Record<string, unknown>;
+
 const mocks = vi.hoisted(() => ({
   pushNotification: vi.fn(),
   sendPushNotification: vi.fn(async () => ({ status: "sent" })),
@@ -74,7 +76,46 @@ describe("meeting-starting-soon push", () => {
       // No synced row for the event yet: the calendar, never an off-app link.
       url: "/calendar",
       bellNotificationId: frame.id,
+      presentation: { kind: "meet" },
     });
+  });
+
+  it("carries the NT0 meet fields: the join link and how many are invited, never who", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW.getTime());
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    mocks.getUpcomingMeetings.mockResolvedValue([
+      {
+        id: "evt-2",
+        summary: "Design review",
+        start: new Date(NOW.getTime() + 3 * 60_000).toISOString(),
+        meetingLink: "https://meet.google.com/abc-defg-hij",
+        attendees: ["a@x.com", "b@x.com", "c@x.com"],
+        attendeeCount: 3,
+      },
+    ]);
+
+    startBackgroundAgent();
+    await vi.waitFor(() =>
+      expect(
+        (
+          mocks.sendPushNotification.mock.calls as unknown as Array<[string, { body?: string }]>
+        ).some(([, p]) => p.body === "Design review"),
+      ).toBe(true),
+    );
+
+    const fields = {
+      kind: "meet",
+      joinUrl: "https://meet.google.com/abc-defg-hij",
+      attendeeCount: 3,
+    };
+    const calls = mocks.sendPushNotification.mock.calls as unknown as Array<
+      [string, { body?: string; presentation?: unknown }]
+    >;
+    const payload = calls.find(([, p]) => p.body === "Design review")?.[1];
+    expect(payload?.presentation).toEqual(fields);
+    const frames = mocks.pushNotification.mock.calls as unknown as Array<[string, Row]>;
+    expect(frames.find(([, f]) => f.kind === "meet" && "joinUrl" in f)?.[1]).toMatchObject(fields);
+    expect(JSON.stringify(mocks.sendPushNotification.mock.calls)).not.toContain("a@x.com");
   });
 });
 
