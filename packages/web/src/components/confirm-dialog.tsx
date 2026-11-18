@@ -94,7 +94,10 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     <ConfirmContext.Provider value={{ confirm }}>
       {children}
       {options && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[130] px-4">
+        <div
+          data-overlay
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[130] px-4"
+        >
           <div
             ref={dialogRef}
             className="bg-surface-panel border border-line rounded-sheet p-6 w-full max-w-sm animate-slide-up"

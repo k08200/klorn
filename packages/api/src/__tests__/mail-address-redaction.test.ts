@@ -47,9 +47,33 @@ describe("redactMailAddresses", () => {
     expect(redactMailAddresses("a@x.io, b@y.io; c@z.io")).toBe(`${M}, ${M}; ${M}`);
   });
 
-  it("keeps a local part to RFC 5321's 64 characters: a longer run keeps its head", () => {
-    const out = redactMailAddresses(`${"h".repeat(10)}${"t".repeat(64)}@example.com`);
-    expect(out).toBe(`${"h".repeat(10)}${M}`);
+  it("takes a local part longer than RFC 5321's 64 characters whole: no head is left", () => {
+    const out = redactMailAddresses(`to ${"h".repeat(10)}${"t".repeat(64)}@example.com now`);
+    expect(out).toBe(`to ${M} now`);
+  });
+
+  it.each([
+    ['"kim lee"@example.com', M],
+    ['To: "kim lee"@example.com, bob@example.com', `To: ${M}, ${M}`],
+    ['<"kim.lee@home"@example.com>', `<${M}>`],
+    ['"kim \\"the boss\\" lee"@example.com', M],
+    [`"${"q".repeat(80)}"@example.com`, M],
+    // JSON writes the quotes escaped: the escape goes with the address.
+    [JSON.stringify({ to: '"kim lee"@example.com' }), `{"to":"${M}"}`],
+    ['said "hi" then "kim lee"@example.com', `said "hi" then ${M}`],
+    ['"a@b.co" and "kim"@example.com', `"${M}" and ${M}`],
+  ])("redacts the quoted local part in %j", (input, expected) => {
+    expect(redactMailAddresses(input)).toBe(expected);
+  });
+
+  it("follows a quoted local part folded across lines, and takes the line when no opening quote is on it", () => {
+    // RFC 5322 lets a quoted string fold: the opening quote may sit a line up.
+    expect(redactMailAddresses('To: "Kim\r\n Lee"@example.com')).toBe(`To: ${M}`);
+    // A stray closing quote with no opening: the line up to it goes, not only
+    // the domain, and the line before stays.
+    expect(redactMailAddresses('first line\nlog: x"@example.com')).toBe(`first line\n${M}`);
+    // An opening quote on an earlier, unfolded line is not this one's.
+    expect(redactMailAddresses('say "hi"\nline two\nfoo"@y.co')).toBe(`say "hi"\nline two\n${M}`);
   });
 
   it.each([
@@ -94,6 +118,20 @@ describe("redactMailAddresses — linear on hostile input", () => {
     const out = redactMailAddresses(input);
     expect(out).not.toContain(M);
     expect(out).toBe(input);
+  });
+
+  it.each([
+    ["a megabyte-long local part", () => `${"a".repeat(MB)}@example.com`, M],
+    ["a megabyte-long quoted local part", () => `"${"a ".repeat(MB / 2)}"@example.com`, M],
+    ["quotes only", () => '"'.repeat(MB), null],
+    ["quote-@ pairs with no domain", () => '"@'.repeat(MB / 2), null],
+    ["quote-@-dot runs", () => '"@x.'.repeat(MB / 4), null],
+    ["escaped quotes only", () => '\\"'.repeat(MB / 2), null],
+    ["back-to-back quoted addresses", () => '"a"@b.co '.repeat(MB / 9), `${M} `.repeat(MB / 9)],
+    ["a quote, then a megabyte of quote-@ pairs", () => `"${'x"@'.repeat(MB / 3)}`, null],
+  ])("%s", (_name, build, expected) => {
+    const input = build();
+    expect(redactMailAddresses(input)).toBe(expected ?? input);
   });
 
   it("a megabyte of back-to-back addresses comes out as markers", () => {

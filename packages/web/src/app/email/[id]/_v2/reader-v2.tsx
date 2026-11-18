@@ -23,6 +23,7 @@
 
 import type { LiveTier } from "@klorn/contract";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import MailHtmlBody from "../../../../components/mail-html-body";
 import { useToast } from "../../../../components/toast";
@@ -48,6 +49,7 @@ import {
 } from "./reader-actions";
 import { type ReaderFacts, ReaderHeader } from "./reader-header";
 import {
+  composerEntryOnTop,
   DOCKED_READER_PADDING,
   ReplyComposer,
   type ReplyLayout,
@@ -111,6 +113,7 @@ function TopBar({ reader, keyboardTriage, onOpen, actions }: TopBarProps) {
   const hint = (label: string, key: string) => (keyboardTriage ? `${label} (${key})` : label);
   const newerId = context?.newerId ?? null;
   const olderId = context?.olderId ?? null;
+  const router = useRouter();
   return (
     <nav
       aria-label={t("mailV2.reader.back")}
@@ -118,6 +121,19 @@ function TopBar({ reader, keyboardTriage, onOpen, actions }: TopBarProps) {
     >
       <Link
         href="/email"
+        onClick={(event) => {
+          // Over the open composer's history entry, not past it (reply-composer.tsx).
+          // A new tab or window (modifier or middle click) keeps the browser's default.
+          const plain =
+            event.button === 0 &&
+            !event.metaKey &&
+            !event.ctrlKey &&
+            !event.shiftKey &&
+            !event.altKey;
+          if (!plain || !composerEntryOnTop()) return;
+          event.preventDefault();
+          router.replace("/email");
+        }}
         title={hint(t("mailV2.reader.back"), "Esc")}
         className="focus-ring flex h-11 min-w-0 items-center gap-2 rounded-control px-3 text-role-label text-ink-mid transition-colors duration-120 ease-fluid hover:bg-surface-hover hover:text-ink"
       >

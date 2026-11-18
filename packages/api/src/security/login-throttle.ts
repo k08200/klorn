@@ -28,58 +28,26 @@
  *   locked attempt is logged at the route for detection.
  */
 
+import { createAccountWindowThrottle } from "./account-window-throttle.js";
+
 export const LOGIN_THROTTLE_MAX_FAILURES = 30;
 export const LOGIN_THROTTLE_WINDOW_MS = 15 * 60 * 1000;
 
-/**
- * Hard ceiling on tracked accounts. When exceeded (after dropping expired
- * windows), the oldest windows are evicted first — the limiter fails open
- * rather than letting unique-email floods grow the map without bound. The
- * eviction scan is O(cap) and only runs on inserts while at the cap.
- */
+/** Hard ceiling on tracked accounts (account-window-throttle.ts: fails open past it). */
 export const LOGIN_THROTTLE_MAX_TRACKED = 50_000;
 
-interface AttemptWindow {
-  /** Attempts since the window started */
-  count: number;
-  /** Epoch ms of the first attempt in the current window */
-  windowStartedAt: number;
-}
-
-const windows = new Map<string, AttemptWindow>();
-
-function isExpired(w: AttemptWindow, now: number): boolean {
-  return now - w.windowStartedAt >= LOGIN_THROTTLE_WINDOW_MS;
-}
-
-function sweepExpired(now: number): void {
-  for (const [key, w] of windows) {
-    if (isExpired(w, now)) windows.delete(key);
-  }
-}
-
-/** Evict oldest-inserted windows until the map fits under the hard cap. */
-function evictToCap(): void {
-  for (const key of windows.keys()) {
-    if (windows.size <= LOGIN_THROTTLE_MAX_TRACKED - 1) return;
-    windows.delete(key);
-  }
-}
+const throttle = createAccountWindowThrottle({
+  maxAttempts: LOGIN_THROTTLE_MAX_FAILURES,
+  windowMs: LOGIN_THROTTLE_WINDOW_MS,
+  maxTracked: LOGIN_THROTTLE_MAX_TRACKED,
+});
 
 /**
  * Milliseconds until the account's current lock expires; 0 when the account
  * is not locked. Never mutates state beyond dropping an expired window.
  */
 export function loginThrottleRemainingMs(normalizedEmail: string): number {
-  const now = Date.now();
-  const w = windows.get(normalizedEmail);
-  if (!w) return 0;
-  if (isExpired(w, now)) {
-    windows.delete(normalizedEmail);
-    return 0;
-  }
-  if (w.count < LOGIN_THROTTLE_MAX_FAILURES) return 0;
-  return w.windowStartedAt + LOGIN_THROTTLE_WINDOW_MS - now;
+  return throttle.remainingMs(normalizedEmail);
 }
 
 export function isLoginThrottled(normalizedEmail: string): boolean {
@@ -91,30 +59,20 @@ export function isLoginThrottled(normalizedEmail: string): boolean {
  * check, before any await — see the module docstring for why.
  */
 export function recordLoginAttempt(normalizedEmail: string): void {
-  const now = Date.now();
-  const w = windows.get(normalizedEmail);
-  if (!w || isExpired(w, now)) {
-    if (windows.size >= LOGIN_THROTTLE_MAX_TRACKED) {
-      sweepExpired(now);
-      evictToCap();
-    }
-    windows.set(normalizedEmail, { count: 1, windowStartedAt: now });
-    return;
-  }
-  windows.set(normalizedEmail, { count: w.count + 1, windowStartedAt: w.windowStartedAt });
+  throttle.record(normalizedEmail);
 }
 
 /** A successful login clears the account's window. */
 export function clearLoginAttempts(normalizedEmail: string): void {
-  windows.delete(normalizedEmail);
+  throttle.clear(normalizedEmail);
 }
 
 /** Test helper: drop all in-memory windows. */
 export function _resetLoginThrottleForTests(): void {
-  windows.clear();
+  throttle.reset();
 }
 
 /** Test helper: current number of tracked windows. */
 export function _loginThrottleTrackedCountForTests(): number {
-  return windows.size;
+  return throttle.trackedCount();
 }

@@ -37,9 +37,20 @@ vi.mock("../notify/push.js", () => ({
   }),
 }));
 vi.mock("../websocket.js", () => ({ pushNotification: vi.fn() }));
+// Pass-through, so one test can make the Slack read fail.
+vi.mock("../notify/held-slack-rows.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../notify/held-slack-rows.js")>();
+  return { ...real, withoutAnsweredEpisodes: vi.fn(real.withoutAnsweredEpisodes) };
+});
+vi.mock("../report-db-failure.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../report-db-failure.js")>();
+  return { ...real, logDbFailure: vi.fn() };
+});
 
+import { withoutAnsweredEpisodes } from "../notify/held-slack-rows.js";
 import { notificationCopy } from "../notify/notification-strings.js";
 import { sendQuietHoursSummaries } from "../notify/quiet-hours-summary.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 const USER = "user-1";
 const MIN = 60_000;
@@ -296,6 +307,20 @@ describe("Slack on — held Slack PUSH rings with the held mail", () => {
 
     expect((pushes.calls[0][1] as { title: string }).title).toBe(
       notificationCopy("ko").messagesDuringQuietHours(3),
+    );
+  });
+
+  it("a failing Slack read never costs the mail summary (#1799 review)", async () => {
+    seedMailAndSlack();
+    vi.mocked(withoutAnsweredEpisodes).mockRejectedValueOnce(new Error("slack read down"));
+
+    expect(await sendQuietHoursSummaries(AFTER_END)).toBe(1);
+
+    expect(pushes.calls).toHaveLength(1);
+    expect(pushes.calls[0][1]).toEqual(MAIL_ONLY_SUMMARY);
+    expect(claimRows()[0]).toMatchObject({ message: "2 held" });
+    expect(vi.mocked(logDbFailure).mock.calls.map((c) => c[0])).toContain(
+      "[QUIET] held Slack read failed",
     );
   });
 
