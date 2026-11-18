@@ -1419,6 +1419,7 @@ const ko: Record<string, string> = {
   "emailDetail.replyDraft.saveGmailDraft": "Gmail 임시보관함 저장",
   "emailDetail.replyDraft.sending": "보내는 중...",
   "emailDetail.replyDraft.sendButton": "이 답장 보내기",
+  "emailDetail.replyDraft.bodyLabel": "답장 본문",
   "emailDetail.analysis.notAnalyzed":
     "Klorn이 아직 이 메일을 분석하지 않았어요. 동기화 후 다시 확인해 주세요.",
   "emailDetail.analysis.title": "Klorn 판단",
@@ -1862,6 +1863,7 @@ const ko: Record<string, string> = {
   "mailV2.reader.error.title": "이 메일을 열지 못했습니다",
   "mailV2.reader.reconnectToArchive": "메일을 보관하려면 이 계정을 다시 연결하세요.",
   "mailV2.reader.tone": "어조 및 템플릿",
+  "mailV2.reply.original": "원본 메일",
   // Assistant hub (productization plan P7, UNIFIED_HOME): /assistant/*.
   "nav.v2.activity": "활동",
   "nav.v2.chat": "채팅",

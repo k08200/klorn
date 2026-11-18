@@ -3,7 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import AuthGuard from "../../../components/auth-guard";
 import { useConfirm } from "../../../components/confirm-dialog";
 import MailHtmlBody from "../../../components/mail-html-body";
@@ -29,6 +29,7 @@ import { REMINDER_LABEL_KEYS } from "../_v2/reminders";
 import { useLaneMove } from "../use-lane-move";
 import { readerLeaveHref } from "./_v2/reader-model";
 import { ReaderV2 } from "./_v2/reader-v2";
+import type { ReplyLayout } from "./_v2/reply-composer";
 import { useDoneFeedback } from "./_v2/use-done-feedback";
 import { useReaderContext } from "./_v2/use-reader-context";
 import { useReaderTriage } from "./_v2/use-reader-triage";
@@ -167,7 +168,7 @@ function useStoredFlag(key: string): [boolean, (value: boolean) => void] {
 /** The v2 reader's slots while there is no mail to fill them with. */
 const EMPTY_READER_SLOTS = {
   thread: null,
-  reply: null,
+  reply: () => null,
   candidate: null,
   attachments: null,
   analysis: null,
@@ -221,6 +222,7 @@ function EmailDetailView() {
   const [draftIntent, setDraftIntent] = useState("");
   const [drafting, setDrafting] = useState(false);
   const [sendingDraft, setSendingDraft] = useState(false);
+  const [replySentCount, setReplySentCount] = useState(0);
   const [savingGmailDraft, setSavingGmailDraft] = useState(false);
   const [savingAttachmentCorrection, setSavingAttachmentCorrection] = useState<string | null>(null);
   const [gmailDraftUrl, setGmailDraftUrl] = useState<string | null>(null);
@@ -480,6 +482,7 @@ function EmailDetailView() {
         body: JSON.stringify(request.body),
       });
       setDraft(null);
+      setReplySentCount((count) => count + 1);
     } catch (err) {
       if (isEntitlementRefusal(err)) {
         setProGate("reply");
@@ -813,6 +816,7 @@ function EmailDetailView() {
           void generateReplyDraft();
         }}
         drafting={drafting}
+        replySentCount={replySentCount}
         onArchive={() => void doneFromV2Reader()}
         onDelete={deleteEmailNow}
         onToggleRead={toggleRead}
@@ -826,11 +830,12 @@ function EmailDetailView() {
                   thread && thread.messages.length > 1 ? (
                     <ThreadContextPanel currentEmailId={email.id} thread={thread} />
                   ) : null,
-                reply: (
+                reply: (layout) => (
                   <>
                     <SmartActionsRow emailId={email.id} className="mb-3" />
                     {proGate === "reply" && <ProFeatureNotice className="mb-3" />}
                     <ReplyDraftBox
+                      layout={layout}
                       presets="collapsed"
                       draft={draft}
                       intent={draftIntent}
@@ -1536,7 +1541,15 @@ function ReplyDraftBox({
   onSaveGmailDraft,
   onSend,
   presets = "inline",
+  layout = "inline",
 }: {
+  /**
+   * "sheet": inside the phone reply sheet / folded dock (v2 reader, PR4). No
+   * card chrome (the sheet titles it), the draft's text box grows to show all
+   * of its text, and the Save / Send row is pinned to the sheet's bottom edge
+   * with 44px buttons. "inline" is unchanged.
+   */
+  layout?: ReplyLayout;
   /**
    * Where the work-mode chips and quick intents sit. "inline" is the legacy
    * reader; the v2 reader folds them behind one disclosure (closed by default,
@@ -1576,6 +1589,10 @@ function ReplyDraftBox({
   const draftAttachmentCount = selectedCount + (includeBriefAttachment ? 1 : 0);
   const workModeOptions = buildWorkModeOptions(t);
   const quickIntents = buildQuickReplyIntents(t, candidateProfile, mode);
+  const inSheet = layout === "sheet";
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(bodyRef, draft?.body ?? "", inSheet);
+  const actionHeight = inSheet ? "h-11" : "h-9";
   const [presetsOpen, setPresetsOpen] = useStoredFlag(REPLY_PRESETS_OPEN_KEY);
   // The same two rows in both layouts: inline for the legacy reader, inside
   // the disclosure for v2.
@@ -1618,17 +1635,35 @@ function ReplyDraftBox({
   );
 
   return (
-    <section className="panel-elevated mt-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel p-4 md:p-5">
+    <section
+      className={
+        inSheet
+          ? ""
+          : "panel-elevated mt-5 overflow-hidden rounded-card border border-line/70 bg-surface-panel p-4 md:p-5"
+      }
+    >
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-role-caption font-semibold uppercase tracking-wider text-ink-mid">
+          <h2
+            className={
+              inSheet
+                ? "sr-only"
+                : "text-role-caption font-semibold uppercase tracking-wider text-ink-mid"
+            }
+          >
             {t("emailDetail.replyDraft.title")}
           </h2>
-          <p className="mt-1 text-role-caption text-ink-dim">
+          <p className={`text-role-caption text-ink-dim${inSheet ? "" : " mt-1"}`}>
             {t("emailDetail.replyDraft.subtitle")}
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={onGenerate} disabled={drafting}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onGenerate}
+          disabled={drafting}
+          className={inSheet ? "shrink-0" : undefined}
+        >
           {drafting
             ? t("emailDetail.replyDraft.drafting")
             : draft
@@ -1694,10 +1729,12 @@ function ReplyDraftBox({
             </label>
           </div>
           <textarea
+            ref={bodyRef}
+            aria-label={t("emailDetail.replyDraft.bodyLabel")}
             value={draft.body}
             onChange={(e) => onDraftChange({ ...draft, body: e.target.value })}
             rows={7}
-            className={`w-full rounded-control border border-line bg-surface-panel/80 px-3 py-2 text-role-body leading-6 text-ink outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
+            className={`w-full rounded-control${inSheet ? " resize-none overflow-hidden" : ""} border border-line bg-surface-panel/80 px-3 py-2 text-role-body leading-6 text-ink outline-none transition duration-150 ease-out focus:border-accent/50 focus:bg-surface-panel focus:ring-2 focus:ring-accent/15${touchField}`}
           />
           {attachments.length > 0 && (
             <div className="space-y-2 rounded-control border border-line-soft bg-surface-raised/70 px-3 py-2">
@@ -1760,14 +1797,22 @@ function ReplyDraftBox({
               </div>
             </div>
           )}
-          <div className="flex justify-end">
+          {/* In the sheet: pinned flush to the bottom edge (-bottom-4 / -mb-4 cancel
+              the sheet body's 1rem bottom padding, so no draft text shows below it). */}
+          <div
+            className={
+              inSheet
+                ? "sticky -bottom-4 -mx-5 -mb-4 flex justify-end border-t border-line-soft bg-surface-elevated px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+                : "flex justify-end"
+            }
+          >
             <div className="flex flex-wrap justify-end gap-2">
               {gmailDraftUrl && (
                 <a
                   href={gmailDraftUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="ease-strong inline-flex h-9 items-center rounded-control border border-state-info-line bg-state-info-bg px-3 text-role-caption font-medium text-accent-deeper transition duration-150 hover:bg-state-info-bg hover:text-state-info-ink active:scale-[0.97] focus-ring"
+                  className={`ease-strong inline-flex ${actionHeight} items-center rounded-control border border-state-info-line bg-state-info-bg px-3 text-role-caption font-medium text-accent-deeper transition duration-150 hover:bg-state-info-bg hover:text-state-info-ink active:scale-[0.97] focus-ring`}
                 >
                   {t("emailDetail.replyDraft.openGmailDraft")}
                 </a>
@@ -1776,7 +1821,7 @@ function ReplyDraftBox({
                 type="button"
                 onClick={onSaveGmailDraft}
                 disabled={savingGmailDraft || !draft.to || !draft.subject || !draft.body}
-                className="ease-strong inline-flex h-9 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring"
+                className={`ease-strong inline-flex ${actionHeight} items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50 focus-ring`}
               >
                 {savingGmailDraft
                   ? t("emailDetail.replyDraft.saving")
@@ -1790,7 +1835,7 @@ function ReplyDraftBox({
                 type="button"
                 onClick={onSend}
                 disabled={sending || !draft.to || !draft.subject || !draft.body}
-                className="glow-primary ease-strong inline-flex h-9 items-center rounded-control bg-accent-solid px-3.5 text-role-caption font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 focus-ring"
+                className={`glow-primary ease-strong inline-flex ${actionHeight} items-center rounded-control bg-accent-solid px-3.5 text-role-caption font-medium text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 focus-ring`}
               >
                 {sending
                   ? t("emailDetail.replyDraft.sending")
@@ -1802,6 +1847,32 @@ function ReplyDraftBox({
       )}
     </section>
   );
+}
+
+/**
+ * Grows a text box to its content so the whole text shows (the phone reply
+ * sheet), again when its width changes (rewrap, late web font), so no line is
+ * ever clipped out of reach.
+ */
+function useAutoGrow(ref: RefObject<HTMLTextAreaElement | null>, value: string, enabled: boolean) {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the text is the trigger
+  useLayoutEffect(() => {
+    const box = ref.current;
+    if (!enabled || !box) return;
+    const fit = () => {
+      box.style.height = "auto";
+      box.style.height = `${box.scrollHeight + box.offsetHeight - box.clientHeight}px`;
+    };
+    fit();
+    let width = box.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (box.clientWidth === width) return;
+      width = box.clientWidth;
+      fit();
+    });
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [ref, value, enabled]);
 }
 
 function SummarizeButton({
