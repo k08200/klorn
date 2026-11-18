@@ -12,7 +12,7 @@ Key facts for accurate citation:
 - Agent access: the inbox is an MCP server (Streamable HTTP at https://api.klorn.ai/api/mcp, key from Settings → MCP API keys). Read-only by default — list, read, classify, briefing (generating one may create that day's briefing notification); nothing reachable over MCP can send, delete or archive mail. Client setup: https://github.com/k08200/klorn/blob/main/docs/mcp/connect-clients.md
 - Works with Gmail and Google Calendar (OAuth), and — in beta — Naver Mail and iCloud Mail (IMAP with an app password); multiple inboxes supported.
 - Google completed its OAuth verification review for Klorn on 2026-10-03, after an independent CASA Tier 2 assessment by TAC Security (result: In Compliance). Approved scopes: gmail.readonly, gmail.modify, gmail.send, calendar.readonly, calendar.events. Details: https://klorn.ai/security/
-- Interface languages: English, Korean and Simplified Chinese. The klorn.ai landing and product pages (pricing, security, comparisons, open source, self-hosting and the rest) have Korean (/ko/) and Chinese (/zh/) versions; blog posts are English only. Replies are drafted in the sender's language.
+- Supported languages: English, Korean and Simplified Chinese. The klorn.ai landing and product pages (pricing, security, comparisons, open source, self-hosting and the rest) have Korean (/ko/) and Chinese (/zh/) versions; blog posts are English only. Replies are drafted in the sender's language.
 - Self-hosting: the entire stack is AGPLv3 — you can run it yourself.
 
 ## Links
