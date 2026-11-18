@@ -245,6 +245,49 @@ func bannerActionSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         check("a Join opens the meeting link and nothing else", opened == [URL(string: "https://meet.google.com/abc")!]
               && w.opens.isEmpty)
     }
+    // Reply on a cold launch (2026-11-18): Klorn launched by the press has no
+    // queue yet. The mail AND the composer open once the first sync lands,
+    // exactly as on a warm launch.
+    do {
+        let cold = SessionScenarios.model([SessionScenarios.firewall: .init(body: SessionScenarios.pushQueue)])
+        let window = FakeMainWindow()
+        let coldRouter = WindowRouter(model: cold, mainWindow: window)
+        coldRouter.onboarding = FakeOnboarding()
+        coldRouter.handleNotificationResponse(
+            identifier: pushID, actionIdentifier: BannerAction.reply.rawValue, info: mailInfo)
+        let waiting = window.opens == [true] && cold.pendingRevealItemID == "p1"
+            && cold.pendingRevealOpensReply && cold.replyRequest == nil
+        await cold.loadQueue()
+        let opened = await SessionScenarios.waitUntil { cold.selectedItemId == "p1" }
+        check("a cold-launch Reply opens the mail and then the composer once the queue loads",
+              waiting && opened && cold.replyRequest?.itemId == "p1"
+              && cold.pendingRevealItemID == nil && !cold.pendingRevealOpensReply
+              && Stub.calls.allSatisfy { !$0.path.hasPrefix("/api/email/send") })
+    }
+    do {
+        let cold = SessionScenarios.model([SessionScenarios.firewall: .init(body: SessionScenarios.pushQueue)])
+        let coldRouter = WindowRouter(model: cold, mainWindow: FakeMainWindow())
+        coldRouter.handleNotificationResponse(
+            identifier: pushID, actionIdentifier: BannerAction.reply.rawValue, info: mailInfo)
+        coldRouter.handleNotificationTap(identifier: pushID)
+        await cold.loadQueue()
+        let opened = await SessionScenarios.waitUntil { cold.selectedItemId == "p1" }
+        check("a later plain tap on a cold launch opens the mail without the composer",
+              opened && cold.replyRequest == nil && !cold.pendingRevealOpensReply)
+    }
+    do {
+        let cold = SessionScenarios.model([SessionScenarios.firewall: .init(body: SessionScenarios.pushQueue)])
+        let coldRouter = WindowRouter(model: cold, mainWindow: FakeMainWindow())
+        coldRouter.handleNotificationResponse(
+            identifier: pushID, actionIdentifier: BannerAction.reply.rawValue, info: mailInfo)
+        cold.signOut()
+        check("sign-out drops a pending cold-launch reply",
+              cold.pendingRevealItemID == nil && !cold.pendingRevealOpensReply)
+    }
+    check("an in-app language change re-registers the button titles",
+          text("Settings.swift").contains("onLanguageChanged?()")
+          && text("KlornApp.swift").contains(
+              "model.settings.onLanguageChanged = { SystemPushNotifier.registerCategories() }"))
     check("the delegate hands every response, with its button and ids, to the router",
           text("KlornApp.swift").contains("self?.router?.handleNotificationResponse(")
           && text("KlornApp.swift").contains("BannerActions.stringInfo(response.notification.request.content.userInfo)"))

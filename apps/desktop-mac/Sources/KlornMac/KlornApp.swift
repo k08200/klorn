@@ -151,8 +151,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if PushNotifier.isAvailable {
             UNUserNotificationCenter.current().delegate = self
         }
-        // The banner buttons (Reply / Later / Done, Join), before any banner.
+        // The banner buttons (Reply / Later / Done, Join), before any banner,
+        // and again in the new language after an in-app language change.
         SystemPushNotifier.registerCategories()
+        model.settings.onLanguageChanged = { SystemPushNotifier.registerCategories() }
         // Settings scene (M0): one opener for the shell, the in-app
         // Preferences buttons, and anything else outside SwiftUI's own ⌘,.
         let opener = SettingsOpener()
