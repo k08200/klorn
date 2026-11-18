@@ -13,6 +13,8 @@ export interface CalendarEvent {
   location: string | null;
   meetingLink: string | null;
   allDay: boolean;
+  /** The calendar's colour as the provider recorded it; untrusted (see eventBarColor). */
+  color?: string | null;
   /** Present (true) on a linked calendar's event: a read-only mirror (step C7). */
   readOnly?: boolean;
   /** The linked account's email, on a linked event only. */

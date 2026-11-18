@@ -250,7 +250,7 @@ export function Sheet({
   const shown = phase === "open";
 
   return createPortal(
-    <div className="fixed inset-0 z-[120]">
+    <div data-overlay className="fixed inset-0 z-[120]">
       <div
         aria-hidden="true"
         onClick={onClose}

@@ -7,6 +7,7 @@ import { useT } from "../lib/i18n";
 import { serverErrorMessage } from "../lib/server-error";
 import { ProFeatureNotice } from "./pro-feature-notice";
 import ErrorAlert from "./ui/error-alert";
+import { OverlayPortal } from "./ui/overlay-portal";
 
 /**
  * Minimal create-event dialog for /calendar. POSTs to /api/calendar, which
@@ -174,154 +175,161 @@ export function NewEventModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center">
-      <button
-        type="button"
-        aria-label={t("newEvent.close")}
-        onClick={() => {
-          if (!saving) onClose();
-        }}
-        className="absolute inset-0 bg-black/60"
-      />
+    <OverlayPortal>
       <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={headingId}
-        className="panel-elevated relative w-full max-w-md animate-slide-up rounded-t-sheet border border-line/70 bg-surface-panel p-5 shadow-2xl shadow-slate-900/10 md:rounded-sheet"
+        data-overlay
+        className="fixed inset-0 z-[120] flex items-end justify-center md:items-center"
       >
-        <h2 id={headingId} className="text-role-title text-ink">
-          {t("calendar.newEvent")}
-        </h2>
-        <p className="mt-1 text-role-caption text-ink-dim">{t("newEvent.subtitle")}</p>
-
-        <form
-          className="mt-4 space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void save();
+        <button
+          type="button"
+          aria-label={t("newEvent.close")}
+          onClick={() => {
+            if (!saving) onClose();
           }}
+          className="absolute inset-0 bg-black/60"
+        />
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={headingId}
+          className="panel-elevated relative w-full max-w-md animate-slide-up rounded-t-sheet border border-line/70 bg-surface-panel p-5 shadow-2xl shadow-slate-900/10 md:rounded-sheet"
         >
-          <div>
-            <label
-              htmlFor={`${headingId}-title`}
-              className="mb-1 block text-role-caption text-ink-mid"
-            >
-              {t("newEvent.title")}
-            </label>
-            <input
-              id={`${headingId}-title`}
-              ref={titleInputRef}
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={t("newEvent.titlePlaceholder")}
-              maxLength={200}
-              disabled={saving}
-              className={inputClass}
-            />
-          </div>
+          <h2 id={headingId} className="text-role-title text-ink">
+            {t("calendar.newEvent")}
+          </h2>
+          <p className="mt-1 text-role-caption text-ink-dim">{t("newEvent.subtitle")}</p>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-1">
-              <label
-                htmlFor={`${headingId}-date`}
-                className="mb-1 block text-role-caption text-ink-mid"
-              >
-                {t("newEvent.date")}
-              </label>
-              <input
-                id={`${headingId}-date`}
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                disabled={saving}
-                className={inputClass}
-              />
-            </div>
+          <form
+            className="mt-4 space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save();
+            }}
+          >
             <div>
               <label
-                htmlFor={`${headingId}-start`}
+                htmlFor={`${headingId}-title`}
                 className="mb-1 block text-role-caption text-ink-mid"
               >
-                {t("newEvent.starts")}
+                {t("newEvent.title")}
               </label>
               <input
-                id={`${headingId}-start`}
-                type="time"
-                value={startTime}
-                onChange={(e) => {
-                  setStartTime(e.target.value);
-                  // Keep a sane default range while the user edits.
-                  if (e.target.value >= endTime) setEndTime(plusOneHour(e.target.value));
-                }}
+                id={`${headingId}-title`}
+                ref={titleInputRef}
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={t("newEvent.titlePlaceholder")}
+                maxLength={200}
                 disabled={saving}
                 className={inputClass}
               />
             </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-1">
+                <label
+                  htmlFor={`${headingId}-date`}
+                  className="mb-1 block text-role-caption text-ink-mid"
+                >
+                  {t("newEvent.date")}
+                </label>
+                <input
+                  id={`${headingId}-date`}
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  disabled={saving}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor={`${headingId}-start`}
+                  className="mb-1 block text-role-caption text-ink-mid"
+                >
+                  {t("newEvent.starts")}
+                </label>
+                <input
+                  id={`${headingId}-start`}
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => {
+                    setStartTime(e.target.value);
+                    // Keep a sane default range while the user edits.
+                    if (e.target.value >= endTime) setEndTime(plusOneHour(e.target.value));
+                  }}
+                  disabled={saving}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor={`${headingId}-end`}
+                  className="mb-1 block text-role-caption text-ink-mid"
+                >
+                  {t("newEvent.ends")}
+                </label>
+                <input
+                  id={`${headingId}-end`}
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  disabled={saving}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+            {!startsBeforeEnds && (
+              <p className="text-role-caption text-state-danger-ink">
+                {t("newEvent.endAfterStart")}
+              </p>
+            )}
+
             <div>
               <label
-                htmlFor={`${headingId}-end`}
+                htmlFor={`${headingId}-location`}
                 className="mb-1 block text-role-caption text-ink-mid"
               >
-                {t("newEvent.ends")}
+                {t("newEvent.location")}{" "}
+                <span className="text-ink-dim">{t("newEvent.optional")}</span>
               </label>
               <input
-                id={`${headingId}-end`}
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
+                id={`${headingId}-location`}
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder={t("newEvent.locationPlaceholder")}
+                maxLength={300}
                 disabled={saving}
                 className={inputClass}
               />
             </div>
-          </div>
-          {!startsBeforeEnds && (
-            <p className="text-role-caption text-state-danger-ink">{t("newEvent.endAfterStart")}</p>
-          )}
 
-          <div>
-            <label
-              htmlFor={`${headingId}-location`}
-              className="mb-1 block text-role-caption text-ink-mid"
-            >
-              {t("newEvent.location")}{" "}
-              <span className="text-ink-dim">{t("newEvent.optional")}</span>
-            </label>
-            <input
-              id={`${headingId}-location`}
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder={t("newEvent.locationPlaceholder")}
-              maxLength={300}
-              disabled={saving}
-              className={inputClass}
-            />
-          </div>
+            {error && <ErrorAlert>{error}</ErrorAlert>}
+            {proGated && <ProFeatureNotice />}
 
-          {error && <ErrorAlert>{error}</ErrorAlert>}
-          {proGated && <ProFeatureNotice />}
-
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="ease-strong min-h-10 rounded-control border border-line bg-surface-panel/70 px-4 text-role-label text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
-            >
-              {t("common.cancel")}
-            </button>
-            <button
-              type="submit"
-              disabled={!canSave}
-              className="glow-primary ease-strong min-h-10 rounded-control bg-accent-solid px-4 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {saving ? t("newEvent.creating") : t("newEvent.create")}
-            </button>
-          </div>
-        </form>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={saving}
+                className="ease-strong min-h-10 rounded-control border border-line bg-surface-panel/70 px-4 text-role-label text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                type="submit"
+                disabled={!canSave}
+                className="glow-primary ease-strong min-h-10 rounded-control bg-accent-solid px-4 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {saving ? t("newEvent.creating") : t("newEvent.create")}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </OverlayPortal>
   );
 }
