@@ -20,10 +20,10 @@ import { PaddleApiError } from "../billing/paddle.js";
 import {
   assertNoSeatChangeSince,
   paddleRefused,
-  SEAT_CHANGE_DOUBT_MS,
-  SEAT_CHANGE_IN_FLIGHT_MS,
   recordSeatChangeRequest,
   recordSeatChangeUnconfirmed,
+  SEAT_CHANGE_DOUBT_MS,
+  SEAT_CHANGE_IN_FLIGHT_MS,
   type SeatChangeAttempt,
   withdrawSeatChangeRequest,
 } from "../org/seat-change-audit.js";
