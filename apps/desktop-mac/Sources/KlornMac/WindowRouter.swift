@@ -143,7 +143,13 @@ final class WindowRouter {
         guard model.phase == .signedIn else { return reopen() }
         switch action {
         case .reply(let itemID):
-            guard let item = model.knownItem(id: itemID) else { return handleNotificationTap(identifier: identifier) }
+            guard let item = model.knownItem(id: itemID) else {
+                // Cold launch: the tap path parks the mail until the first
+                // sync; the composer rides along with it.
+                handleNotificationTap(identifier: identifier)
+                model.pendingRevealOpensReply = model.pendingRevealItemID == itemID
+                return
+            }
             openInApp(item)
             model.requestReply(to: item)
         case .later(let itemID, let emailID):
@@ -191,6 +197,8 @@ final class WindowRouter {
             // when the first sync lands instead of dropping the tap.
             if queue == nil, let id = PushNotifier.itemID(fromNotificationIdentifier: identifier) {
                 model.pendingRevealItemID = id
+                // A plain tap opens the mail only (a Reply sets this after).
+                model.pendingRevealOpensReply = false
             }
         case .openMeeting:
             // The calendar shows the day's events with their join links.
