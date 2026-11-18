@@ -1582,6 +1582,8 @@ func runSelfChecks() async -> Bool {
     for (name, ok) in await permissionWaitSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     print("Time Sensitive banners: PUSH and MEETING mail, Developer ID build only (2026-11-13):")
     for (name, ok) in await timeSensitiveSelfChecks(sourceDir: sourceDir) { check(name, ok) }
+    print("Banner actions and the NT3 layout (2026-11-17):")
+    for (name, ok) in await bannerActionSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     for (name, ok) in await notificationCenterSelfChecks(sourceDir: sourceDir) { check(name, ok) }
     for (name, ok) in await notificationContractSelfChecks() { check(name, ok) }
     print("Notification receipts: shown / clicked to the server (2026-11-12):")

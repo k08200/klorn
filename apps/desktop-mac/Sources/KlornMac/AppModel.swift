@@ -1558,6 +1558,50 @@ final class AppModel {
         }
     }
 
+    /// A banner's Done (2026-11-17): the same dismiss as the reader's, by
+    /// id, so it works whether or not the mail is in the list loaded now.
+    /// Returns the failure shown (the action notice), nil when it took (or
+    /// was cancelled, which is logged and never shown).
+    func dismissFromBanner(itemID: String) async -> String? {
+        let session = sessionGeneration
+        let item = knownItem(id: itemID)
+        if let item { hideLocally(item) }
+        do {
+            try await api.post("/api/inbox/firewall/\(itemID)/dismiss")
+            return nil
+        } catch _ where !isCurrent(session) {
+            return nil
+        } catch APIError.unauthorized {
+            sessionRejected()
+            return L("error.sessionExpired")
+        } catch {
+            Log.app.error("banner Done failed: \(String(describing: error), privacy: .private)")
+            if let item { return unhide(item, error) }
+            return noteActionFailure(error)
+        }
+    }
+
+    /// A banner's Later (2026-11-17): the web's Later for one mail
+    /// (`POST /api/email/:id/later`, packages/api/src/routes/email-later.ts).
+    /// No time sent: the server's later-today default, the one its web push
+    /// Later uses. Returns the failure shown, nil when it took (or was
+    /// cancelled).
+    func remindLaterFromBanner(emailID: String) async -> String? {
+        let session = sessionGeneration
+        do {
+            try await api.post("/api/email/\(emailID)/later", json: [:])
+            return nil
+        } catch _ where !isCurrent(session) {
+            return nil
+        } catch APIError.unauthorized {
+            sessionRejected()
+            return L("error.sessionExpired")
+        } catch {
+            Log.app.error("banner Later failed: \(String(describing: error), privacy: .private)")
+            return noteActionFailure(error)
+        }
+    }
+
     /// Confirm an agent-drafted event: POST to the calendar (syncs to Google
     /// server-side), clear the card, and confirm in-thread. Failure keeps the
     /// card so the user can retry, plus a visible failure bubble.
