@@ -239,7 +239,7 @@ pnpm exec vitest run pg.test.ts
 touch UI copy, the website, lane names, colors or prices:
 
 ```bash
-node .github/scripts/check-i18n-parity.mjs        # web: every key in all 7 locales
+node .github/scripts/check-i18n-parity.mjs        # web: exactly en/ko/zh, every key in each
 node .github/scripts/check-lane-vocabulary.mjs    # web: lane lists name all five lanes
 node .github/scripts/check-lane-identity.mjs      # lane colors stay distinct
 bash .github/scripts/check-website-lockstep.sh    # website: translated landings stay in step
@@ -271,11 +271,14 @@ one file on an idle machine, say so in the PR; don't loosen the budget.
 
 | Surface | Strings | Check |
 |---|---|---|
-| Web (`packages/web`) | `packages/web/src/lib/locales/*.ts`, 7 locales (de, en, es, fr, ja, ko, zh), read through `t()` | `node .github/scripts/check-i18n-parity.mjs` |
-| Mobile (`apps/mobile`) | `apps/mobile/src/i18n/locales/*.ts`, same 7 locales | `cd apps/mobile && npm test` |
+| Web (`packages/web`) | `packages/web/src/lib/locales/*.ts`, 3 locales (en, ko, zh = Simplified Chinese), read through `t()` | `node .github/scripts/check-i18n-parity.mjs` |
+| Server copy (`packages/api`) | Tables keyed by `SHIPPED_LANGUAGES` (`packages/api/src/shipped-languages.ts`): en, ko, zh | `pnpm --filter @klorn/api typecheck` |
+| Mobile (`apps/mobile`) | `apps/mobile/src/i18n/locales/*.ts` | `cd apps/mobile && npm test` |
 | macOS (`apps/desktop-mac`) | `Sources/KlornMac/Resources/*.lproj/Localizable.strings`, read through `L()` | `swift run KlornMac --self-check` |
 | Website (`website/`) | One HTML file per language | `bash .github/scripts/check-website-lockstep.sh` |
 
+- Klorn ships English, Korean and Simplified Chinese. Japanese, Spanish,
+  French and German were retired on 2026-11-17; don't add strings for them.
 - Add a new key to **every** locale in the same PR; the checks fail otherwise.
 - The non-English web locales are machine-translated. Native-speaker review is
   very welcome: say which locale you reviewed in the PR.

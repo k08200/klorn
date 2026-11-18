@@ -74,6 +74,14 @@ describe("summarizeEmailOnDemand", () => {
     expect(opts).toMatchObject({ userId: "user-1", priority: "foreground" });
   });
 
+  it("asks for Simplified Chinese output when lang=zh", async () => {
+    await summarizeEmailOnDemand("user-1", EMAIL, "zh");
+    const [req] = createCompletion.mock.calls[0];
+    expect(req.messages[0].content).toContain(
+      "Write summary, keyPoints, and actionItems in Simplified Chinese.",
+    );
+  });
+
   it("persists the result columns and returns the reply signal", async () => {
     const result = await summarizeEmailOnDemand("user-1", EMAIL, "en");
     expect(emailUpdate).toHaveBeenCalledTimes(1);

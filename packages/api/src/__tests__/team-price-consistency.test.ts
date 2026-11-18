@@ -106,7 +106,7 @@ describe("Team prices: pricing-tiers.md against the code", () => {
     const [min, max] = seatsLine?.slice(1) ?? [];
     const localesDir = join(repo, "packages", "web", "src", "lib", "locales");
     const locales = readdirSync(localesDir).filter((name) => name.endsWith(".ts"));
-    expect(locales.length).toBe(7);
+    expect(locales.length).toBe(3);
     for (const file of locales) {
       const source = readFileSync(join(localesDir, file), "utf8");
       for (const key of ["settings.org.checkout.seats", "settings.org.error.INVALID_SEATS"]) {

@@ -7,7 +7,7 @@
 import type { MeetingPrep, MeetingPrepItem } from "@klorn/contract";
 import { describe, expect, it } from "vitest";
 import { prepCopy, renderPrepHeader, renderPrepLines } from "../context/meeting-prep-copy.js";
-import { NOTIFICATION_LANGUAGES } from "../notify/notification-strings.js";
+import { SHIPPED_LANGUAGES } from "../shipped-languages.js";
 
 const TZ = "Asia/Seoul";
 
@@ -60,15 +60,13 @@ const meeting: MeetingPrep = {
 };
 
 describe("renderPrepLines", () => {
-  it.each(NOTIFICATION_LANGUAGES)("%s: one sourced, non-empty line per item", (lang) => {
+  it.each(SHIPPED_LANGUAGES)("%s: one sourced, non-empty line per item", (lang) => {
     const lines = renderPrepLines(items, lang, TZ);
     expect(lines.map((l) => l.source)).toEqual(items.map((i) => i.source));
     for (const line of lines) expect(line.text.trim().length).toBeGreaterThan(0);
   });
 
-  it.each(
-    NOTIFICATION_LANGUAGES,
-  )("%s: labels the unconfirmed commitment as a suggestion", (lang) => {
+  it.each(SHIPPED_LANGUAGES)("%s: labels the unconfirmed commitment as a suggestion", (lang) => {
     const lines = renderPrepLines(items, lang, TZ);
     const marker = prepCopy(lang).suggestion("").trim();
     expect(lines[1]?.text).toContain(marker);

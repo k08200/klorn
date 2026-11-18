@@ -10,11 +10,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 import {
@@ -180,7 +176,7 @@ describe("prompt and setting copy", () => {
   });
 
   it("every locale's buttons say different things, so the choice is never ambiguous", () => {
-    for (const table of [en, ko, ja, zh, es, fr, de]) {
+    for (const table of [en, ko, zh]) {
       expect(table["desktop.autostart.prompt.accept"]).not.toBe(
         table["desktop.autostart.prompt.decline"],
       );
@@ -188,7 +184,7 @@ describe("prompt and setting copy", () => {
   });
 
   it("exists in every shipped locale, non-empty, and is translated in Korean", () => {
-    for (const table of [en, ko, ja, zh, es, fr, de]) {
+    for (const table of [en, ko, zh]) {
       for (const key of KEYS) {
         expect(table[key], key).toBeTruthy();
       }

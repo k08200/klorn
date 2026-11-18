@@ -24,6 +24,7 @@ import { createCompletion, MODEL } from "../llm/openai.js";
 import { logLlmFailure } from "../llm/report-llm-failure.js";
 import { getProviderChain } from "../providers/index.js";
 import { logDbFailure } from "../report-db-failure.js";
+import { OUTPUT_LANGUAGE_NAME, type ShippedLanguage } from "../shipped-languages.js";
 import { wrapUntrusted } from "../untrusted.js";
 import { extractEmailAddress } from "./email-address.js";
 import { fetchGmailThread, type GmailRawEmail } from "./gmail-fetch.js";
@@ -60,8 +61,8 @@ const EMPTY_BRIEF: ThreadBrief = {
   fresh: false,
 };
 
-function briefPrompt(lang: "en" | "ko"): string {
-  const language = lang === "ko" ? "Korean" : "English";
+function briefPrompt(lang: ShippedLanguage): string {
+  const language = OUTPUT_LANGUAGE_NAME[lang];
   return `You read one email thread and explain why the latest message arrived NOW.
 
 Return JSON only:
@@ -163,7 +164,7 @@ export async function cachedThreadBrief(
 export async function getThreadBrief(
   userId: string,
   threadId: string | null | undefined,
-  opts?: { lang?: "en" | "ko"; userEmail?: string | null },
+  opts?: { lang?: ShippedLanguage; userEmail?: string | null },
 ): Promise<ThreadBrief> {
   if (!threadId) return EMPTY_BRIEF;
 

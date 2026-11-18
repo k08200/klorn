@@ -9,7 +9,7 @@ import { useT } from "../lib/i18n";
 const SECURITY_URL = "https://klorn.ai/security/";
 
 /** Locales whose script the accent serif covers (it ships a Latin subset). */
-const SERIF_LOCALES = new Set(["en", "de", "fr", "es"]);
+const SERIF_LOCALES = new Set(["en"]);
 
 interface AuthScreenProps {
   /** The page's h1 — a string, or <BrandHeadline /> on the sign-in page. */

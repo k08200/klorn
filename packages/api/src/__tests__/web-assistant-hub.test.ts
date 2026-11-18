@@ -38,11 +38,7 @@ import {
   type HotkeyScope,
   type KeyEventLike,
 } from "../../../web/src/lib/hotkeys";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 
@@ -430,8 +426,8 @@ describe("approval keys", () => {
     expect(HOTKEYS.find((d) => d.id === "approvals.next")?.repeatable).toBe(true);
   });
 
-  it("every approval key has a label in all seven locales", () => {
-    const tables = { en, ko, ja, zh, es, fr, de };
+  it("every approval key has a label in all three locales", () => {
+    const tables = { en, ko, zh };
     const defs = HOTKEYS.filter((d) => d.id.startsWith("approvals."));
     expect(defs).toHaveLength(5);
     for (const def of defs) {

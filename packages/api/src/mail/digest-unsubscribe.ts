@@ -13,6 +13,8 @@
  * with the settings screen, and the one the user can see has to win.
  */
 
+import { type ShippedLanguage, toShippedLanguage } from "../shipped-languages.js";
+
 const DIGEST_UNSUBSCRIBE_PATH = "/settings/notifications#notifyDailyBriefing";
 
 /**
@@ -55,11 +57,12 @@ export function digestUnsubscribeUrl(baseUrl: string | undefined | null): string
  * pim/weekly-report.ts). Calling it "unsubscribe from the daily digest" would
  * promise a narrower effect than the switch actually has.
  */
-const LABEL: Record<"en" | "ko", string> = {
+const LABEL: Record<ShippedLanguage, string> = {
   en: "Unsubscribe — turn off daily briefing emails and alerts",
   ko: "수신거부 — 데일리 브리핑 메일·알림 끄기",
+  zh: "退订 — 关闭每日简报邮件和提醒",
 };
 
 export function digestUnsubscribeLabel(language: string): string {
-  return language === "ko" ? LABEL.ko : LABEL.en;
+  return LABEL[toShippedLanguage(language)];
 }

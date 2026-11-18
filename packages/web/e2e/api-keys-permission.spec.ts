@@ -1,10 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import de from "../src/lib/locales/de";
 import en from "../src/lib/locales/en";
-import es from "../src/lib/locales/es";
-import fr from "../src/lib/locales/fr";
-import ja from "../src/lib/locales/ja";
 import ko from "../src/lib/locales/ko";
 import zh from "../src/lib/locales/zh";
 
@@ -21,7 +17,7 @@ import zh from "../src/lib/locales/zh";
  *   E2E_BASE_URL=http://localhost:8123 pnpm exec playwright test e2e/api-keys-permission.spec.ts
  */
 
-const LOCALES = { en, ko, ja, zh, es, fr, de } as const;
+const LOCALES = { en, ko, zh } as const;
 type LocaleCode = keyof typeof LOCALES;
 
 const GOLDEN_DIR = new URL("./golden/", import.meta.url);

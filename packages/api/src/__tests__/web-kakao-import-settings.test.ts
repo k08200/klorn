@@ -1,6 +1,6 @@
 /**
  * Settings → Integrations → KakaoTalk import (web): the panel's pure helpers,
- * and every `kakaoImport.*` key the panel uses exists in all seven locales
+ * and every `kakaoImport.*` key the panel uses exists in all three locales
  * with its placeholders intact.
  */
 
@@ -15,16 +15,12 @@ import {
   kakaoImportResult,
   kakaoImportWayOutOnly,
 } from "../../../web/src/app/settings/_sections/kakao-import-settings";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 import { KAKAO_MAX_FILE_BYTES } from "../kakao-import/parse.js";
 
-const LOCALES: Record<string, Record<string, string>> = { de, en, es, fr, ja, ko, zh };
+const LOCALES: Record<string, Record<string, string>> = { en, ko, zh };
 
 function summary(overrides: Partial<KakaoImportSummary> = {}): KakaoImportSummary {
   return {

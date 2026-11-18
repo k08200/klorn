@@ -26,11 +26,7 @@ import {
   presetProbeReducer,
 } from "../../../web/src/lib/imap-preset-status";
 import { IMAP_PRESETS, imapPresetFor } from "../../../web/src/lib/imap-presets";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 import { sourceGlyph } from "../../../web/src/lib/source-provider";
@@ -39,7 +35,7 @@ import { IMAP_PRESET_KEYS, imapPresetRouteSlug } from "../mail/imap-preset-keys"
 const WEB = join(__dirname, "../../../web/src");
 const read = (path: string) => readFileSync(join(WEB, path), "utf8");
 
-const LOCALES = { en, ko, ja, zh, de, fr, es } as const;
+const LOCALES = { en, ko, zh } as const;
 
 /** The provider's own instructions, read on 2026-11-14. */
 const HELP_URL: Record<string, string> = {
@@ -99,7 +95,7 @@ describe("IMAP_PRESETS", () => {
   });
 });
 
-describe("preset copy, all 7 locales", () => {
+describe("preset copy, all 3 locales", () => {
   const presetKeys = [
     ...IMAP_PRESETS.map((preset) => preset.hintKey),
     "imapPreset.passwordLabel.app",
@@ -363,7 +359,7 @@ describe("a preset whose flag was turned off after the user connected it", () =>
     expect(presetCardView(probe, true)).toBe("accounts");
   });
 
-  it("hides the reconnect form and says the mailbox is paused, in all 7 locales", () => {
+  it("hides the reconnect form and says the mailbox is paused, in all 3 locales", () => {
     const card = read("components/imap-preset-section.tsx");
     expect(card).toContain("canReconnect={presetConnectOpen(probe.status)}");
     const icloud = read("components/icloud-imap-section.tsx");

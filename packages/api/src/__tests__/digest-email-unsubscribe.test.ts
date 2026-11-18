@@ -81,6 +81,12 @@ describe("sendDigestEmail opt-out", () => {
     expect(payload.headers).toEqual({ "List-Unsubscribe": `<${UNSUBSCRIBE_URL}>` });
   });
 
+  it("translates the label for zh", async () => {
+    await sendDigestEmail("a@example.com", "Subject", "body", { language: "zh" });
+    expect(sentPayload().text as string).toContain("退订");
+    expect(sentPayload().text as string).not.toContain(LABEL_EN);
+  });
+
   it("falls back to English for a language the digest copy was never written in", async () => {
     await sendDigestEmail("a@example.com", "Subject", "body", { language: "de" });
     expect(sentPayload().text as string).toContain(LABEL_EN);

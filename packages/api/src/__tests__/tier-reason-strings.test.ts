@@ -80,9 +80,16 @@ describe("static tier reasons", () => {
   });
 
   it("renders a shipped non-English language in that language", () => {
-    const fr = resolveTierReason("task.overdueUrgent", "fr");
-    expect(fr).toBeTruthy();
-    expect(fr).not.toBe(resolveTierReason("task.overdueUrgent", "en"));
+    const zh = resolveTierReason("task.overdueUrgent", "zh");
+    expect(zh).toBeTruthy();
+    expect(zh).not.toBe(resolveTierReason("task.overdueUrgent", "en"));
+    expect(resolveTierReason("task.overdueUrgent", "zh-TW")).toBe(zh);
+  });
+
+  it.each(["ja", "es", "fr", "de"])("renders the retired %s in English", (lang) => {
+    expect(resolveTierReason("task.overdueUrgent", lang)).toBe(
+      resolveTierReason("task.overdueUrgent", "en"),
+    );
   });
 
   it("recognises its own keys and nothing else", () => {

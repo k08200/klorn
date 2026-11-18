@@ -217,10 +217,18 @@ describe("composeEveningReview", () => {
 
   it("has copy for every shipped language", () => {
     const input = { ...EMPTY, theyOwe: ["x"] };
-    for (const lang of ["en", "ko", "ja", "zh", "es", "fr", "de"] as const) {
+    for (const lang of ["en", "ko", "zh"] as const) {
       const review = composeEveningReview(input, lang, TZ);
       expect(review?.title.length).toBeGreaterThan(0);
       expect(review?.message).toContain("• x");
+    }
+  });
+
+  it("writes a retired language (ja/es/fr/de) in English", () => {
+    const input = { ...EMPTY, theyOwe: ["x"] };
+    const english = composeEveningReview(input, "en", TZ);
+    for (const lang of ["ja", "es", "fr", "de"] as const) {
+      expect(composeEveningReview(input, lang, TZ), lang).toEqual(english);
     }
   });
 });
