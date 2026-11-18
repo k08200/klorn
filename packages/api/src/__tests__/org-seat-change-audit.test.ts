@@ -18,9 +18,12 @@ vi.mock("../sentry.js", () => ({ captureError }));
 
 import { PaddleApiError } from "../billing/paddle.js";
 import {
+  assertNoSeatChangeSince,
   paddleRefused,
   recordSeatChangeRequest,
   recordSeatChangeUnconfirmed,
+  SEAT_CHANGE_DOUBT_MS,
+  SEAT_CHANGE_IN_FLIGHT_MS,
   type SeatChangeAttempt,
   withdrawSeatChangeRequest,
 } from "../org/seat-change-audit.js";
@@ -133,5 +136,63 @@ describe("seat change audit rows", () => {
     expect(paddleRefused(new PaddleApiError(503, null, "x"))).toBe(false);
     expect(paddleRefused(new DOMException("aborted", "TimeoutError"))).toBe(false);
     expect(paddleRefused(new TypeError("fetch failed"))).toBe(false);
+  });
+});
+
+describe("a stale live read: changed since, or still settling", () => {
+  const NOW = new Date("2026-11-18T12:00:00Z");
+  const READ = {
+    mark: { id: "ev-1", createdAt: new Date("2026-11-18T11:00:00Z") },
+    startedAt: NOW,
+  };
+
+  /** A locked transaction whose two audit reads answer `changed` then `settling`. */
+  function txAnswering(changed: object | null, settling: object | null) {
+    const findFirst = vi.fn().mockResolvedValueOnce(changed).mockResolvedValueOnce(settling);
+    return { tx: { orgAuditEvent: { findFirst } } as never, findFirst };
+  }
+
+  async function refusal(tx: never) {
+    try {
+      await assertNoSeatChangeSince(tx, "org-1", READ, NOW);
+      return null;
+    } catch (err) {
+      return err as { statusCode: number; code: string };
+    }
+  }
+
+  it("answers SEATS_CHANGED for a change since the mark, without asking whether one is settling", async () => {
+    const { tx, findFirst } = txAnswering({ id: "ev-2" }, { id: "ev-3" });
+    expect(await refusal(tx)).toMatchObject({ statusCode: 409, code: "SEATS_CHANGED" });
+    expect(findFirst).toHaveBeenCalledTimes(1);
+    expect(findFirst.mock.calls[0]?.[0]).toMatchObject({
+      where: { orgId: "org-1", action: "billing.seats_change_requested" },
+    });
+  });
+
+  it("answers SEATS_CHANGE_IN_FLIGHT when nothing changed since but an earlier change may still move the count", async () => {
+    const { tx, findFirst } = txAnswering(null, { id: "ev-1" });
+    expect(await refusal(tx)).toMatchObject({ statusCode: 409, code: "SEATS_CHANGE_IN_FLIGHT" });
+    expect(findFirst.mock.calls[1]?.[0]).toEqual({
+      where: {
+        orgId: "org-1",
+        OR: [
+          {
+            action: "billing.seats_change_requested",
+            createdAt: { gt: new Date(NOW.getTime() - SEAT_CHANGE_IN_FLIGHT_MS) },
+          },
+          {
+            action: "billing.seats_change_unconfirmed",
+            createdAt: { gt: new Date(NOW.getTime() - SEAT_CHANGE_DOUBT_MS) },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+  });
+
+  it("lets the change through when neither holds", async () => {
+    const { tx } = txAnswering(null, null);
+    expect(await refusal(tx)).toBeNull();
   });
 });
