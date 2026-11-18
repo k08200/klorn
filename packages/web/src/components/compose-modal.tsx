@@ -9,6 +9,7 @@ import { useConfirm } from "./confirm-dialog";
 import { ProFeatureNotice } from "./pro-feature-notice";
 import { useToast } from "./toast";
 import ErrorAlert from "./ui/error-alert";
+import { OverlayPortal } from "./ui/overlay-portal";
 
 // Mirror the server caps (packages/api/src/routes/email-mutations.ts) so the
 // user gets an instant client-side warning instead of a round-trip rejection.
@@ -217,154 +218,157 @@ export function ComposeModal({ open, onClose }: ComposeModalProps) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/40 px-4 py-6 backdrop-blur-[2px] transition-opacity duration-150 ease-strong starting:opacity-0 motion-reduce:transition-none"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !sending) close();
-      }}
-    >
+    <OverlayPortal>
       <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="panel-elevated flex max-h-[88vh] w-full max-w-xl origin-center flex-col overflow-hidden rounded-sheet border border-line/70 bg-surface-panel transition duration-150 ease-strong starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none"
+        data-overlay
+        className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/40 px-4 py-6 backdrop-blur-[2px] transition-opacity duration-150 ease-strong starting:opacity-0 motion-reduce:transition-none"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !sending) close();
+        }}
       >
-        <div className="flex items-center justify-between border-b border-line-soft px-5 py-4">
-          <h2 id={titleId} className="text-role-title tracking-[-0.01em] text-ink">
-            {t("compose.title")}
-          </h2>
-          <button
-            type="button"
-            onClick={close}
-            disabled={sending}
-            aria-label={t("common.close")}
-            className="ease-strong flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-control text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink-soft active:scale-[0.97] disabled:opacity-50"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
-          <div>
-            <label htmlFor="compose-to" className="sr-only">
-              {t("compose.recipient")}
-            </label>
-            <input
-              id="compose-to"
-              ref={toInputRef}
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              value={to}
-              onChange={(event) => setTo(event.target.value)}
-              placeholder={t("compose.to")}
-              disabled={sending}
-              className={fieldClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="compose-subject" className="sr-only">
-              {t("emailDetail.replyDraft.subjectLabel")}
-            </label>
-            <input
-              id="compose-subject"
-              type="text"
-              value={subject}
-              onChange={(event) => setSubject(event.target.value)}
-              placeholder={t("emailDetail.replyDraft.subjectLabel")}
-              disabled={sending}
-              className={fieldClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="compose-body" className="sr-only">
-              {t("compose.message")}
-            </label>
-            <textarea
-              id="compose-body"
-              value={body}
-              onChange={(event) => setBody(event.target.value)}
-              placeholder={t("compose.messagePlaceholder")}
-              rows={8}
-              disabled={sending}
-              className={`${fieldClass} resize-y leading-6`}
-            />
-          </div>
-
-          {files.length > 0 && (
-            <ul className="space-y-1.5">
-              {files.map((file, index) => (
-                <li
-                  key={`${file.name}-${file.size}`}
-                  className="flex items-center justify-between gap-2 rounded-control border border-line bg-surface-raised px-3 py-2 text-role-caption"
-                >
-                  <span className="min-w-0 flex-1 truncate text-ink" title={file.name}>
-                    📎 {file.name}
-                  </span>
-                  <span className="shrink-0 text-ink-dim">{formatBytes(file.size)}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeFile(index)}
-                    disabled={sending}
-                    aria-label={t("compose.removeFile", { name: file.name })}
-                    className="shrink-0 rounded px-1 text-ink-dim transition hover:text-state-danger-ink disabled:opacity-50"
-                  >
-                    ✕
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {tooMany && (
-            <p className="text-role-caption text-state-danger-ink">
-              {t("compose.tooMany", { count: String(MAX_ATTACHMENTS) })}
-            </p>
-          )}
-          {overSize && (
-            <p className="text-role-caption text-state-danger-ink">
-              {t("compose.overSize", {
-                size: formatBytes(totalBytes),
-                limit: formatBytes(MAX_TOTAL_BYTES),
-              })}
-            </p>
-          )}
-          {error && <ErrorAlert>{error}</ErrorAlert>}
-          {proGated && <ProFeatureNotice />}
-        </div>
-
-        <div className="flex items-center justify-between gap-3 border-t border-line-soft px-5 py-4">
-          <input ref={fileInputRef} type="file" multiple hidden onChange={onFileInputChange} />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={sending}
-            className="ease-strong inline-flex min-h-11 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
-          >
-            📎 {t("compose.attach")}
-          </button>
-          <div className="flex gap-2">
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          className="panel-elevated flex max-h-[88vh] w-full max-w-xl origin-center flex-col overflow-hidden rounded-sheet border border-line/70 bg-surface-panel transition duration-150 ease-strong starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none"
+        >
+          <div className="flex items-center justify-between border-b border-line-soft px-5 py-4">
+            <h2 id={titleId} className="text-role-title tracking-[-0.01em] text-ink">
+              {t("compose.title")}
+            </h2>
             <button
               type="button"
               onClick={close}
               disabled={sending}
-              className="ease-strong inline-flex min-h-11 items-center rounded-control px-4 text-role-label text-ink-mid transition duration-150 hover:text-ink active:scale-[0.97] disabled:opacity-50"
+              aria-label={t("common.close")}
+              className="ease-strong flex h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-control text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink-soft active:scale-[0.97] disabled:opacity-50"
             >
-              {t("common.cancel")}
+              ✕
             </button>
+          </div>
+
+          <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+            <div>
+              <label htmlFor="compose-to" className="sr-only">
+                {t("compose.recipient")}
+              </label>
+              <input
+                id="compose-to"
+                ref={toInputRef}
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={to}
+                onChange={(event) => setTo(event.target.value)}
+                placeholder={t("compose.to")}
+                disabled={sending}
+                className={fieldClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="compose-subject" className="sr-only">
+                {t("emailDetail.replyDraft.subjectLabel")}
+              </label>
+              <input
+                id="compose-subject"
+                type="text"
+                value={subject}
+                onChange={(event) => setSubject(event.target.value)}
+                placeholder={t("emailDetail.replyDraft.subjectLabel")}
+                disabled={sending}
+                className={fieldClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="compose-body" className="sr-only">
+                {t("compose.message")}
+              </label>
+              <textarea
+                id="compose-body"
+                value={body}
+                onChange={(event) => setBody(event.target.value)}
+                placeholder={t("compose.messagePlaceholder")}
+                rows={8}
+                disabled={sending}
+                className={`${fieldClass} resize-y leading-6`}
+              />
+            </div>
+
+            {files.length > 0 && (
+              <ul className="space-y-1.5">
+                {files.map((file, index) => (
+                  <li
+                    key={`${file.name}-${file.size}`}
+                    className="flex items-center justify-between gap-2 rounded-control border border-line bg-surface-raised px-3 py-2 text-role-caption"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-ink" title={file.name}>
+                      📎 {file.name}
+                    </span>
+                    <span className="shrink-0 text-ink-dim">{formatBytes(file.size)}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(index)}
+                      disabled={sending}
+                      aria-label={t("compose.removeFile", { name: file.name })}
+                      className="shrink-0 rounded px-1 text-ink-dim transition hover:text-state-danger-ink disabled:opacity-50"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {tooMany && (
+              <p className="text-role-caption text-state-danger-ink">
+                {t("compose.tooMany", { count: String(MAX_ATTACHMENTS) })}
+              </p>
+            )}
+            {overSize && (
+              <p className="text-role-caption text-state-danger-ink">
+                {t("compose.overSize", {
+                  size: formatBytes(totalBytes),
+                  limit: formatBytes(MAX_TOTAL_BYTES),
+                })}
+              </p>
+            )}
+            {error && <ErrorAlert>{error}</ErrorAlert>}
+            {proGated && <ProFeatureNotice />}
+          </div>
+
+          <div className="flex items-center justify-between gap-3 border-t border-line-soft px-5 py-4">
+            <input ref={fileInputRef} type="file" multiple hidden onChange={onFileInputChange} />
             <button
               type="button"
-              onClick={send}
-              disabled={!canSend}
-              className="glow-primary ease-strong inline-flex min-h-11 items-center rounded-control bg-accent-solid px-4 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              className="ease-strong inline-flex min-h-11 items-center rounded-control border border-line bg-surface-panel/70 px-3 text-role-caption font-medium text-ink-mid shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition duration-150 hover:bg-surface-panel hover:text-ink active:scale-[0.97] disabled:opacity-50"
             >
-              {sending ? t("compose.sending") : t("chat.send")}
+              📎 {t("compose.attach")}
             </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={close}
+                disabled={sending}
+                className="ease-strong inline-flex min-h-11 items-center rounded-control px-4 text-role-label text-ink-mid transition duration-150 hover:text-ink active:scale-[0.97] disabled:opacity-50"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={send}
+                disabled={!canSend}
+                className="glow-primary ease-strong inline-flex min-h-11 items-center rounded-control bg-accent-solid px-4 text-role-label text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sending ? t("compose.sending") : t("chat.send")}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </OverlayPortal>
   );
 }
 

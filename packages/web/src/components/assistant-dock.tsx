@@ -13,8 +13,11 @@ import {
   type AssistantAskDetail,
 } from "../lib/assistant-ask";
 import type { DailyCapCode } from "../lib/daily-cap";
+import { trapTab } from "../lib/focusable";
 import { useT } from "../lib/i18n";
 import { type AssistantChatMessage, useAssistantChat } from "../lib/use-assistant-chat";
+import { useMediaQuery } from "../lib/use-media-query";
+import { useVisualViewport } from "../lib/use-visual-viewport";
 import { DailyCapLine } from "./daily-cap-line";
 import EventDraftCard from "./event-draft-card";
 import ErrorAlert from "./ui/error-alert";
@@ -35,6 +38,29 @@ const SUGGESTION_KEYS = [
  */
 const LIFTED_BOTTOM = "bottom-[calc(74px+env(safe-area-inset-bottom))]";
 
+/** Focus sits in another overlay ([data-overlay], e.g. a Sheet) than the dock. */
+function overlayAbove(dock: HTMLElement | null): boolean {
+  const active = document.activeElement;
+  const overlay = active instanceof HTMLElement ? active.closest("[data-overlay]") : null;
+  return overlay !== null && overlay !== dock;
+}
+
+/** Below the rail step (globals.css, --breakpoint-rail): the phone shell. */
+const PHONE_QUERY = "(width < 37.5rem)";
+
+/**
+ * The open dock's frame. On a phone (mobile redesign PR5) it is the whole
+ * screen: over the tab bar and the header, inside the safe areas, its bottom
+ * edge on the top of the on-screen keyboard (see the inline `bottom`). From
+ * 600px, the floating panel beside the button.
+ */
+function panelFrame(phone: boolean, unified: boolean): string {
+  if (phone) {
+    return "fixed inset-x-0 top-0 bottom-0 z-[80] flex flex-col overflow-hidden bg-surface-panel pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]";
+  }
+  return `panel-elevated ease-strong fixed ${unified ? LIFTED_BOTTOM : "bottom-24"} right-4 z-[80] flex h-[min(600px,calc(100dvh-8rem))] w-[min(400px,calc(100vw-2rem))] origin-bottom-right flex-col overflow-hidden rounded-sheet border border-line/70 bg-surface-panel transition duration-200 starting:translate-y-2 starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none md:bottom-[5.25rem] md:right-5`;
+}
+
 export default function AssistantDock({
   unified = false,
   fullScreenReader = false,
@@ -54,6 +80,9 @@ export default function AssistantDock({
   const threadEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const phone = useMediaQuery(PHONE_QUERY);
+  // Full screen on a phone: keep the composer above the on-screen keyboard.
+  const keyboard = useVisualViewport(open && phone);
 
   // Keep the newest message in view as the thread grows.
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on thread growth
@@ -86,18 +115,30 @@ export default function AssistantDock({
     window.addEventListener(ASSISTANT_OPEN_EVENT, onOpen);
     return () => window.removeEventListener(ASSISTANT_OPEN_EVENT, onOpen);
   }, []);
-  const fabHidden = fullScreenReader ? "max-rail:hidden" : "";
+  // The phone reader has no button; on a phone the open dock is the whole
+  // screen, so the button would float over its composer.
+  const fabHidden = fullScreenReader || open ? "max-rail:hidden" : "";
 
   // Focus the composer when the panel opens; Escape closes it.
   useEffect(() => {
     if (!open) return;
     inputRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        if (!overlayAbove(panelRef.current)) setOpen(false);
+      }
+      // Full screen on a phone it is modal: Tab stays inside, unless another
+      // overlay (a sheet, a confirm) opened above it owns the keyboard.
+      else if (phone && !overlayAbove(panelRef.current)) trapTab(e, panelRef.current);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, phone]);
+
+  // Phone sizes: 44px targets, the body type size, a 16px field (no iOS zoom).
+  const iconButton = phone ? "size-11" : "h-7 w-7 pointer-coarse:h-11 pointer-coarse:w-11";
+  const textButton = phone ? "h-11 px-3" : "h-7 px-2 pointer-coarse:h-11 pointer-coarse:px-3";
+  const messageText = phone ? "text-role-body" : "text-role-meta";
 
   return (
     <>
@@ -107,7 +148,10 @@ export default function AssistantDock({
           ref={panelRef}
           role="dialog"
           aria-label={t("nav.assistant")}
-          className={`panel-elevated ease-strong fixed ${unified ? LIFTED_BOTTOM : "bottom-24"} right-4 z-[80] flex h-[min(600px,calc(100dvh-8rem))] w-[min(400px,calc(100vw-2rem))] origin-bottom-right flex-col overflow-hidden rounded-sheet border border-line/70 bg-surface-panel transition duration-200 starting:translate-y-2 starting:scale-[0.97] starting:opacity-0 motion-reduce:transition-none md:bottom-[5.25rem] md:right-5`}
+          aria-modal={phone || undefined}
+          data-overlay={phone || undefined}
+          className={panelFrame(phone, unified)}
+          style={phone && keyboard ? { bottom: keyboard.bottomInset } : undefined}
         >
           {/* Head */}
           <div className="flex items-center gap-2.5 border-b border-line-soft px-4 py-3">
@@ -129,7 +173,7 @@ export default function AssistantDock({
               type="button"
               onClick={chat.newChat}
               disabled={!chat.activeId || chat.sending}
-              className="focus-ring ease-strong h-7 rounded-chip px-2 text-role-caption pointer-coarse:h-11 pointer-coarse:px-3 font-medium text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97] disabled:opacity-40"
+              className={`focus-ring ease-strong ${textButton} rounded-chip text-role-caption font-medium text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97] disabled:opacity-40`}
             >
               {t("chat.newChat")}
             </button>
@@ -137,7 +181,7 @@ export default function AssistantDock({
               type="button"
               onClick={() => setOpen(false)}
               aria-label={t("assistantDock.close")}
-              className="focus-ring ease-strong flex h-7 w-7 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-chip text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]"
+              className={`focus-ring ease-strong flex ${iconButton} items-center justify-center rounded-chip text-ink-dim transition duration-150 hover:bg-surface-hover hover:text-ink active:scale-[0.97]`}
             >
               <svg
                 aria-hidden="true"
@@ -168,7 +212,7 @@ export default function AssistantDock({
                       <button
                         type="button"
                         onClick={() => chat.send(t(key))}
-                        className="focus-ring ease-strong row-wash w-full rounded-control border border-line bg-surface-panel/70 px-3 py-2 text-left text-role-meta text-ink-muted transition duration-150 hover:text-ink active:scale-[0.99]"
+                        className={`focus-ring ease-strong row-wash w-full rounded-control border border-line bg-surface-panel/70 px-3 py-2 text-left ${phone ? "min-h-11 text-role-body" : "text-role-meta"} text-ink-muted transition duration-150 hover:text-ink active:scale-[0.99]`}
                       >
                         {t(key)}
                       </button>
@@ -179,11 +223,18 @@ export default function AssistantDock({
             ) : (
               <>
                 {chat.messages.map((m) => (
-                  <DockBubble key={m.id} message={m} capCode={chat.capCodeFor(m)} />
+                  <DockBubble
+                    key={m.id}
+                    message={m}
+                    capCode={chat.capCodeFor(m)}
+                    textClass={messageText}
+                  />
                 ))}
                 {chat.pendingText && (
                   <div className="ease-strong flex justify-end transition duration-150 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
-                    <div className="max-w-[85%] rounded-card rounded-br-chip bg-slate-900 px-3.5 py-2 text-role-meta text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
+                    <div
+                      className={`max-w-[85%] rounded-card rounded-br-chip bg-slate-900 px-3.5 py-2 ${messageText} text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]`}
+                    >
                       <p className="whitespace-pre-wrap">{chat.pendingText}</p>
                     </div>
                   </div>
@@ -207,7 +258,9 @@ export default function AssistantDock({
 
           {/* Composer */}
           <form
-            className="border-t border-line-soft p-3"
+            className={`border-t border-line-soft p-3 ${
+              phone && !keyboard?.bottomInset ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""
+            }`}
             onSubmit={(e) => {
               e.preventDefault();
               chat.send(chat.input);
@@ -228,8 +281,10 @@ export default function AssistantDock({
                 maxLength={4000}
                 placeholder={t("chat.inputPlaceholder")}
                 aria-label={t("assistantDock.input")}
-                className={`max-h-24 flex-1 resize-none bg-transparent text-role-meta text-ink outline-none placeholder:text-ink-dim${
-                  unified ? " pointer-coarse:text-field" : ""
+                className={`max-h-24 flex-1 resize-none bg-transparent text-ink outline-none placeholder:text-ink-dim ${
+                  phone
+                    ? "text-field"
+                    : `text-role-meta${unified ? " pointer-coarse:text-field" : ""}`
                 }`}
               />
               <VoiceButton
@@ -241,7 +296,7 @@ export default function AssistantDock({
                 type="submit"
                 disabled={!chat.input.trim() || chat.sending}
                 aria-label={t("chat.send")}
-                className="glow-primary ease-strong flex h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 shrink-0 items-center justify-center rounded-chip bg-accent-solid text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+                className={`glow-primary ease-strong flex ${phone ? "size-11" : "h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11"} shrink-0 items-center justify-center rounded-chip bg-accent-solid text-accent-solid-ink transition duration-150 hover:bg-accent-solid-hover active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40`}
               >
                 <svg
                   aria-hidden="true"
@@ -296,14 +351,19 @@ export default function AssistantDock({
 function DockBubble({
   message,
   capCode,
+  textClass,
 }: {
   message: AssistantChatMessage;
   capCode: DailyCapCode | null;
+  /** The bubble's type role: the body size full screen on a phone, else meta. */
+  textClass: string;
 }) {
   if (message.role === "USER") {
     return (
       <div className="ease-strong flex justify-end transition duration-150 starting:translate-y-1 starting:opacity-0 motion-reduce:transition-none">
-        <div className="max-w-[85%] rounded-card rounded-br-chip bg-slate-900 px-3.5 py-2 text-role-meta text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]">
+        <div
+          className={`max-w-[85%] rounded-card rounded-br-chip bg-slate-900 px-3.5 py-2 ${textClass} text-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.16)]`}
+        >
           <p className="whitespace-pre-wrap">{message.content}</p>
         </div>
       </div>
@@ -319,7 +379,9 @@ function DockBubble({
       >
         K
       </span>
-      <div className="max-w-[85%] rounded-card rounded-tl-chip border border-line/70 bg-surface-panel px-3.5 py-2 text-role-meta text-ink-strong shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
+      <div
+        className={`max-w-[85%] rounded-card rounded-tl-chip border border-line/70 bg-surface-panel px-3.5 py-2 ${textClass} text-ink-strong shadow-[0_1px_2px_rgba(15,23,42,0.05)]`}
+      >
         {capCode ? (
           <DailyCapLine code={capCode} />
         ) : (
