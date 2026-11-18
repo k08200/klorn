@@ -94,6 +94,11 @@ calendar time.
   kept, the month-long meeting fingerprint, retention, and use in
   classification. The `calendar.events` and `calendar.readonly` scope entries
   say so too (#1607).
+- **klorn.ai ships in English, Korean and Simplified Chinese only.** The
+  Japanese, German, Spanish and French pages are gone from the language
+  menus, hreflang sets and sitemap; their old URLs (`/ja/`, `/de/`, `/es/`,
+  `/fr/` and every page under them) are noindex stubs that redirect to the
+  matching English page.
 
 ### Fixed
 - **Only PUSH mail rings from the urgent sweep.** The urgent-priority sweep
