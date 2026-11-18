@@ -51,7 +51,7 @@
     "firebase-admin": "^14.5.0",
     "googleapis": "^171.4.0",
     "ical.js": "2.2.1",
-    "imapflow": "^1.7.0",
+    "imapflow": "^2.11.0",
     "jose": "^6.2.15",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^10.4.0",
