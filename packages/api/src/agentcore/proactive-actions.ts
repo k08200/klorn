@@ -280,15 +280,19 @@ async function meetingStartRingCovers(userId: string): Promise<boolean> {
   return token !== null && (config === null || config.meetingAutoJoin !== false);
 }
 
-/** A primary Google event with a link pim/meeting.ts would find: the start ring's. */
+/**
+ * A primary-calendar event with a link pim/meeting.ts would find: the start
+ * ring's. Primary = no linked account and an external id (a LOCAL row has
+ * none); the primary calendar is the Google login calendar.
+ */
 function ringsAtStart(event: {
-  provider: string;
+  externalId: string | null;
   sourceAccountId: string | null;
   meetingLink: string | null;
   description: string | null;
   location: string | null;
 }): boolean {
-  if (event.provider !== "GOOGLE" || event.sourceAccountId !== null) return false;
+  if (event.sourceAccountId !== null || !event.externalId) return false;
   return Boolean(event.meetingLink || meetingLinkInText(event.description, event.location));
 }
 

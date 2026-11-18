@@ -10,6 +10,10 @@
  * mail) also carries the fields below; a push without them is not about one
  * email. All values are opaque ids and an in-app route.
  *
+ * Any push may also carry the NT0 structured fields (NotificationPresentation
+ * below) as top-level APNs keys / FCM `data` keys, plus FCM `channelId` and
+ * `groupKey`; a client that does not read them sees exactly what it did.
+ *
  * Android data-only (a device registered with `dataMessages: true`, while the
  * server's ANDROID_DATA_PUSH_ENABLED is on): a mail push has no `notification`
  * block; `data` then also carries `title`, `body` and `sentAt` (epoch ms, as a

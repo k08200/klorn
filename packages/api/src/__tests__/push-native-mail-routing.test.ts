@@ -87,14 +87,18 @@ describe("sendPushNotification — mail deep-link routing", () => {
     };
     await sendPushNotification("user-1", mail, "email_urgent");
 
-    expect(mocks.sendDevicePush).toHaveBeenCalledWith("user-1", mail, "email_urgent");
-    expect(mocks.sendApnsPush).toHaveBeenCalledWith("user-1", mail, "email_urgent");
+    // NT0: an urgent-mail push names its kind (push-presentation.ts defaultKind).
+    const nativeMail = { ...mail, presentation: { kind: "push" } };
+    expect(mocks.sendDevicePush).toHaveBeenCalledWith("user-1", nativeMail, "email_urgent");
+    expect(mocks.sendApnsPush).toHaveBeenCalledWith("user-1", nativeMail, "email_urgent");
 
     const legacy = { ...BASE, attentionItemId: "item-1" };
     expect(mocks.sendTelegramForPush).toHaveBeenCalledWith("user-1", legacy, "email_urgent");
     const body = webBody();
-    for (const key of ["emailId", "pendingActionId", "route"]) expect(body).not.toHaveProperty(key);
-    expect(body).toMatchObject(legacy);
+    for (const key of ["emailId", "pendingActionId", "route", "presentation"]) {
+      expect(body).not.toHaveProperty(key);
+    }
+    expect(body).toMatchObject({ ...legacy, kind: "push" });
   });
 
   it("the bell notification id rides the web push body only (the SW's OS tag)", async () => {
@@ -106,8 +110,8 @@ describe("sendPushNotification — mail deep-link routing", () => {
     );
 
     expect(webBody()).toMatchObject({ ...BASE, bellNotificationId: "notif-1" });
-    // Native, Telegram: byte-identical to before.
-    const native = { ...BASE, emailId: "email-1" };
+    // Native: as before plus the NT0 kind; Telegram: byte-identical to before.
+    const native = { ...BASE, emailId: "email-1", presentation: { kind: "push" } };
     expect(mocks.sendDevicePush).toHaveBeenCalledWith("user-1", native, "email_urgent");
     expect(mocks.sendApnsPush).toHaveBeenCalledWith("user-1", native, "email_urgent");
     expect(mocks.sendTelegramForPush).toHaveBeenCalledWith("user-1", BASE, "email_urgent");
