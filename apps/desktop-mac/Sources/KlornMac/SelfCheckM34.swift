@@ -155,7 +155,7 @@ func m34SelfChecks(sourceDir: URL) -> [(String, Bool)] {
         "prefs.group.startup", "prefs.group.appearance", "prefs.group.dock", "prefs.group.updates",
         "prefs.group.keyboard", "prefs.group.support", "prefs.group.about", "prefs.group.mail",
     ]
-    let langs = ["en", "ko", "ja", "zh", "es", "fr", "de"]
+    let langs = L10n.shipped
     let missing = langs.flatMap { lang -> [String] in
         let url = sourceDir.appendingPathComponent("Resources/\(lang).lproj/Localizable.strings")
         let table = (NSDictionary(contentsOf: url) as? [String: String]) ?? [:]

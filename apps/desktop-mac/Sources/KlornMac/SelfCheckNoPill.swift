@@ -535,7 +535,7 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     let newKeys = ["push.announce", "prefs.section.support", "prefs.banners.denied",
                    "prefs.banners.openSystemSettings", "meeting.banner.soon"]
     check("new strings exist in every locale",
-          ["en", "ko", "de", "es", "fr", "ja", "zh"].allSatisfy { locale in
+          L10n.shipped.allSatisfy { locale in
               let strings = (try? String(
                   contentsOf: sourceDir.appendingPathComponent("Resources/\(locale).lproj/Localizable.strings"),
                   encoding: .utf8)) ?? ""

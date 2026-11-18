@@ -60,7 +60,7 @@ func bannerActionSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
                    "banner.action.join", "meeting.banner.soon", "meeting.provider.meet",
                    "meeting.provider.zoom", "meeting.provider.teams", "meeting.provider.webex"]
     check("the new strings exist in every locale; the retired meeting body is gone",
-          ["en", "ko", "de", "es", "fr", "ja", "zh"].allSatisfy { locale in
+          L10n.shipped.allSatisfy { locale in
               let strings = text("Resources/\(locale).lproj/Localizable.strings")
               return newKeys.allSatisfy { strings.contains("\"\($0)\" = ") }
                   && !strings.contains("\"meeting.banner.body\" = ")

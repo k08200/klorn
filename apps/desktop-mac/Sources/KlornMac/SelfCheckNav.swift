@@ -381,7 +381,7 @@ func navSelfChecks(sourceDir: URL) -> [(String, Bool)] {
               && cards.contains("L(\"today.cards.more\", cards.more)")
               && cards.contains("model.go(to: .tier(.push))"))
         check("today: the lane-count a11y string is gone from every locale",
-              ["en", "ko", "ja", "zh", "de", "fr", "es"]
+              L10n.shipped
                   .allSatisfy { !L10n.keys(forLanguage: $0).contains("today.lane.a11y") })
     }
     check("opening an item in-app reveals it in Mail",

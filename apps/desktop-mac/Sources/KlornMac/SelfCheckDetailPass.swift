@@ -18,7 +18,7 @@ func detailPassSelfChecks(sourceDir: URL) -> [(String, Bool)] {
         let url = sourceDir.appendingPathComponent("Resources/\(lang).lproj/Localizable.strings")
         return (NSDictionary(contentsOf: url) as? [String: String]) ?? [:]
     }
-    let langs = ["en", "ko", "ja", "zh", "es", "fr", "de"]
+    let langs = L10n.shipped
     let tables = Dictionary(uniqueKeysWithValues: langs.map { ($0, table($0)) })
 
     // M1: the move menu never names the lane the mail is in.
