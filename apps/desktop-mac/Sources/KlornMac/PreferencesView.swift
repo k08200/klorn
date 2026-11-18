@@ -448,7 +448,9 @@ struct InboxAccountsSection: View {
                         email: account.email,
                         provider: providerLabel(provider.rawValue),
                         beta: MailSourceCatalog.isBeta(provider.rawValue),
-                        needsReconnect: account.needsReconnect,
+                        // A paused provider is not polled: its flag is stale,
+                        // and reconnecting is not offered (the notice says so).
+                        needsReconnect: account.needsReconnect && !model.imapConnectClosed.contains(provider),
                         detail: account.host,
                         onDisconnect: {
                             pendingDisconnect = PendingImapDisconnect(provider: provider, email: account.email)
@@ -485,6 +487,11 @@ struct InboxAccountsSection: View {
             }
         }
         .task { await model.refreshImapAccounts() }
+        // A form left open for a provider that closed must not come back on
+        // its own if the provider opens again later.
+        .onChange(of: model.imapConnectClosed) { _, closed in
+            if let provider = connectingProvider, closed.contains(provider) { connectingProvider = nil }
+        }
         .confirmationDialog(
             L("account.disconnect.confirm", pendingDisconnect?.email ?? ""),
             isPresented: Binding(

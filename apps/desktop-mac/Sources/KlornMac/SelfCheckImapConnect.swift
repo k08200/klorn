@@ -261,11 +261,13 @@ func imapConnectSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     check("the status probe records connectOpen, and a 404 forgets it",
           model.contains("imapConnectClosed = status.acceptsConnects")
               && model.contains("imapConnectClosed = imapConnectClosed.subtracting([provider])"))
-    check("settings ▸ Accounts hides the form for a closed provider, explains it, keeps disconnect",
+    check("settings ▸ Accounts hides the form for a closed provider, explains it, keeps disconnect, drops its stale needs-reconnect",
           prefs.contains("if let provider = connectingProvider, !model.imapConnectClosed.contains(provider)")
               && prefs.contains("ForEach(connectClosedImapProviders(model.imapConnectClosed))")
               && prefs.contains("L(\"account.imap.connectClosed\", providerLabel(provider.rawValue))")
-              && prefs.contains("pendingDisconnect = PendingImapDisconnect(provider: provider, email: account.email)"))
+              && prefs.contains("pendingDisconnect = PendingImapDisconnect(provider: provider, email: account.email)")
+              && prefs.contains("if let provider = connectingProvider, closed.contains(provider) { connectingProvider = nil }")
+              && prefs.contains("needsReconnect: account.needsReconnect && !model.imapConnectClosed.contains(provider)"))
     check("the status probe covers every provider; a 404 hides any but Naver",
           model.contains("for provider in ImapMailProvider.allCases { await refreshImapAccounts(provider) }")
               && model.contains("guard isCurrent(session), provider != .naver else { return }"))
@@ -309,7 +311,7 @@ func imapConnectSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         }
         check("\(language): each preset sentence takes exactly one %@ (the name)", badFormats.isEmpty)
         let closedNotice = table["account.imap.connectClosed"] ?? ""
-        check("\(language): the closed-connect notice takes exactly one %@ (the provider) and reads",
+        check("\(language): the paused-sync notice takes exactly one %@ (the provider) and reads",
               closedNotice.components(separatedBy: "%@").count == 2
                   && !closedNotice.replacingOccurrences(of: "%@", with: "").contains("%")
                   && String(format: closedNotice, "iCloud").contains("iCloud"))

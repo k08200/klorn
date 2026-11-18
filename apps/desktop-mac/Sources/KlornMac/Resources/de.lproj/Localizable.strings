@@ -419,7 +419,7 @@
 "account.naver.error.unavailable" = "Naver Mail ist auf diesem Server noch nicht verfügbar.";
 "account.imap.error.insecure" = "Klorn sendet ein App-Passwort nur über eine sichere (HTTPS-)Verbindung.";
 "account.imap.submit" = "Verbinden";
-"account.imap.connectClosed" = "%@: Neue Verbindungen und erneutes Verbinden sind vorerst pausiert. Ein Postfach lässt sich weiterhin trennen.";
+"account.imap.connectClosed" = "Klorn hat die Synchronisierung von %@ pausiert. Postfächer lassen sich weiterhin trennen.";
 "account.preset.connect" = "Postfach bei %@ verbinden…";
 "account.preset.title" = "Postfach bei %@ verbinden";
 "account.preset.body" = "Dieses Postfach wird per IMAP verbunden (beta). Klorn sortiert jede neue Nachricht in dieselben Spuren wie Gmail.";
