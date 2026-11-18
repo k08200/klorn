@@ -1642,7 +1642,9 @@ func runSelfChecks() async -> Bool {
     if infoPlists != L10n.shipped.sorted() { print("      found: \(infoPlists.joined(separator: ", "))") }
     let bundled = Bundle.module.localizations.filter { $0 != "Base" }.sorted()
     check("the built resource bundle carries exactly en, ko, zh", bundled == L10n.shipped.sorted())
-    if bundled != L10n.shipped.sorted() { print("      bundled: \(bundled.joined(separator: ", "))") }
+    if bundled != L10n.shipped.sorted() {
+        print("      bundled: \(bundled.joined(separator: ", ")) — a stale build? rm -rf apps/desktop-mac/.build and rebuild")
+    }
     for code in L10n.shipped where code != "en" {
         let other = L10n.keys(forLanguage: code)
         let missing = english.subtracting(other).sorted()
@@ -1822,6 +1824,13 @@ func runSelfChecks() async -> Bool {
     check("a saved retired in-app language reads as English, not a crash or raw keys",
           ["ja", "es", "fr", "de"].allSatisfy { AppLanguage(stored: $0) == .english }
           && L10n.resolvedCode(override: AppLanguage(stored: "ja")) == "en")
+    check("a saved regional tag folds onto its shipped base",
+          AppLanguage(stored: "zh-Hans") == .chinese && AppLanguage(stored: "ko_KR") == .korean
+          && AppLanguage(stored: "EN-us") == .english && AppLanguage(stored: "system-x") == .english)
+    // The fold above only helps if the persisted override is read through it.
+    check("the saved in-app language is read through the fold",
+          ((try? String(contentsOf: sourceDir.appendingPathComponent("Localization.swift"), encoding: .utf8)) ?? "")
+              .contains("AppLanguage(stored: UserDefaults.standard.string(forKey: storageKey))"))
     check("nothing saved follows macOS; a shipped choice is kept",
           AppLanguage(stored: nil) == .system && AppLanguage(stored: "") == .system
           && AppLanguage(stored: "system") == .system

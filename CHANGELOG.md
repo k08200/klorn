@@ -78,8 +78,9 @@ calendar time.
 - The Mac app ships the same three languages. Its Japanese, Spanish, French
   and German catalogues are removed; a saved in-app language from that set
   reads as English, and a macOS in one of them shows the next Preferred
-  Language Klorn ships, else English. Traditional Chinese shows Simplified
-  Chinese.
+  Language Klorn ships, else English. A Traditional Chinese macOS shows the
+  app in Simplified Chinese; prompts macOS itself shows (calendar access)
+  follow macOS's own language matching.
 - **Quiet hours hold urgent mail instead of dropping it.** A PUSH-lane mail
   that rang no web push, Telegram, Android or iOS push because of quiet hours
   now rings once after they end, as the Mac and Windows apps already do. One

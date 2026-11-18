@@ -161,6 +161,6 @@ func m34SelfChecks(sourceDir: URL) -> [(String, Bool)] {
         let table = (NSDictionary(contentsOf: url) as? [String: String]) ?? [:]
         return newKeys.filter { (table[$0] ?? "").isEmpty }.map { "\(lang):\($0)" }
     }
-    check("every new M3/M4 string exists in all seven catalogues (missing: \(missing))", missing.isEmpty)
+    check("every new M3/M4 string exists in every shipped catalogue (missing: \(missing))", missing.isEmpty)
     return results
 }

@@ -70,7 +70,7 @@ func detailPassSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     // M3: tool names in the UI language, never the identifier.
     let koTools = ToolLabels.known.map { tables["ko"]?["tool.label.\($0)"] ?? "" }
     results.append((
-        "every known tool has a label in all 7 languages",
+        "every known tool has a label in every shipped language",
         ToolLabels.known.union(["unknown"]).allSatisfy { tool in
             langs.allSatisfy { tables[$0]?["tool.label.\(tool)"]?.isEmpty == false }
         }))

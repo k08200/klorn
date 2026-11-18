@@ -27,10 +27,15 @@ enum AppLanguage: String, CaseIterable, Sendable {
     /// macOS". A value that names no shipped language — ja/es/fr/de, picked
     /// before those were retired on 2026-11-17 — reads as English: the user
     /// chose a language explicitly, and the web app folds the same codes to
-    /// English. The stored value is left as is; only the read folds.
+    /// English. A regional or script tag ("zh-Hans", "ko_KR") folds onto its
+    /// base first, as the server's toShippedLanguage does. The stored value is
+    /// left as is; only the read folds.
     init(stored: String?) {
         guard let stored, !stored.isEmpty else { self = .system; return }
-        self = AppLanguage(rawValue: stored) ?? .english
+        if let exact = AppLanguage(rawValue: stored) { self = exact; return }
+        let base = stored.lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" }).first
+            .map(String.init) ?? ""
+        self = base == AppLanguage.system.rawValue ? .english : AppLanguage(rawValue: base) ?? .english
     }
 }
 
@@ -55,7 +60,10 @@ enum L10n {
     /// A macOS set to Japanese, Spanish, French or German skips to the next
     /// Preferred Language Klorn ships, else English. Traditional Chinese
     /// ("zh-Hant-TW") matches on its base "zh" and gets Simplified Chinese: a
-    /// Chinese reader reads it more easily than English.
+    /// Chinese reader reads it more easily than English. That is the in-app
+    /// UI only: text macOS itself picks from the main bundle (the calendar
+    /// permission prompt, standard menu items) follows macOS's own matching,
+    /// which does not treat zh.lproj as Traditional Chinese.
     static func resolvedCode(
         override: AppLanguage,
         preferred: [String] = Locale.preferredLanguages,

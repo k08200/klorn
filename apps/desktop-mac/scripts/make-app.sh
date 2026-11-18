@@ -138,6 +138,13 @@ for code in en ko zh; do
   [ -f "$APP/Contents/Resources/$code.lproj/InfoPlist.strings" ] \
     || { echo "✗ $code InfoPlist.strings missing — the calendar prompt would not be localised"; exit 1; }
 done
+for lproj in "$APP"/Contents/Resources/*.lproj; do
+  [ -d "$lproj" ] || continue
+  case "$(basename "$lproj")" in
+    en.lproj|ko.lproj|zh.lproj) ;;
+    *) echo "✗ the app carries $(basename "$lproj") — Klorn ships en, ko, zh only"; exit 1 ;;
+  esac
+done
 
 # Dock/Finder icon: build AppIcon.icns from the source PNG (the matte K).
 ICON_SRC="Resources/AppIcon.png"
