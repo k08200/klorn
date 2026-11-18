@@ -108,6 +108,23 @@ function safeJoinUrl(value: string | undefined): string | undefined {
   return known && port === "" ? safe : undefined;
 }
 
+/**
+ * A meeting's fields: the join link only when it passes the same checks as on
+ * a push (so a live frame never offers a link a push would drop), and how many
+ * people are invited — never who.
+ */
+export function meetingPresentation(
+  joinUrl: string | null | undefined,
+  attendeeCount: number | null | undefined,
+): NotificationPresentation {
+  const link = safeJoinUrl(joinUrl ?? undefined);
+  return {
+    kind: "meet",
+    ...(link ? { joinUrl: link } : {}),
+    ...(typeof attendeeCount === "number" ? { attendeeCount } : {}),
+  };
+}
+
 /** The fields each channel family may carry for this user. */
 export function presentationForChannels(
   userId: string,

@@ -33,6 +33,7 @@ import { clampText } from "../notify/clamp-text.js";
 import type { NotifCategory } from "../notify/notification-prefs.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { sendPushNotification } from "../notify/push.js";
+import { meetingPresentation } from "../notify/push-presentation.js";
 import { isWithinQuietHours, lastEndedQuietWindow } from "../notify/quiet-hours.js";
 import { sendSms } from "../notify/sms.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
@@ -330,13 +331,7 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
       {
         pushBody,
         dedupeKey: `${MEETING_PREP_KEY_PREFIX}${event.id}:${event.startTime.getTime()}`,
-        presentation: {
-          kind: "meet",
-          ...(event.meetingLink ? { joinUrl: event.meetingLink } : {}),
-          ...(typeof event.attendeeCount === "number"
-            ? { attendeeCount: event.attendeeCount }
-            : {}),
-        },
+        presentation: meetingPresentation(event.meetingLink, event.attendeeCount),
       },
     );
     if (!rang) continue;

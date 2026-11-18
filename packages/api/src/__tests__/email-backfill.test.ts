@@ -210,6 +210,8 @@ describe("judgeAndMirrorEmail — PUSH tier drives a real push", () => {
       language: "en",
       emailId: "hn",
       bellNotificationId: "n1",
+      // NT0 fields: a From with no display name gives no senderDisplayName.
+      presentation: { kind: "push", subject: "hn" },
     });
   });
 

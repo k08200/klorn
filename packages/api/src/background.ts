@@ -23,6 +23,7 @@ import { prisma } from "./db.js";
 import { escapeLikePattern } from "./db-like.js";
 import { INTERRUPT_SLOT_ROOT } from "./judge/v3/interrupt-budget.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
+import { meetingPresentation } from "./notify/push-presentation.js";
 import { NOTIFIED_LOOKBACK_MS } from "./notify/urgent-dedup.js";
 import { isCalendarRowVisible } from "./pim/calendar-scope.js";
 import { getUpcomingMeetings } from "./pim/meeting.js";
@@ -292,13 +293,7 @@ async function checkUpcomingMeetings() {
               : `${meeting.summary} starts soon [${meeting.id}]`;
 
             // NT0 meet: the join link and how many people are invited, never who.
-            const presentation: NotificationPresentation = {
-              kind: "meet",
-              ...(meeting.meetingLink ? { joinUrl: meeting.meetingLink } : {}),
-              ...(typeof meeting.attendeeCount === "number"
-                ? { attendeeCount: meeting.attendeeCount }
-                : {}),
-            };
+            const presentation = meetingPresentation(meeting.meetingLink, meeting.attendeeCount);
             // The bell row keeps the join link: the web bell validates it and
             // opens it outside the app (lib/notification-target.ts).
             const bellRow = await addNotification(userId, {
