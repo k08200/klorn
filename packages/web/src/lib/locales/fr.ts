@@ -1461,6 +1461,7 @@ const fr: Record<string, string> = {
   "emailDetail.replyDraft.saveGmailDraft": "Enregistrer le brouillon Gmail",
   "emailDetail.replyDraft.sending": "Envoi...",
   "emailDetail.replyDraft.sendButton": "Envoyer cette réponse",
+  "emailDetail.replyDraft.bodyLabel": "Texte de la réponse",
   "emailDetail.analysis.notAnalyzed":
     "Klorn n'a pas encore analysé ce courrier. Synchronisez, puis revenez dans un instant.",
   "emailDetail.analysis.title": "Jugement de Klorn",
@@ -1921,6 +1922,7 @@ const fr: Record<string, string> = {
   "mailV2.reader.error.title": "Impossible d'ouvrir ce courrier",
   "mailV2.reader.reconnectToArchive": "Reconnectez ce compte pour archiver du courrier.",
   "mailV2.reader.tone": "Ton et modèle",
+  "mailV2.reply.original": "Message d’origine",
   // Assistant hub (productization plan P7, UNIFIED_HOME): /assistant/*.
   "nav.v2.activity": "Activité",
   "nav.v2.chat": "Discussion",

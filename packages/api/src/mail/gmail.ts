@@ -220,9 +220,14 @@ async function notifyGmailReconnect(
   userId: string,
   linkedInboxAccountId?: string,
   provider: ReconnectProvider = "GOOGLE",
+  stoppedAt?: Date,
 ): Promise<void> {
   const pending = linkedInboxAccountId
-    ? ensureGmailReconnectNotification(userId, { linkedInboxAccountId, provider })
+    ? ensureGmailReconnectNotification(userId, {
+        linkedInboxAccountId,
+        provider,
+        ...(stoppedAt ? { stoppedAt } : {}),
+      })
     : ensureGmailReconnectNotification(userId, { provider });
   await pending.catch((err) => {
     logDbFailure("[GOOGLE] reconnect notification failed", err, { ids: { userId } });
@@ -846,14 +851,17 @@ export async function resolveMailClient(
 /**
  * The reconnect alert for a linked inbox whose `needsReconnect` flag the caller
  * has just set itself (the IMAP poll, which flags conditionally on the stored
- * password). Same once-a-day dedupe and best-effort contract as the mark-* paths.
+ * password). Same once-a-day dedupe and best-effort contract as the mark-* paths,
+ * except with `stoppedAt` (the poll's 4th refused login stopped it): then once per
+ * stop, under that stop's own key (notify/reconnect-notification.ts).
  */
 export async function notifyLinkedInboxReconnect(
   userId: string,
   linkedInboxAccountId: string,
   provider: ReconnectProvider,
+  opts?: { stoppedAt?: Date },
 ): Promise<void> {
-  await notifyGmailReconnect(userId, linkedInboxAccountId, provider);
+  await notifyGmailReconnect(userId, linkedInboxAccountId, provider, opts?.stoppedAt);
 }
 
 /**

@@ -1475,6 +1475,7 @@ const de: Record<string, string> = {
   "emailDetail.replyDraft.saveGmailDraft": "Gmail-Entwurf speichern",
   "emailDetail.replyDraft.sending": "Wird gesendet...",
   "emailDetail.replyDraft.sendButton": "Diese Antwort senden",
+  "emailDetail.replyDraft.bodyLabel": "Antworttext",
   "emailDetail.analysis.notAnalyzed":
     "Klorn hat diese Mail noch nicht analysiert. Synchronisiere und sieh gleich noch einmal nach.",
   "emailDetail.analysis.title": "Einschätzung von Klorn",
@@ -1936,6 +1937,7 @@ const de: Record<string, string> = {
   "mailV2.reader.error.title": "Diese Mail konnte nicht geöffnet werden",
   "mailV2.reader.reconnectToArchive": "Verbinde dieses Konto erneut, um Mail zu archivieren.",
   "mailV2.reader.tone": "Ton & Vorlage",
+  "mailV2.reply.original": "Ursprüngliche Nachricht",
   // Assistant hub (productization plan P7, UNIFIED_HOME): /assistant/*.
   "nav.v2.activity": "Aktivität",
   "nav.v2.chat": "Chat",

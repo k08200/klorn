@@ -79,6 +79,8 @@ final class WindowRouter {
     var openSettings: () -> Void = {}
     /// Hides the app (NSApp.hide); a seam for the harness.
     var hideApp: () -> Void = { NSApp.hide(nil) }
+    /// Opens a meeting's join link (a banner's Join); a seam for the harness.
+    var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
 
     init(model: AppModel, mainWindow: any MainWindowPresenting) {
         self.model = model
@@ -126,6 +128,53 @@ final class WindowRouter {
         Task { await model.select(item) }
     }
 
+    /// Every banner response (2026-11-17): the banner itself is a tap; a
+    /// button acts on the mail or meeting it names (`PushNotifier.responseAction`).
+    /// Reply opens the mail with the composer: nothing is sent from a
+    /// notification. Later and Done run in the background; a failure opens
+    /// the window on the action notice, never silently.
+    func handleNotificationResponse(identifier: String, actionIdentifier: String, info: [String: String]) {
+        let action = PushNotifier.responseAction(
+            identifier: identifier, actionIdentifier: actionIdentifier, info: info,
+            isKnownItem: { self.model.knownItem(id: $0) != nil })
+        if case .tap = action { return handleNotificationTap(identifier: identifier) }
+        if case .join(let url) = action { return openURL(url) }
+        // Mail buttons need the session they act for.
+        guard model.phase == .signedIn else { return reopen() }
+        switch action {
+        case .reply(let itemID):
+            guard let item = model.knownItem(id: itemID) else {
+                // Cold launch: the tap path parks the mail until the first
+                // sync; the composer rides along with it.
+                handleNotificationTap(identifier: identifier)
+                model.pendingRevealOpensReply = model.pendingRevealItemID == itemID
+                return
+            }
+            openInApp(item)
+            model.requestReply(to: item)
+        case .later(let itemID, let emailID):
+            Task { [weak self] in
+                guard let failure = await self?.model.remindLaterFromBanner(emailID: emailID) else { return }
+                self?.showBannerActionFailure(itemID: itemID, failure)
+            }
+        case .done(let itemID):
+            Task { [weak self] in
+                guard let failure = await self?.model.dismissFromBanner(itemID: itemID) else { return }
+                self?.showBannerActionFailure(itemID: itemID, failure)
+            }
+        case .tap, .join:
+            return
+        }
+    }
+
+    /// A background button failed: bring the window forward on that mail
+    /// (or the window alone), where the action notice says what went wrong.
+    private func showBannerActionFailure(itemID: String, _ failure: String) {
+        Log.app.notice("banner action failed; showing the notice")
+        if let item = model.knownItem(id: itemID) { openInApp(item) } else { openMainWindow() }
+        if model.actionError == nil { model.showActionError(failure) }
+    }
+
     /// A tapped banner lands on the mail it announced; if that mail is gone
     /// from the queue the main window still opens — a tap never does nothing.
     func handleNotificationTap(identifier: String) {
@@ -148,6 +197,8 @@ final class WindowRouter {
             // when the first sync lands instead of dropping the tap.
             if queue == nil, let id = PushNotifier.itemID(fromNotificationIdentifier: identifier) {
                 model.pendingRevealItemID = id
+                // A plain tap opens the mail only (a Reply sets this after).
+                model.pendingRevealOpensReply = false
             }
         case .openMeeting:
             // The calendar shows the day's events with their join links.

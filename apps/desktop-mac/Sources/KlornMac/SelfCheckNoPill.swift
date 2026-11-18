@@ -183,7 +183,8 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     check("a Dock reopen, the hotkey and banner taps all route through WindowRouter",
           app.contains("router?.reopen()")
           && app.contains("router?.handleHotKey()")
-          && app.contains("router?.handleNotificationTap(identifier: identifier)"))
+          && app.contains("router?.handleNotificationResponse(")
+          && text("WindowRouter.swift").contains("if case .tap = action { return handleNotificationTap(identifier: identifier) }"))
     check("whether the window was open is recorded at quit, for the next login launch",
           app.contains("model.settings.mainWindowOpenAtQuit = model.mainWindowOpen"))
 
@@ -273,10 +274,13 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           fake.posted.count == 1 && banner?.title == "Kim & Co" && banner?.body == "Q4 & budget"
           && !(banner?.body.contains("private body") ?? true)
           && banner?.identifier == PushNotifier.notificationIdentifier(for: "x1"))
-    check("SystemPushNotifier sets title, body and the lane line only (no snippet, no actions)",
+    // Founder decision 2026-11-17 lifted "no actions": banners carry the
+    // Reply / Later / Done (or Join) category. Still never the mail's text,
+    // and no button sends: Reply opens the composer (SelfCheckBannerActions).
+    check("SystemPushNotifier sets title, subtitle, body, thread and the banner's category (no snippet, no text reply)",
           !text("Notifications.swift").contains("snippet")
-          && !text("Notifications.swift").contains("UNNotificationAction")
-          && !text("Notifications.swift").contains("categoryIdentifier"))
+          && !text("Notifications.swift").contains("UNTextInputNotificationAction")
+          && text("Notifications.swift").contains("if let category = banner.category { content.categoryIdentifier = category.rawValue }"))
     alertModel.settings.notificationsEnabled = false
     alerter.handleNewPush([push("x2")])
     check("Settings ▸ Notifications OFF posts no banner, but VoiceOver still hears it",
@@ -401,10 +405,10 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
         id: "ev-9",
         title: "Standup", startTime: meetingStartISO, endTime: "2026-10-15T09:30:00Z",
         location: "Room 4", meetingLink: "https://meet.example/x", allDay: false)
-    let meetingBanner = MeetingBanner.make(for: standup, now: meetingNow, time: { _ in "9:10" })
-    check("a meeting banner says the title and start time, and the minutes left",
-          meetingBanner.title == "Standup · 9:10"
-          && meetingBanner.body == L("meeting.banner.body", 8)
+    let meetingBanner = MeetingBanner.make(for: standup, now: meetingNow)
+    check("a meeting banner says the title, and the minutes left (NT3)",
+          meetingBanner.title == "Standup"
+          && meetingBanner.body == L("meeting.banner.soon", 8)
           && meetingBanner.identifier == PushNotifier.meetingIdentifier(for: "ev-9"))
     check("a meeting banner carries no location, link or description",
           !meetingBanner.body.contains("Room") && !meetingBanner.body.contains("http")
@@ -529,7 +533,7 @@ func noPillSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
 
     // MARK: strings
     let newKeys = ["push.announce", "prefs.section.support", "prefs.banners.denied",
-                   "prefs.banners.openSystemSettings", "meeting.banner.body"]
+                   "prefs.banners.openSystemSettings", "meeting.banner.soon"]
     check("new strings exist in every locale",
           ["en", "ko", "de", "es", "fr", "ja", "zh"].allSatisfy { locale in
               let strings = (try? String(

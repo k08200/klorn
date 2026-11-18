@@ -1449,6 +1449,7 @@ const es: Record<string, string> = {
   "emailDetail.replyDraft.saveGmailDraft": "Guardar borrador en Gmail",
   "emailDetail.replyDraft.sending": "Enviando...",
   "emailDetail.replyDraft.sendButton": "Enviar esta respuesta",
+  "emailDetail.replyDraft.bodyLabel": "Texto de la respuesta",
   "emailDetail.analysis.notAnalyzed":
     "Klorn todavía no ha analizado este correo. Sincroniza y vuelve a mirar en un momento.",
   "emailDetail.analysis.title": "Juicio de Klorn",
@@ -1901,6 +1902,7 @@ const es: Record<string, string> = {
   "mailV2.reader.error.title": "No se pudo abrir este correo",
   "mailV2.reader.reconnectToArchive": "Vuelve a conectar esta cuenta para archivar correo.",
   "mailV2.reader.tone": "Tono y plantilla",
+  "mailV2.reply.original": "Mensaje original",
   // Assistant hub (productization plan P7, UNIFIED_HOME): /assistant/*.
   "nav.v2.activity": "Actividad",
   "nav.v2.chat": "Chat",

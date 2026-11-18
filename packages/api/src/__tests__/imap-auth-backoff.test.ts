@@ -272,10 +272,10 @@ describe("the poll of a fixed-host mailbox whose password is refused", () => {
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringMatching(/row row-y.*polling stopped until the mailbox is reconnected/),
     );
-    // The row was flagged at the 1st refusal; the stop asks for the alert once more
-    // (the notification module still sends at most one per account per UTC day).
+    // The row was flagged at the 1st refusal; the stop asks for the alert once more,
+    // naming the stop so its dedupe key is its own (imap-stop-alert.test.ts).
     expect(fake.notify).toHaveBeenCalledTimes(1);
-    expect(fake.notify).toHaveBeenCalledWith("u1", "row-y", "YAHOO");
+    expect(fake.notify).toHaveBeenCalledWith("u1", "row-y", "YAHOO", { stoppedAt: at(0) });
 
     for (const hours of [1, 6, 24, 24 * 30]) {
       vi.setSystemTime(at(hours * HOUR));
@@ -290,6 +290,7 @@ describe("the poll of a fixed-host mailbox whose password is refused", () => {
     await syncImapAccountsForUser("u1", YAHOO);
     expect(row()).toMatchObject({ imapAuthFailures: 4, needsReconnect: true });
     expect(fake.notify).toHaveBeenCalledTimes(1);
+    expect(fake.notify).toHaveBeenCalledWith("u1", "row-y", "YAHOO", { stoppedAt: at(0) });
   });
 
   it("the 2nd and 3rd refusals of a flagged row send no new alert", async () => {

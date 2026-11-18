@@ -344,7 +344,15 @@
 
 /* Meeting <-> calendar cross-reference (2026-08-13) */
 "meeting.alternatives" = "双方都有空：%@";
-"meeting.banner.body" = "%d 分钟后开始。";
+"meeting.banner.soon" = "%d 分钟后";
+"banner.action.reply" = "回复";
+"banner.action.later" = "稍后";
+"banner.action.done" = "完成";
+"banner.action.join" = "加入";
+"meeting.provider.meet" = "Google Meet";
+"meeting.provider.zoom" = "Zoom";
+"meeting.provider.teams" = "Microsoft Teams";
+"meeting.provider.webex" = "Webex";
 "meeting.proposedSlot" = "建议：%@";
 "meeting.slotFree" = "你的日历上这个时段是空的";
 "meeting.slotBusy" = "与已有日程冲突";
