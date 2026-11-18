@@ -49,6 +49,16 @@ remark an assessor may probe.
 | 25 | 3.2.2 | PASS | `redirect_uri` is a server-side env constant for every provider — never read from the request (`mail/gmail.ts:16,40-42`; `mail/outlook-oauth.ts:41-43,60,94`). `state` is a signed 10-minute HS256 JWT, verified at the callback and additionally checked for a purpose marker so tokens cannot be replayed across flows (`routes/auth.ts:889,968-977`; `routes/outlook-auth.ts:46,108-120`). | redirect_uri is a fixed server-side constant per provider, and state is a signed short-lived token verified (signature, expiry, and flow marker) at the callback — preventing both open-redirect and CSRF on the OAuth exchange. |
 | 26 | 3.3.1 | NOTE | Admin API is gated server-side on every request: `requireAdmin` = verified JWT + device-session + revocation epoch + DB role check (`routes/admin.ts:74-75`, `auth.ts:180-206`). Dedicated MFA is not implemented; the platform is operated by a single founder-administrator and admin sign-in is via Google OAuth (Google-account 2FA applies upstream). | Administrative endpoints enforce a server-side role check plus full session validation on every request. The sole administrator authenticates via Google OAuth protected by Google 2-step verification; a dedicated in-app MFA factor is on the roadmap. |
 
+> **Addendum 2026-11-17 (row 21, 3.1.4).** Row 21 above is the record as
+> submitted and is left unchanged. Since #1792 (merged 2026-11-17), a route
+> that finds a requested id belongs to another user answers the same 404 it
+> answers for an id that does not exist, instead of the 403 the row cites
+> (`routes/commitments.ts:87-93` then). A 403 told the caller the id exists and
+> is someone else's; the 404 gives no such existence oracle. The scoping itself
+> is unchanged, and `packages/api/src/__tests__/ownership-not-found-guard.test.ts`
+> now fails CI on an owner comparison answered with a 403 in route source
+> (a source scan for that shape, not a proof that none can exist).
+
 ## 4 — Communications
 
 | # | ID | Verdict | Evidence | Portal comment |

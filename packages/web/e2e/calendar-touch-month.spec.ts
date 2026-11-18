@@ -67,6 +67,17 @@ async function mockApi(page: Page) {
   await page.route("**/api/automations", (route) => route.fulfill({ json: {} }));
 }
 
+/**
+ * Below 600px Calendar opens on the day's agenda (mobile redesign PR5); the
+ * compact month is the "Month" view, one tap away. Wider, it shows at once.
+ */
+async function gotoMonth(page: Page) {
+  await page.goto("/calendar");
+  const month = page.getByRole("group", { name: "View" }).getByRole("button", { name: "Month" });
+  await expect(page.locator("#main")).toBeVisible();
+  if ((page.viewportSize()?.width ?? 0) < 600) await month.click();
+}
+
 const dayButton = (page: Page, label: RegExp) =>
   page.getByRole("grid").getByRole("button", { name: label });
 
@@ -77,7 +88,7 @@ test.describe("touch phone (390×844, coarse pointer)", () => {
     page,
   }) => {
     await mockApi(page);
-    await page.goto("/calendar");
+    await gotoMonth(page);
     const grid = page.getByRole("grid");
     await expect(grid).toBeVisible();
     await expect(grid.getByRole("link")).toHaveCount(0);
@@ -94,7 +105,7 @@ test.describe("touch phone (390×844, coarse pointer)", () => {
 
   test("today is selected by default and its events list below as ≥52px rows", async ({ page }) => {
     await mockApi(page);
-    await page.goto("/calendar");
+    await gotoMonth(page);
     await expect(page.getByRole("gridcell", { selected: true })).toHaveCount(1);
     await expect(
       page.getByRole("gridcell", { selected: true }).getByRole("button"),
@@ -114,7 +125,7 @@ test.describe("touch phone (390×844, coarse pointer)", () => {
 
   test("tapping a day selects it and swaps the agenda; an empty day says so", async ({ page }) => {
     await mockApi(page);
-    await page.goto("/calendar");
+    await gotoMonth(page);
 
     await dayButton(page, /July 24,/).tap();
     await expect(
@@ -132,7 +143,7 @@ test.describe("touch phone (390×844, coarse pointer)", () => {
 
   test("another month defaults to its 1st", async ({ page }) => {
     await mockApi(page);
-    await page.goto("/calendar");
+    await gotoMonth(page);
     await page.getByRole("button", { name: "Next month" }).tap();
     await expect(
       page.getByRole("gridcell", { selected: true }).getByRole("button"),
@@ -145,7 +156,7 @@ test.describe("keyboard on the compact grid", () => {
 
   test("arrows move focus between days with one tab stop; Enter selects", async ({ page }) => {
     await mockApi(page);
-    await page.goto("/calendar");
+    await gotoMonth(page);
     const grid = page.getByRole("grid");
     await expect(grid).toBeVisible();
     // Roving tabindex: exactly one day is in the tab order.
@@ -185,7 +196,7 @@ test.describe("touch tablet (1024×768, coarse pointer)", () => {
 
   test("a wide touch screen also gets the compact grid", async ({ page }) => {
     await mockApi(page);
-    await page.goto("/calendar");
+    await gotoMonth(page);
     await expect(page.getByRole("grid")).toBeVisible();
     await expect(page.getByRole("link", { name: /Offsite A/ })).toHaveCount(0);
   });
@@ -196,7 +207,7 @@ test.describe("desktop (1280×800, fine pointer)", () => {
 
   test("keeps the original month grid with event chips", async ({ page }) => {
     await mockApi(page);
-    await page.goto("/calendar");
+    await gotoMonth(page);
     await expect(page.getByRole("link", { name: /09:00\s*Standup/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /Offsite C/ })).toBeVisible();
     await expect(page.getByRole("grid")).toHaveCount(0);
