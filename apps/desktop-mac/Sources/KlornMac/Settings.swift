@@ -85,6 +85,9 @@ final class AppSettings {
 
     /// Fired when the appearance choice changes (wired at launch, not persisted).
     var onAppearanceChanged: ((AppearanceChoice) -> Void)?
+    /// Called after an in-app language change (the banner buttons'
+    /// titles are re-registered in the new language).
+    var onLanguageChanged: (() -> Void)?
 
     /// Whether the main window was open when Klorn last quit. A launch at
     /// login reopens it only then; otherwise a login launch stays out of the
@@ -102,6 +105,7 @@ final class AppSettings {
             guard appLanguage != oldValue else { return }
             L10n.override = appLanguage
             languageRevision &+= 1
+            onLanguageChanged?()
         }
     }
 

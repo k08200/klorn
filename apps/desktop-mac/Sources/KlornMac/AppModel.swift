@@ -279,6 +279,9 @@ final class AppModel {
     /// A banner tapped before the first sync (cold launch): its item opens
     /// as soon as a queue arrives (`applyPendingReveal`).
     @ObservationIgnored var pendingRevealItemID: String?
+    /// The pending reveal came from a banner's Reply (2026-11-18): open the
+    /// composer too once the mail is revealed, as a warm launch does.
+    @ObservationIgnored var pendingRevealOpensReply = false
     private var pollTask: Task<Void, Never>?
     private var realtime: RealtimeClient?
     /// Error from the last add-account attempt; cleared on the next attempt.
@@ -1558,6 +1561,50 @@ final class AppModel {
         }
     }
 
+    /// A banner's Done (2026-11-17): the same dismiss as the reader's, by
+    /// id, so it works whether or not the mail is in the list loaded now.
+    /// Returns the failure shown (the action notice), nil when it took (or
+    /// was cancelled, which is logged and never shown).
+    func dismissFromBanner(itemID: String) async -> String? {
+        let session = sessionGeneration
+        let item = knownItem(id: itemID)
+        if let item { hideLocally(item) }
+        do {
+            try await api.post("/api/inbox/firewall/\(itemID)/dismiss")
+            return nil
+        } catch _ where !isCurrent(session) {
+            return nil
+        } catch APIError.unauthorized {
+            sessionRejected()
+            return L("error.sessionExpired")
+        } catch {
+            Log.app.error("banner Done failed: \(String(describing: error), privacy: .private)")
+            if let item { return unhide(item, error) }
+            return noteActionFailure(error)
+        }
+    }
+
+    /// A banner's Later (2026-11-17): the web's Later for one mail
+    /// (`POST /api/email/:id/later`, packages/api/src/routes/email-later.ts).
+    /// No time sent: the server's later-today default, the one its web push
+    /// Later uses. Returns the failure shown, nil when it took (or was
+    /// cancelled).
+    func remindLaterFromBanner(emailID: String) async -> String? {
+        let session = sessionGeneration
+        do {
+            try await api.post("/api/email/\(emailID)/later", json: [:])
+            return nil
+        } catch _ where !isCurrent(session) {
+            return nil
+        } catch APIError.unauthorized {
+            sessionRejected()
+            return L("error.sessionExpired")
+        } catch {
+            Log.app.error("banner Later failed: \(String(describing: error), privacy: .private)")
+            return noteActionFailure(error)
+        }
+    }
+
     /// Confirm an agent-drafted event: POST to the calendar (syncs to Google
     /// server-side), clear the card, and confirm in-thread. Failure keeps the
     /// card so the user can retry, plus a visible failure bubble.
@@ -2499,6 +2546,7 @@ final class AppModel {
         permissionAnswers = nil
         didOfferLoginItem = false
         pendingRevealItemID = nil
+        pendingRevealOpensReply = false
         // Read before the Keychain is cleared: the device-calendar removals owed at
         // sign-out are sent with this session's token.
         let sessionToken = tokenStore.load()
@@ -3196,10 +3244,15 @@ final class AppModel {
     /// Cleared either way: a tap must not jump the window later on.
     private func applyPendingReveal() {
         guard let id = pendingRevealItemID else { return }
+        let opensReply = pendingRevealOpensReply
         pendingRevealItemID = nil
+        pendingRevealOpensReply = false
         guard let item = knownItem(id: id) else { return }
         revealInMail(item)
         Task { await select(item) }
+        // The same request a warm Reply makes: the reading pane opens the
+        // composer once this mail has loaded. Nothing is sent.
+        if opensReply { requestReply(to: item) }
     }
 
     /// Re-read the permission (the user may have changed it in System

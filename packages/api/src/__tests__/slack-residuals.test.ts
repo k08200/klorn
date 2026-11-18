@@ -220,7 +220,11 @@ describe("rejudgeFallbackSlackEpisodes", () => {
     expect(ring.pushNotification).not.toHaveBeenCalled();
     expect(ring.sendPushNotification).not.toHaveBeenCalled();
     expect(db.prisma.notification.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ userId: "user-1", type: "slack", dedupeKey: "slack:ep-1" }),
+      data: expect.objectContaining({
+        userId: "user-1",
+        type: "slack",
+        dedupeKey: "slack-held:ep-1",
+      }),
       select: { id: true },
     });
   });
