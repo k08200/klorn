@@ -419,6 +419,7 @@
 "account.naver.error.unavailable" = "Naver Mail isn't available on this server yet.";
 "account.imap.error.insecure" = "Klorn only sends an app password over a secure (HTTPS) connection.";
 "account.imap.submit" = "Connect";
+"account.imap.connectClosed" = "%@: new connections and reconnects are paused for now. You can still disconnect a mailbox.";
 "account.preset.connect" = "Connect %@ mailbox…";
 "account.preset.title" = "Connect %@ mailbox";
 "account.preset.body" = "This mailbox connects over IMAP (beta). Klorn sorts every new message into the same lanes as Gmail.";

@@ -419,6 +419,7 @@
 "account.naver.error.unavailable" = "このサーバーではNaverメールはまだ利用できません。";
 "account.imap.error.insecure" = "KlornはApp用パスワードを安全な（HTTPS）接続でのみ送信します。";
 "account.imap.submit" = "接続";
+"account.imap.connectClosed" = "%@: 現在、新しい接続と再接続は一時停止中です。メールボックスの接続解除は引き続き行えます。";
 "account.preset.connect" = "%@メールを接続…";
 "account.preset.title" = "%@メールを接続";
 "account.preset.body" = "このメールボックスはIMAPで接続します（beta）。新着メールはGmailと同じレーンに振り分けられます。";

@@ -419,6 +419,7 @@
 "account.naver.error.unavailable" = "此服务器尚未提供 Naver 邮件。";
 "account.imap.error.insecure" = "Klorn 只通过安全 (HTTPS) 连接发送应用密码。";
 "account.imap.submit" = "连接";
+"account.imap.connectClosed" = "%@：新连接和重新连接暂时停用。你仍可以断开邮箱连接。";
 "account.preset.connect" = "连接 %@ 邮箱…";
 "account.preset.title" = "连接 %@ 邮箱";
 "account.preset.body" = "此邮箱通过 IMAP 连接（beta）。新邮件会分到与 Gmail 相同的通道。";

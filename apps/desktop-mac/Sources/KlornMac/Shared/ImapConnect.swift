@@ -225,9 +225,21 @@ enum ImapConnectOutcome: Equatable, Sendable {
 
 /// The connect buttons Settings ▸ Accounts draws, in display order: Naver
 /// always (its routes are never gated), every other provider only once its
-/// status probe answered. Pure.
-func offeredImapProviders(_ available: Set<ImapMailProvider>) -> [ImapMailProvider] {
-    ImapMailProvider.allCases.filter { $0 == .naver || available.contains($0) }
+/// status probe answered — and none whose status said its connect route is
+/// closed to this user (`connectOpen: false`). Pure.
+func offeredImapProviders(
+    _ available: Set<ImapMailProvider>, closed: Set<ImapMailProvider> = []
+) -> [ImapMailProvider] {
+    ImapMailProvider.allCases.filter {
+        ($0 == .naver || available.contains($0)) && !closed.contains($0)
+    }
+}
+
+/// The providers Settings ▸ Accounts explains instead of offering, in display
+/// order: their connect route is closed to this user, who can still
+/// disconnect a mailbox there. Pure.
+func connectClosedImapProviders(_ closed: Set<ImapMailProvider>) -> [ImapMailProvider] {
+    ImapMailProvider.allCases.filter { closed.contains($0) }
 }
 
 /// Account rows from /api/email/inboxes that the IMAP status lists already

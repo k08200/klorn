@@ -460,16 +460,24 @@ struct InboxAccountsSection: View {
                     .font(.caption).foregroundStyle(Theme.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let provider = connectingProvider {
+            if let provider = connectingProvider, !model.imapConnectClosed.contains(provider) {
                 ImapConnectForm(provider: provider, model: model) { connectingProvider = nil }
                     .id(provider)
             } else {
                 // One button per provider the server has, in display order: a
                 // gated provider's status 404s while its flag is off (or the
-                // user is outside its cohort), which drops it from the set.
-                ForEach(offeredImapProviders(model.availableImapProviders)) { provider in
+                // user is outside its cohort), which drops it from the set. An
+                // owner it is closed to gets 200 with connectOpen false: no
+                // button (the connect would 404), a notice, and disconnect.
+                ForEach(offeredImapProviders(model.availableImapProviders, closed: model.imapConnectClosed)) {
+                    provider in
                     connectButton(provider, title: provider.connectLabel)
                 }
+            }
+            ForEach(connectClosedImapProviders(model.imapConnectClosed)) { provider in
+                Text(L("account.imap.connectClosed", providerLabel(provider.rawValue)))
+                    .font(.caption).foregroundStyle(Theme.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let error = model.imapError {
                 Text(error).font(.caption).foregroundStyle(Theme.textDim)
