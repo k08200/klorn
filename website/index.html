@@ -9,7 +9,8 @@
 <link rel="alternate" hreflang="x-default" href="https://klorn.ai/">
 <link rel="canonical" href="https://klorn.ai/">
 <!-- English is the default at klorn.ai. Other languages are reached from the
-     language menu; a Korean-locale first visit to / is routed to /ko/ once. -->
+     language menu; a Korean- or Chinese-locale first visit to / is routed to
+     /ko/ or /zh/ once. -->
 <title>Klorn — All your mail and calendars. One calm place.</title>
 <meta name="description" content="Gmail and Google Calendar, plus Naver Mail and iCloud Mail in beta, in one view. Klorn sorts every message by what it needs from you and tells you why. Free plan; Klorn Pro is $29.99/month.">
 <meta property="og:title" content="Klorn — All your mail and calendars. One calm place.">
@@ -587,7 +588,10 @@
 
 // Language: follow the browser preference on a first visit to the root, and
 // never again. An explicit pick is remembered, the redirect fires at most once
-// per browser session, and deep links stay where they point.
+// per browser session, and deep links stay where they point. Only the first
+// language a browser lists counts, and a client that lists none (most
+// crawlers) stays on English. Every Chinese locale (zh-CN, zh-TW, zh-Hant…)
+// goes to /zh/: Simplified is the only Chinese the site ships.
 (function () {
   var KEY = 'klorn.lang';
   document.querySelectorAll('[data-lang-pick]').forEach(function (a) {
@@ -602,10 +606,13 @@
   if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
   var path = location.pathname;
   if (path !== '/' && path !== '/index.html') return;
-  var prefers = (navigator.languages && navigator.languages[0]) || navigator.language || '';
-  if (!/^ko\b/i.test(prefers)) return;
+  var listed = navigator.languages;
+  if (!listed || !listed.length) return;
+  var primary = String(listed[0]).split('-')[0].toLowerCase();
+  var home = primary === 'ko' ? '/ko/' : primary === 'zh' ? '/zh/' : null;
+  if (!home) return;
   try { sessionStorage.setItem(KEY + '.tried', '1'); } catch (e) {}
-  location.replace('/ko/');
+  location.replace(home);
 })();
 </script>
 <script>
