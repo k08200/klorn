@@ -153,6 +153,11 @@ describe("landing language redirect", () => {
       expect(first.to).toBe("/zh/");
       expect(first.session.get("klorn.lang.tried")).toBe("1");
       expect(load(page, { languages: ["en-US"] }).session.has("klorn.lang.tried")).toBe(false);
+      // Marked only when it actually redirects, never before the other checks.
+      const deepLink = load(page, { languages: ["zh-CN"], path: "/pricing/" });
+      expect(deepLink.session.has("klorn.lang.tried")).toBe(false);
+      const picked = load(page, { languages: ["zh-CN"], stored: "en" });
+      expect(picked.session.has("klorn.lang.tried")).toBe(false);
       expect(visit(page, { languages: ["zh-CN"], triedThisSession: true })).toBeNull();
     });
 
@@ -163,12 +168,18 @@ describe("landing language redirect", () => {
       expect(loaded.local.get("klorn.lang")).toBe("zh");
     });
 
+    it("lets a reader change an earlier pick", () => {
+      const loaded = load(page, { languages: ["en-US"], stored: "en", menuPick: "ko" });
+      loaded.clickMenuPick();
+      expect(loaded.local.get("klorn.lang")).toBe("ko");
+    });
+
     it("leaves a deep link where it points", () => {
       expect(visit(page, { languages: ["zh-CN"], path: "/pricing/" })).toBeNull();
       expect(visit(page, { languages: ["zh-CN"], path: "/zh/" })).toBeNull();
     });
 
-    it("never redirects a client that states no language list (crawlers)", () => {
+    it("never redirects a client that states no language list", () => {
       expect(visit(page, { language: "zh-CN" })).toBeNull();
       expect(visit(page, { languages: [], language: "ko-KR" })).toBeNull();
     });
