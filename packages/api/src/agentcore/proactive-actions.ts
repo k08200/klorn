@@ -21,6 +21,7 @@ import {
   DEADLINE_WARNING_DAYS,
   EOD_HOUR,
   MEETING_PREP_MINUTES,
+  pushPresentationOpenTo,
   pushQuoteOpenTo,
   UNANSWERED_THRESHOLD_HOURS,
   WEEKLY_REVIEW_DAY,
@@ -30,11 +31,12 @@ import { prisma } from "../db.js";
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
 import { parseAddress } from "../mail/email-address.js";
 import { clampText } from "../notify/clamp-text.js";
+import { meetPushCopy } from "../notify/kind-push-copy.js";
+import { inMorningWindow } from "../notify/morning-window.js";
 import type { NotifCategory } from "../notify/notification-prefs.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
 import { sendPushNotification } from "../notify/push.js";
 import { meetingPresentation } from "../notify/push-presentation.js";
-import { isWithinQuietHours, lastEndedQuietWindow } from "../notify/quiet-hours.js";
 import { sendSms } from "../notify/sms.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
 import { countCalendarRows } from "../pim/calendar-read.js";
@@ -43,7 +45,6 @@ import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { isUniqueViolation } from "../slack/unique-violation.js";
 import {
   isLocalTimeWithin,
-  localDateKey,
   localDayOfWeek,
   localDayUtcRange,
   localMinuteOfDay,
@@ -72,7 +73,8 @@ async function getUserTimeZone(userId: string): Promise<string> {
   return normalizeTimeZone(config?.timezone);
 }
 
-const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 /** The oldest mail the unanswered reminder (flag off) still lists. */
 const UNANSWERED_MAX_AGE_DAYS = 7;
@@ -86,15 +88,14 @@ const FOLLOW_UP_MAX_AGE_DAYS = 14;
 const REPLY_WAIT_SCAN = 100;
 /** Follow-up lines that get a contact lookup (the ones listed). */
 const FOLLOW_UP_LISTED = 3;
-/**
- * The merged reminder's user-local delivery window, [start, end) hours. When
- * quiet hours end later than its start, it runs as long after they end.
- */
-const REPLY_WAIT_WINDOW_START_HOUR = 9;
-const REPLY_WAIT_WINDOW_END_HOUR = 12;
-const REPLY_WAIT_WINDOW_MS = (REPLY_WAIT_WINDOW_END_HOUR - REPLY_WAIT_WINDOW_START_HOUR) * HOUR_MS;
 /** Both reminder types: the merged one dedupes against either, so a flip mid-day never sends twice. */
 const REPLY_WAIT_TYPES = ["email_followup", "followup"];
+/**
+ * The heads-up's "starts in" figure is floored to this step: a meeting the
+ * 5-minute window first sees 60–65 minutes out reads "in 1 hr", not a figure
+ * that jitters with the tick ("in 1 hr 4 min").
+ */
+const HEADS_UP_STEP_MINUTES = 5;
 /** Bell-row dedupe key of a meeting heads-up: one per calendar row and start time. */
 const MEETING_PREP_KEY_PREFIX = "meeting-prep:";
 /** The push body cap (the bell row keeps the whole message). */
@@ -209,42 +210,15 @@ async function checkUnansweredEmails(userId: string, tz: string): Promise<void> 
 }
 
 /**
- * Whether the merged reminder may go out now: never inside quiet hours;
- * inside [REPLY_WAIT_WINDOW_START_HOUR, REPLY_WAIT_WINDOW_END_HOUR) local; or,
- * when today's quiet hours ended after the window opened, for as long after
- * they ended — so quiet hours that cover the morning delay the reminder, not
- * drop it.
- */
-async function inReplyWaitWindow(userId: string, tz: string, now: Date): Promise<boolean> {
-  const minute = localMinuteOfDay(now, tz);
-  if (minute < REPLY_WAIT_WINDOW_START_HOUR * 60) return false;
-  const row = await prisma.automationConfig.findUnique({
-    where: { userId },
-    select: { quietHoursStart: true, quietHoursEnd: true },
-  });
-  const quiet = {
-    quietHoursStart: row?.quietHoursStart ?? null,
-    quietHoursEnd: row?.quietHoursEnd ?? null,
-  };
-  if (isWithinQuietHours(now, quiet, tz)) return false;
-  if (minute < REPLY_WAIT_WINDOW_END_HOUR * 60) return true;
-  const ended = lastEndedQuietWindow(now, quiet, tz);
-  if (!ended || ended.endDateKey !== localDateKey(now, tz)) return false;
-  return (
-    localMinuteOfDay(ended.end, tz) > REPLY_WAIT_WINDOW_START_HOUR * 60 &&
-    now.getTime() - ended.end.getTime() < REPLY_WAIT_WINDOW_MS
-  );
-}
-
-/**
  * The merged reminder (NOTIFY_WAIT_DIGEST): one "wait" notification for every
  * mail that still needs the user's reply, UNANSWERED_THRESHOLD_HOURS to
  * FOLLOW_UP_MAX_AGE_DAYS old, bulk mail out, at any priority (needsReply is
- * the signal). Sent once per local day inside inReplyWaitWindow.
+ * the signal). Sent once per local day inside the morning window
+ * (notify/morning-window.ts).
  */
 async function checkReplyWait(userId: string, tz: string): Promise<void> {
   const now = new Date();
-  if (!(await inReplyWaitWindow(userId, tz, now))) return;
+  if (!(await inMorningWindow(userId, tz, now))) return;
   if (await sentReplyWaitToday(userId, tz, REPLY_WAIT_TYPES)) return;
   const rows = await prisma.emailMessage.findMany({
     where: {
@@ -308,6 +282,10 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
   const leftOut = leftToStartRing(events, covers);
   // The join link is meeting content: on Apple's / Google's push only under NOTIFY_PUSH_QUOTE.
   const linkInPush = pushQuoteOpenTo(userId);
+  // NT0 meet copy for the device push (the bell row keeps its text).
+  const language = pushPresentationOpenTo(userId)
+    ? await getUserNotificationLanguage(userId)
+    : null;
 
   for (const event of events) {
     if (leftOut.has(event)) continue;
@@ -320,6 +298,16 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
     const link = event.meetingLink ? `\nJoin: ${event.meetingLink}` : "";
 
     const message = `${event.title} starts at ${time}${location}${link}`;
+    const presentation = meetingPresentation(event.meetingLink, event.attendeeCount);
+    const nt = language
+      ? meetPushCopy({
+          eventTitle: event.title,
+          startsInMinutes: headsUpMinutes(event.startTime, now),
+          joinUrl: presentation.joinUrl,
+          attendeeCount: event.attendeeCount,
+          language,
+        })
+      : null;
     const pushBody = linkInPush ? message : `${event.title} starts at ${time}${location}`;
 
     const rang = await notify(
@@ -329,9 +317,10 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
       message,
       "/briefing",
       {
-        pushBody,
+        pushTitle: nt?.title,
+        pushBody: nt?.body ?? pushBody,
         dedupeKey: `${MEETING_PREP_KEY_PREFIX}${event.id}:${event.startTime.getTime()}`,
-        presentation: meetingPresentation(event.meetingLink, event.attendeeCount),
+        presentation,
       },
     );
     if (!rang) continue;
@@ -347,9 +336,28 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
   }
 }
 
+/** Minutes until a heads-up's meeting, floored to HEADS_UP_STEP_MINUTES. */
+function headsUpMinutes(start: Date, now: Date): number {
+  const minutes = (start.getTime() - now.getTime()) / MINUTE_MS;
+  return Math.floor(minutes / HEADS_UP_STEP_MINUTES) * HEADS_UP_STEP_MINUTES;
+}
+
+/**
+ * Whether a once-a-day task reminder (overdue, deadline) may go out now. Flag
+ * off: on any tick — the day's dedupe makes it the first tick of the local
+ * day, as before. NOTIFY_WAIT_DIGEST open to the user: inside the morning
+ * window, like the reply-wait reminder, so it no longer rings just after local
+ * midnight.
+ */
+async function dailyTaskReminderDue(userId: string, tz: string, now: Date): Promise<boolean> {
+  if (!waitDigestOpenTo(userId)) return true;
+  return inMorningWindow(userId, tz, now);
+}
+
 /** Alert on tasks that are past their due date */
 async function checkOverdueTasks(userId: string, tz: string): Promise<void> {
   const now = new Date();
+  if (!(await dailyTaskReminderDue(userId, tz, now))) return;
 
   const overdue = await prisma.task.findMany({
     where: {
@@ -455,6 +463,7 @@ async function checkEndOfDayReview(userId: string, tz: string): Promise<void> {
 /** Warn about tasks with deadlines approaching in 3 days */
 async function checkDeadlineCountdown(userId: string, tz: string): Promise<void> {
   const now = new Date();
+  if (!(await dailyTaskReminderDue(userId, tz, now))) return;
   const warningDate = new Date(now.getTime() + DEADLINE_WARNING_DAYS * 24 * 60 * 60 * 1000);
 
   const approaching = await prisma.task.findMany({
@@ -615,6 +624,8 @@ async function checkBackToBackMeetings(userId: string, tz: string): Promise<void
 }
 
 interface NotifyOptions {
+  /** The device push's title when it should differ from the bell row's (NT0 copy). */
+  pushTitle?: string;
   /** The device push's text when it should differ from the bell row's message. */
   pushBody?: string;
   /** NT0 structured fields; the type's kind (kindForType) when absent. */
@@ -655,7 +666,12 @@ async function notify(
   // internals would otherwise crash the single dyno.
   sendPushNotification(
     userId,
-    { title, body: clampText(opts.pushBody ?? message, PUSH_BODY_MAX), url, presentation },
+    {
+      title: opts.pushTitle ?? title,
+      body: clampText(opts.pushBody ?? message, PUSH_BODY_MAX),
+      url,
+      presentation,
+    },
     categoryForType(type),
     // Heuristic-decided: ambient even for a "meeting" category (a back-to-back
     // warning is not a meeting starting), so it cannot use up the interrupt

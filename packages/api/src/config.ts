@@ -796,10 +796,12 @@ export function slackOpenTo(userId: string): boolean {
 // NT0 reply-wait reminder (notification redesign, decided 2026-11-17): the
 // unanswered (48h) and follow-up (72h) reminders of agentcore/proactive-actions.ts
 // become ONE "wait" reminder, read most-important-first, sent in the user-local
-// morning window and never during their quiet hours. OFF by default (repo
-// doctrine): both reminders then keep their old timing (the first tick of the
-// user's local day). `cohort` opens it only to ROLLOUT_COHORT_USER_IDS. Read
-// per tick: a flip needs no redeploy.
+// morning window and never during their quiet hours. The overdue-task and
+// deadline (D-3) reminders move to the same window (notify/morning-window.ts):
+// one timing decision for every once-a-day reminder, so none rings just after
+// local midnight. OFF by default (repo doctrine): all of them then keep their
+// old timing (the first tick of the user's local day). `cohort` opens it only
+// to ROLLOUT_COHORT_USER_IDS. Read per tick: a flip needs no redeploy.
 export const WAIT_DIGEST_FLAG = "NOTIFY_WAIT_DIGEST";
 export function waitDigestOpenTo(userId: string): boolean {
   return featureOpenTo(userId, [WAIT_DIGEST_FLAG]);
@@ -822,7 +824,10 @@ export function pushQuoteOpenTo(userId: string): boolean {
 // (the subject, so the body is the one-line request only),
 // `interruption-level` (time-sensitive for push / meet, passive for wait,
 // digest and brief), `relevance-score`, and `apns-priority` 5 for a passive
-// kind. OFF by default: the APNs alert stays { title, body } at priority 10.
+// kind; and the NT0 copy of the meet, brief, agent and acct device pushes on
+// every channel (notify/kind-push-copy.ts), so every presentation change flips
+// together. OFF by default: the APNs alert stays { title, body } at priority 10
+// and those pushes keep their old text.
 // The structured custom keys (contract NotificationPresentation) ship either
 // way; a client that does not read them is unaffected.
 export const PUSH_PRESENTATION_FLAG = "NOTIFY_PUSH_PRESENTATION";

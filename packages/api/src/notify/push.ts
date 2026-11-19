@@ -214,6 +214,12 @@ export async function sendPushNotification(
     // by web push, APNs and FCM as push-presentation.ts allows for this user.
     // Never sent to Telegram.
     presentation?: NotificationPresentation;
+    // The push's pre-NT0 text, when title / body are NT0 copy
+    // (NOTIFY_PUSH_PRESENTATION, notify/kind-push-copy.ts): the inbound-mail
+    // noise policy judges this text instead, so flipping the copy flag never
+    // changes whether a push rings (an address with "deal" in an acct title,
+    // a sender named "Daily Digest" in an agent title). Never sent to a channel.
+    policyText?: { title: string; body: string };
   },
   category: NotifCategory = "system",
   options: PushSendOptions = {},
@@ -226,6 +232,7 @@ export async function sendPushNotification(
     language,
     userSet,
     presentation,
+    policyText,
     ...channelPayload
   } = payload;
   const shown = presentationForChannels(userId, presentation, category, options.bucket);
@@ -252,8 +259,8 @@ export async function sendPushNotification(
   // ("[Klorn] Action complete — mark read finished") from the LOW-risk
   // auto-exec path that PR #456's notify_user-tool guard did not cover.
   const suppression = notificationSuppressionReason({
-    title: payload.title,
-    message: payload.body,
+    title: policyText?.title ?? payload.title,
+    message: policyText?.body ?? payload.body,
     // category is a routing/preference dimension; we co-opt it as the
     // adjudicated-surface hint so content the system already decided to
     // interrupt on bypasses the inbound-mail noise heuristic.

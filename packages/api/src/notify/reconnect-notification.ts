@@ -20,10 +20,20 @@
  * a stop on the same UTC day as the 1st refusal's alert is no longer
  * swallowed by the daily key. The push still passes every gate of
  * sendPushNotification, quiet hours included.
+ *
+ * NOTIFY_PUSH_PRESENTATION open to the user: the device push of every alert
+ * here reads the NT0 acct copy, "<address> 연결 끊김" / "다시 연결하면 이 계정
+ * 메일도 분류합니다" (notify/kind-push-copy.ts). The address is the owner's own
+ * connected account, shown in the owner's own push only and never logged; the
+ * bell row and the live frame keep their text.
  */
 
+import { pushPresentationOpenTo } from "../config.js";
 import { prisma } from "../db.js";
+import { logDbFailure } from "../report-db-failure.js";
 import { pushNotification } from "../websocket.js";
+import { acctPushCopy, type PushCopy } from "./kind-push-copy.js";
+import { getUserNotificationLanguage } from "./notification-strings.js";
 import { sendPushNotification } from "./push.js";
 
 // Wording deliberately avoids the notification-policy noise keywords
@@ -88,6 +98,56 @@ function reconnectDedupeKey(slug: string, opts: ReconnectAlertOptions | undefine
 }
 
 /**
+ * The address of the account that needs reconnecting: the linked inbox's own
+ * (read by id AND user), else the primary Google grant's. Owner-only: it goes
+ * in the owner's own push and nowhere else — never a log line.
+ */
+async function reconnectAccountAddress(
+  userId: string,
+  opts: ReconnectAlertOptions | undefined,
+): Promise<string | null> {
+  try {
+    if (opts?.linkedInboxAccountId) {
+      const row = await prisma.linkedInboxAccount.findFirst({
+        where: { id: opts.linkedInboxAccountId, userId },
+        select: { email: true },
+      });
+      return row?.email ?? null;
+    }
+    // Only the Google login has an account-wide address on its token row.
+    if ((opts?.provider ?? "GOOGLE") !== "GOOGLE") return null;
+    const token = await prisma.userToken.findFirst({
+      where: { userId, provider: "google" },
+      select: { googleEmail: true },
+    });
+    return token?.googleEmail ?? null;
+  } catch (err) {
+    // The alert still goes out, naming the provider instead.
+    logDbFailure("[RECONNECT] account address read failed", err, { ids: { userId } });
+    return null;
+  }
+}
+
+/**
+ * The device push's text. NOTIFY_PUSH_PRESENTATION open to the user: the NT0
+ * acct copy ("<address> 연결 끊김" / "다시 연결하면 이 계정 메일도 분류합니다"),
+ * in their language. Otherwise exactly what it always was.
+ */
+async function reconnectPushCopy(
+  userId: string,
+  label: string,
+  fallback: PushCopy,
+  opts: ReconnectAlertOptions | undefined,
+): Promise<PushCopy> {
+  if (!pushPresentationOpenTo(userId)) return fallback;
+  const [account, language] = await Promise.all([
+    reconnectAccountAddress(userId, opts),
+    getUserNotificationLanguage(userId),
+  ]);
+  return acctPushCopy({ account, label, language });
+}
+
+/**
  * Create + broadcast + web-push the reconnect alert. Returns the created
  * notification, or null when the alert under this key already exists (today's
  * for this account, or this stop's: the P2002 loser — no duplicate push on any
@@ -132,11 +192,15 @@ export async function ensureGmailReconnectNotification(
     kind: "acct",
   });
 
+  const fallback = { title, body: message };
+  const copy = await reconnectPushCopy(userId, label, fallback, opts);
   await sendPushNotification(
     userId,
     {
-      title,
-      body: message,
+      title: copy.title,
+      body: copy.body,
+      // NT0 copy names the address: the noise policy still judges the fixed text.
+      ...(copy === fallback ? {} : { policyText: fallback }),
       url: RECONNECT_LINK,
       notificationId: notification.id,
       // NT0: an account to reconnect (Android channel "account").

@@ -92,9 +92,14 @@ function domainOf(address: string): string {
   return at < 0 ? "" : plainLine(address.slice(at + 1), SENDER_MAX * CLEAN_FACTOR);
 }
 
+/** Every whole address inside free text shown as its domain, as a sender is. */
+export function foldInlineAddresses(text: string): string {
+  return text.replace(INLINE_ADDRESS, "$1");
+}
+
 /** Plain, one line, addresses folded to their domain, cut on a word boundary. */
 function freeText(value: string | null | undefined, max: number): string {
-  const clean = plainLine(value, max * CLEAN_FACTOR).replace(INLINE_ADDRESS, "$1");
+  const clean = foldInlineAddresses(plainLine(value, max * CLEAN_FACTOR));
   return clean ? clampText(clean, max) : "";
 }
 
