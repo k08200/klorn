@@ -87,12 +87,15 @@ export interface MailPushContent {
   body: string;
 }
 
+/** The text without the quotation marks around it, so a line never shows them twice. */
+export function stripEdgeQuotes(text: string): string {
+  return text.replace(EDGE_QUOTES, "").trim();
+}
+
 /** The verified quote as shown (no quotation marks), or "" — only when quotes may be shown. */
 function shownQuote(reason: NotificationReason | null | undefined, allowQuote: boolean): string {
   if (!allowQuote || !reason?.verified || !reason.quote) return "";
-  return plainLine(reason.quote, MAIL_PUSH_REASON_MAX - 2)
-    .replace(EDGE_QUOTES, "")
-    .trim();
+  return stripEdgeQuotes(plainLine(reason.quote, MAIL_PUSH_REASON_MAX - 2));
 }
 
 /**
@@ -149,15 +152,25 @@ export function mailPushContent(input: MailPushInput): MailPushContent {
  * mailPushContent's text. `senderDisplayName` is the From header's display
  * name only (absent when it has none, or when it is itself an address).
  */
+/**
+ * The From header's display name as the `senderDisplayName` field carries it:
+ * cleaned onto one line; undefined when the header has none, or when it is
+ * itself an address.
+ */
+export function presentedDisplayName(from: string | null | undefined): string | undefined {
+  const name = plainLine(displayNameOf(boundedFromValue(from ?? "").trim()), TITLE_MAX);
+  return name && !name.includes("@") ? name : undefined;
+}
+
 export function mailPushPresentation(
   input: MailPushInput & { lane: MailPushLane; threadId?: string | null },
 ): NotificationPresentation {
-  const name = plainLine(displayNameOf(boundedFromValue(input.from).trim()), TITLE_MAX);
+  const name = presentedDisplayName(input.from);
   const quote = shownQuote(input.reason, input.allowQuote === true);
   const reason = reasonText(input.reason);
   return {
     kind: input.lane === "MEETING" ? "meet" : "push",
-    ...(name && !name.includes("@") ? { senderDisplayName: name } : {}),
+    ...(name ? { senderDisplayName: name } : {}),
     subject: subjectLine(input),
     ...(quote ? { quote } : {}),
     ...(reason ? { reasonLine: reason } : {}),

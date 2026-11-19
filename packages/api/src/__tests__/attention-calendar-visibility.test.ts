@@ -345,6 +345,7 @@ describe("every AttentionItem reader is accounted for", () => {
     "notify/channel-delivery-log.ts", // one item by id and owner: its id only (desktop receipt)
     "notify/notification-center.ts", // EMAIL items of named mails: lane, status, reason, hold; no title
     "notify/open-push-mail.ts", // OPEN PUSH EMAIL items of named mails: id + reason only
+    "pim/briefing-push.ts", // open PUSH EMAIL items: a count, no title
     "pim/briefing-window.ts", // EMAIL items of window mail: tier only; OPEN PUSH: ids only
     "pim/focus-digest.ts", // a count of arrivals, no title
     "routes/commitments.ts",

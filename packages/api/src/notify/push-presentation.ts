@@ -65,18 +65,23 @@ const JOIN_URL_MAX = 512;
 /** A thread id longer than this is not sent (provider ids are far shorter). */
 const THREAD_ID_MAX = 256;
 /**
- * Hosts a join link may point at (the host itself or a sub-domain of it): a
- * structured link a client can open in one tap, so a calendar entry naming
- * any other host carries none.
+ * Hosts a join link may point at (the host itself or a sub-domain of it), with
+ * the provider name the meet copy shows: a structured link a client can open in
+ * one tap, so a calendar entry naming any other host carries none.
  */
-const JOIN_HOSTS = [
-  "zoom.us",
-  "meet.google.com",
-  "teams.microsoft.com",
-  "teams.live.com",
-  "webex.com",
-  "whereby.com",
-];
+const JOIN_HOSTS: Readonly<Record<string, string>> = {
+  "zoom.us": "Zoom",
+  "meet.google.com": "Google Meet",
+  "teams.microsoft.com": "Microsoft Teams",
+  "teams.live.com": "Microsoft Teams",
+  "webex.com": "Webex",
+  "whereby.com": "Whereby",
+};
+
+/** The allowlisted join host a URL names (itself or as a parent domain), if any. */
+function joinHostOf(hostname: string): string | undefined {
+  return Object.keys(JOIN_HOSTS).find((host) => hostname === host || hostname.endsWith(`.${host}`));
+}
 
 /**
  * The kind of a push whose caller named none, from its category — only where
@@ -104,8 +109,19 @@ function safeJoinUrl(value: string | undefined): string | undefined {
   const safe = safeHttpsLink(value);
   if (!safe || safe.length > JOIN_URL_MAX) return undefined;
   const { hostname, port } = new URL(safe);
-  const known = JOIN_HOSTS.some((host) => hostname === host || hostname.endsWith(`.${host}`));
-  return known && port === "" ? safe : undefined;
+  return joinHostOf(hostname) && port === "" ? safe : undefined;
+}
+
+/**
+ * The meeting service a join link belongs to ("Google Meet", "Zoom", …), for
+ * the NT0 meet copy: only for a link that passes the same checks as a pushed
+ * join link, so the copy never names a service the push would not link to.
+ */
+export function joinProviderName(joinUrl: string | null | undefined): string | undefined {
+  const link = safeJoinUrl(joinUrl ?? undefined);
+  if (!link) return undefined;
+  const host = joinHostOf(new URL(link).hostname);
+  return host ? JOIN_HOSTS[host] : undefined;
 }
 
 /**

@@ -19,10 +19,13 @@ import type {
   NotificationRow,
 } from "@klorn/contract";
 import { HIDDEN_CLAIM_TYPE, REPLY_CLAIM_ROWS } from "./agentcore/auto-reply-ledger-keys.js";
+import { pushPresentationOpenTo } from "./config.js";
 import { prisma } from "./db.js";
 import { escapeLikePattern } from "./db-like.js";
 import { INTERRUPT_SLOT_ROOT } from "./judge/v3/interrupt-budget.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
+import { meetPushCopy, type PushCopy } from "./notify/kind-push-copy.js";
+import { getUserNotificationLanguage } from "./notify/notification-strings.js";
 import { meetingPresentation } from "./notify/push-presentation.js";
 import { NOTIFIED_LOOKBACK_MS } from "./notify/urgent-dedup.js";
 import { isCalendarRowVisible } from "./pim/calendar-scope.js";
@@ -240,6 +243,29 @@ async function meetingPushPath(userId: string, googleEventId: string): Promise<s
   }
 }
 
+/**
+ * The start ring's device push text. NOTIFY_PUSH_PRESENTATION open to the
+ * user: the NT0 meet copy (title = the event, body = "3분 후 · Google Meet ·
+ * 3명"), in their language. Otherwise exactly what it always was.
+ */
+async function meetingStartCopy(
+  userId: string,
+  meeting: { summary: string; attendeeCount?: number | null },
+  minutesUntil: number,
+  presentation: { joinUrl?: string },
+): Promise<PushCopy> {
+  if (!pushPresentationOpenTo(userId)) {
+    return { title: `Meeting in ${Math.ceil(minutesUntil)} min`, body: meeting.summary };
+  }
+  return meetPushCopy({
+    eventTitle: meeting.summary,
+    startsInMinutes: minutesUntil,
+    joinUrl: presentation.joinUrl,
+    attendeeCount: meeting.attendeeCount,
+    language: await getUserNotificationLanguage(userId),
+  });
+}
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: meeting check has inherent nested logic (users → meetings → dedup → notify)
 async function checkUpcomingMeetings() {
   if (meetingCheckInFlight) return;
@@ -262,7 +288,10 @@ async function checkUpcomingMeetings() {
       if (config && !config.meetingAutoJoin) continue;
 
       try {
-        const meetings = await getUpcomingMeetings(userId);
+        // A failed live read falls back to the stored rows (pim/meeting.ts): the
+        // T-60 heads-up left these meetings to this ring, so a Google outage
+        // across the 5-minute window must not cost them their only alert.
+        const meetings = await getUpcomingMeetings(userId, { storedOnFailure: true });
 
         for (const meeting of meetings) {
           const startTime = new Date(meeting.start).getTime();
@@ -316,11 +345,12 @@ async function checkUpcomingMeetings() {
             // bypasses that opt-out).
             try {
               const { sendPushNotification } = await import("./notify/push.js");
+              const copy = await meetingStartCopy(userId, meeting, minutesUntil, presentation);
               await sendPushNotification(
                 userId,
                 {
-                  title: `Meeting in ${Math.ceil(minutesUntil)} min`,
-                  body: meeting.summary,
+                  title: copy.title,
+                  body: copy.body,
                   url: await meetingPushPath(userId, meeting.id),
                   // Web push tags its OS notification with the bell row, as
                   // an open tab does, so the meeting shows once.

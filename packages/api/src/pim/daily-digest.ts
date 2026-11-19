@@ -25,10 +25,9 @@
  * No LLM and no estimates. The weekly report deliberately refuses to claim
  * "time saved" because we do not measure it; the same rule applies here.
  *
- * Copy is en/ko only, and every other notification language falls back to
- * English. Klorn ships seven; writing five more sets of user-facing email copy
- * unreviewed would be worse than an honest fallback, so the remaining
- * translations go through the normal i18n lane rather than being invented here.
+ * Copy is en / ko / zh, the languages Klorn ships (shipped-languages.ts,
+ * founder decision 2026-11-17). Any other stored notification language — a
+ * retired one included — reads English (copyFor below).
  *
  * Off by default behind `DAILY_DIGEST_ENABLED`.
  */

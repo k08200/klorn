@@ -15,6 +15,7 @@ import { getAuthedClient } from "../mail/gmail.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { googleAttendeeCount, googleMeetingLinkOf } from "./calendar-providers/google.js";
 import { meetingLinkInText } from "./meeting-link.js";
+import { storedStartRingMeetings } from "./meeting-stored-fallback.js";
 
 const exec = promisify(execFile);
 const IS_MACOS = process.platform === "darwin";
@@ -56,8 +57,21 @@ function meetingLinkOf(event: calendar_v3.Schema$Event): string | null {
   return googleMeetingLinkOf(event) ?? meetingLinkInText(event.description, event.location);
 }
 
+export interface UpcomingMeetingsOptions {
+  /**
+   * When the live listing fails, answer from the stored primary-calendar rows
+   * that start inside the start ring's window (meeting-stored-fallback.ts).
+   * Only the start ring (background.ts) asks: a missing grant is not a failure
+   * (the T-60 heads-up covers it), and the agent's tool keeps its answer.
+   */
+  storedOnFailure?: boolean;
+}
+
 /** Check calendar for upcoming meetings with video links */
-export async function getUpcomingMeetings(userId: string): Promise<MeetingEvent[]> {
+export async function getUpcomingMeetings(
+  userId: string,
+  options: UpcomingMeetingsOptions = {},
+): Promise<MeetingEvent[]> {
   // Use the shared authed client (getAuthedClient) rather than a raw OAuth2
   // client built from the stored token. A bare `new google.auth.OAuth2()` has
   // no client credentials, so it cannot refresh an expired access token and
@@ -103,6 +117,22 @@ export async function getUpcomingMeetings(userId: string): Promise<MeetingEvent[
     captureDbFailure("[MEETING] getUpcomingMeetings failed", err, {
       tags: { scope: "meeting.get-upcoming" },
     });
+    return options.storedOnFailure ? storedMeetingsOrNone(userId) : [];
+  }
+}
+
+/** The start ring's stored fallback; a failing read is reported as facts and rings nothing. */
+async function storedMeetingsOrNone(userId: string): Promise<MeetingEvent[]> {
+  try {
+    const stored = await storedStartRingMeetings(userId, new Date());
+    if (stored.length > 0) {
+      console.warn(
+        `[MEETING] live calendar read failed; ${stored.length} stored meeting(s) used for user ${userId}`,
+      );
+    }
+    return stored;
+  } catch (err) {
+    logDbFailure("[MEETING] stored meeting fallback failed", err, { ids: { userId } });
     return [];
   }
 }

@@ -258,3 +258,43 @@ describe("proactive meeting heads-up — one meeting, one notification", () => {
     });
   });
 });
+
+describe("proactive meeting heads-up — NT0 meet copy (NOTIFY_PUSH_PRESENTATION)", () => {
+  afterEach(() => {
+    delete process.env.NOTIFY_PUSH_PRESENTATION;
+    delete process.env.NOTIFY_PUSH_QUOTE;
+  });
+
+  const linkedMeeting = () =>
+    event("other-cal", {
+      title: "디자인 리뷰",
+      meetingLink: "https://meet.google.com/abc-defg-hij",
+      sourceAccountId: "lca-1",
+      location: "Room 4",
+      attendeeCount: 3,
+    });
+
+  it("flag on: the push reads title = the event, body = relative start · provider · how many", async () => {
+    process.env.NOTIFY_PUSH_PRESENTATION = "on";
+    process.env.NOTIFY_PUSH_QUOTE = "on";
+    db.config = { timezone: "Asia/Seoul", meetingAutoJoin: true, notificationLanguage: "ko" };
+    db.events = [linkedMeeting()];
+    await runProactiveActions("u1");
+
+    const payload = vi.mocked(sendPushNotification).mock.calls[0][1];
+    expect(payload.title).toBe("디자인 리뷰");
+    expect(payload.body).toBe("1시간 2분 후 · Google Meet · 3명");
+    // The bell row keeps its own text.
+    expect(meetingRows()[0].title).toBe("Meeting in 1 hour: 디자인 리뷰");
+  });
+
+  it("flag off: the push is exactly what it was", async () => {
+    db.config = { timezone: "Asia/Seoul", meetingAutoJoin: true, notificationLanguage: "ko" };
+    db.events = [linkedMeeting()];
+    await runProactiveActions("u1");
+
+    const payload = vi.mocked(sendPushNotification).mock.calls[0][1];
+    expect(payload.title).toBe("Meeting in 1 hour: 디자인 리뷰");
+    expect(payload.body).toBe("디자인 리뷰 starts at 03:02 PM @ Room 4");
+  });
+});
