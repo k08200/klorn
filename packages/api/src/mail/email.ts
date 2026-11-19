@@ -1,9 +1,11 @@
 import { Resend } from "resend";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { addressLogTag } from "../security/address-log-tag.js";
+import { PASSWORD_RESET_TOKEN_TTL_MS } from "../security/password-reset-throttle.js";
 import { captureError } from "../sentry.js";
 import { digestUnsubscribeLabel, digestUnsubscribeUrl } from "./digest-unsubscribe.js";
 import { parseAddress } from "./email-address.js";
+import { requireResendAccepted } from "./resend-send.js";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -46,6 +48,23 @@ function safeHttpUrl(raw: string | undefined | null): string | null {
   }
 }
 
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+
+/**
+ * A link lifetime in the mail's words: "1 hour", "2 hours", "30 minutes".
+ * Whole hours read as hours; anything else as whole minutes, rounded down so
+ * the mail never promises longer than the link lives.
+ */
+export function formatLinkLifetime(ms: number): string {
+  if (ms >= HOUR_MS && ms % HOUR_MS === 0) {
+    const hours = ms / HOUR_MS;
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  const minutes = Math.max(1, Math.floor(ms / MINUTE_MS));
+  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
+
 export async function sendPasswordResetEmail(to: string, resetToken: string): Promise<boolean> {
   const resetUrl = `${WEB_URL}/reset-password?token=${resetToken}`;
   const addressTag = addressLogTag(to);
@@ -56,14 +75,14 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
   }
 
   try {
-    // Resend answers a refused or failed send (4xx/5xx, rate limit, network)
-    // with `{ error }` rather than a throw. The caller puts the previous reset
-    // link back when this mail did not go out, so it must hear about it.
-    const { error } = await resend.emails.send({
-      from: FROM_EMAIL,
-      to,
-      subject: "Reset your Klorn password",
-      html: `
+    // The caller puts the previous reset link back when this mail did not go
+    // out (resend-send.ts: a refusal is an answer, not a throw).
+    await requireResendAccepted(
+      resend.emails.send({
+        from: FROM_EMAIL,
+        to,
+        subject: "Reset your Klorn password",
+        html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
           <h2 style="color: #0ea5e9; margin-bottom: 24px;">Klorn</h2>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
@@ -73,7 +92,7 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
             Reset Password
           </a>
           <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
-            This link expires in 1 hour. If you didn't request this, ignore this email.
+            This link expires in ${formatLinkLifetime(PASSWORD_RESET_TOKEN_TTL_MS)}. If you didn't request this, ignore this email.
           </p>
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
           <p style="color: #9ca3af; font-size: 12px;">
@@ -81,11 +100,8 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
           </p>
         </div>
       `,
-    });
-    if (error) {
-      logDbFailure("[EMAIL] Resend refused the reset email", error, { level: "error" });
-      return false;
-    }
+      }),
+    );
     console.log("[EMAIL] Password reset email sent to", addressTag);
     return true;
   } catch (err) {
@@ -106,11 +122,12 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
   }
 
   try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
-      to,
-      subject: "You're approved — sign in to Klorn",
-      html: `
+    await requireResendAccepted(
+      resend.emails.send({
+        from: FROM_EMAIL,
+        to,
+        subject: "You're approved — sign in to Klorn",
+        html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
           <h2 style="color: #0ea5e9; margin-bottom: 24px;">You're approved</h2>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
@@ -137,7 +154,8 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
           </p>
         </div>
       `,
-    });
+      }),
+    );
     console.log("[EMAIL] Beta invite email sent to", addressTag);
     return true;
   } catch (err) {
@@ -153,7 +171,8 @@ const INVITE_NAME_MAX = 80;
  * fragment, which browsers never send to a server, so it stays out of access
  * logs and Referer headers; the accept page posts it in a request body. The
  * organization and inviter names are user text: escaped for HTML and stripped
- * of header controls for the subject. Returns false only when Resend refused.
+ * of header controls for the subject. Returns false when the mail did not go
+ * out (Resend refused it, failed, or threw).
  */
 export async function sendOrgInviteEmail(input: {
   to: string;
@@ -175,11 +194,12 @@ export async function sendOrgInviteEmail(input: {
     ? `${escapeHtml(inviter)} invited you to join <strong>${escapeHtml(org)}</strong> on Klorn.`
     : `You were invited to join <strong>${escapeHtml(org)}</strong> on Klorn.`;
   try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
-      to: input.to,
-      subject: `Join ${org} on Klorn`,
-      html: `
+    await requireResendAccepted(
+      resend.emails.send({
+        from: FROM_EMAIL,
+        to: input.to,
+        subject: `Join ${org} on Klorn`,
+        html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px;">
           <h2 style="color: #0ea5e9; margin-bottom: 24px;">Klorn</h2>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">${lead}</p>
@@ -196,7 +216,8 @@ export async function sendOrgInviteEmail(input: {
           </p>
         </div>
       `,
-    });
+      }),
+    );
     console.log("[EMAIL] Organization invite sent to", addressTag);
     return true;
   } catch (err) {
@@ -215,11 +236,12 @@ export async function sendVerificationEmail(to: string, verifyToken: string): Pr
   }
 
   try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
-      to,
-      subject: "Verify your Klorn account",
-      html: `
+    await requireResendAccepted(
+      resend.emails.send({
+        from: FROM_EMAIL,
+        to,
+        subject: "Verify your Klorn account",
+        html: `
         <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
           <h2 style="color: #0ea5e9; margin-bottom: 24px;">Klorn</h2>
           <p style="color: #374151; font-size: 16px; line-height: 1.6;">
@@ -237,7 +259,8 @@ export async function sendVerificationEmail(to: string, verifyToken: string): Pr
           </p>
         </div>
       `,
-    });
+      }),
+    );
     console.log("[EMAIL] Verification email sent to", addressTag);
     return true;
   } catch (err) {
@@ -375,14 +398,16 @@ export async function sendWelcomeEmail(
     stripHeaderControls(process.env.FOUNDER_REPLY_TO || "") || adminEmail || fromAddress;
 
   try {
-    await resend.emails.send({
-      from,
-      to,
-      replyTo,
-      subject: content.subject,
-      html: content.html,
-      text: content.text,
-    });
+    await requireResendAccepted(
+      resend.emails.send({
+        from,
+        to,
+        replyTo,
+        subject: content.subject,
+        html: content.html,
+        text: content.text,
+      }),
+    );
     console.log("[EMAIL] Welcome email sent to", addressTag);
     return "sent";
   } catch (err) {
@@ -455,22 +480,24 @@ export async function sendDigestEmail(
   }
   const label = digestUnsubscribeLabel(opts.language ?? "en");
   try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
-      to,
-      subject,
-      // The opt-out is part of the text payload, not a decoration on the HTML
-      // part: a client that shows only text/plain must still see a way out.
-      text: `${text}\n\n—\n${label}: ${unsubscribeUrl}`,
-      html:
-        `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:520px;` +
-        `margin:0 auto;padding:32px 20px;color:#374151;font-size:15px;line-height:1.6">` +
-        `<pre style="font-family:inherit;white-space:pre-wrap;margin:0">${escapeHtml(text)}</pre>` +
-        `<p style="color:#6b7280;font-size:13px;margin-top:28px">` +
-        `<a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">${escapeHtml(label)}</a></p>` +
-        `</div>`,
-      headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
-    });
+    await requireResendAccepted(
+      resend.emails.send({
+        from: FROM_EMAIL,
+        to,
+        subject,
+        // The opt-out is part of the text payload, not a decoration on the HTML
+        // part: a client that shows only text/plain must still see a way out.
+        text: `${text}\n\n—\n${label}: ${unsubscribeUrl}`,
+        html:
+          `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:520px;` +
+          `margin:0 auto;padding:32px 20px;color:#374151;font-size:15px;line-height:1.6">` +
+          `<pre style="font-family:inherit;white-space:pre-wrap;margin:0">${escapeHtml(text)}</pre>` +
+          `<p style="color:#6b7280;font-size:13px;margin-top:28px">` +
+          `<a href="${escapeHtml(unsubscribeUrl)}" style="color:#6b7280">${escapeHtml(label)}</a></p>` +
+          `</div>`,
+        headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
+      }),
+    );
     return true;
   } catch (err) {
     logDbFailure("[EMAIL] digest send failed", err);

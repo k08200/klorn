@@ -242,13 +242,15 @@ export async function sendDailyDigests(now: Date = new Date()): Promise<number> 
       // part; WEB_URL is passed from here because this module already owns
       // where the digest's links point, and letting mail/email.ts read the env
       // var separately let the body and the opt-out disagree.
-      await sendDigestEmail(
+      // False when the mail did not go out (sendDigestEmail logged why). The
+      // day stays claimed either way: a missed digest beats a duplicate.
+      const delivered = await sendDigestEmail(
         user.email,
         digestSubject(stats, language),
         formatDigest(stats, language),
         { language, webUrl: WEB_URL },
       );
-      sent++;
+      if (delivered) sent++;
     } catch (err) {
       // One user's bad address or provider blip must not end the sweep.
       logDbFailure("[DIGEST] daily digest failed", err, { ids: { userId: user.id } });

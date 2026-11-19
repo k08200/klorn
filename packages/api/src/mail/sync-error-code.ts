@@ -8,6 +8,7 @@
 import { prisma } from "../db.js";
 import { logDbFailure } from "../report-db-failure.js";
 import { pollFailureKind } from "./imap-poll-failures.js";
+import { IMAP_THROTTLED_CODE } from "./imap-throttled.js";
 import { isImapAuthFailure } from "./providers/imap-session.js";
 
 export type SyncErrorCode = "auth" | "unreachable" | "throttled" | "error";
@@ -46,6 +47,9 @@ const UNREACHABLE_KINDS = new Set([
  */
 const TRANSIENT_LOGIN_REFUSALS = new Set(["UNAVAILABLE", "LIMIT", "INUSE", "SERVERBUG"]);
 
+/** A throttled command (Microsoft 365), at login or later: not a refusal, not unreachable. */
+const THROTTLED_KINDS = new Set([IMAP_THROTTLED_CODE]);
+
 /** A refused login that is about the credentials: only the user can fix it. */
 export function isCredentialRefusal(err: unknown): boolean {
   if (!isImapAuthFailure(err)) return false;
@@ -58,6 +62,7 @@ export function imapSyncErrorCode(err: unknown): SyncErrorCode {
   if (isImapAuthFailure(err)) return isCredentialRefusal(err) ? "auth" : "throttled";
   const kind = pollFailureKind(err);
   if (UNREACHABLE_KINDS.has(kind)) return "unreachable";
+  if (THROTTLED_KINDS.has(kind)) return "throttled";
   return "error";
 }
 

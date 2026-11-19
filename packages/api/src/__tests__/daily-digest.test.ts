@@ -173,6 +173,12 @@ describe("sendDailyDigests", () => {
     );
   });
 
+  it("does not count a digest the mail provider did not accept", async () => {
+    sendDigestEmail.mockResolvedValue(false);
+    await expect(sendDailyDigests(NOW)).resolves.toBe(0);
+    expect(sendDigestEmail).toHaveBeenCalledTimes(1);
+  });
+
   it("passes the notification language through, so the opt-out footer is not always English", async () => {
     getUserNotificationLanguage.mockResolvedValue("ko");
     await sendDailyDigests(NOW);

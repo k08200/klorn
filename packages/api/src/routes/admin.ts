@@ -30,6 +30,7 @@ import { getTraitMetrics } from "../learning/sender-trait-metrics.js";
 import { clearFallbackState, getProviderCooldownInfo } from "../llm/model-fallback.js";
 import { MODEL } from "../llm/openai.js";
 import { sendBetaInviteEmail } from "../mail/email.js";
+import { ResendSendError, requireResendAccepted } from "../mail/resend-send.js";
 import { collectFeatureFlags } from "../ops/feature-flags.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { cohortReadout, pmfSummary } from "../product/cohort.js";
@@ -668,14 +669,27 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const resendClient = new Resend(process.env.RESEND_API_KEY!);
     try {
-      const result = await resendClient.emails.send({
-        from: fromEmail,
-        to: alertTo,
-        subject: "[Klorn] Email config test",
-        html: "<p>Email delivery is working.</p>",
-      });
-      return { ok: true, fromEmail, alertTo, resendId: (result as { id?: string }).id ?? null };
+      const sent = await requireResendAccepted(
+        resendClient.emails.send({
+          from: fromEmail,
+          to: alertTo,
+          subject: "[Klorn] Email config test",
+          html: "<p>Email delivery is working.</p>",
+        }),
+      );
+      return { ok: true, fromEmail, alertTo, resendId: sent.id };
     } catch (err) {
+      // Resend answered and refused: its code and status, not its message.
+      if (err instanceof ResendSendError) {
+        return {
+          ok: false,
+          reason: "Resend did not accept the test mail",
+          code: err.code,
+          status: err.statusCode,
+          fromEmail,
+          alertTo,
+        };
+      }
       const msg = err instanceof Error ? err.message : String(err);
       return { ok: false, reason: msg, fromEmail, alertTo };
     }

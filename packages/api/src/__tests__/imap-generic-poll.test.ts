@@ -316,6 +316,11 @@ describe("a generic poll that fails for any other reason", () => {
     ["a refused connection", () => connectError("ECONNREFUSED")],
     ["a timeout", () => connectError("ETIMEDOUT")],
     ["a certificate failure", () => connectError("ERR_TLS_CERT_ALTNAME_INVALID")],
+    // imapflow 1.x marks a throttled LOGIN (Microsoft 365) authenticationFailed too.
+    [
+      "a throttled login",
+      () => Object.assign(authRejected(), { responseStatus: "BAD", code: "ETHROTTLE" }),
+    ],
     ["a blocked address", () => new PinnedAddressError("blocked-address", ["10.0.0.5"])],
     ["an unresolvable name", () => new PinnedAddressError("unresolvable")],
   ])("%s is not flagged or cooled down: it is backed off instead", async (_label, makeError) => {
@@ -462,6 +467,24 @@ describe("Naver and iCloud: a revoked app password says reconnect after one poll
     await syncImapAccountsForUser("u1", IMAP_PROVIDERS.NAVER);
 
     expect(flagCalls()).toHaveLength(0);
+    expect(fake.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { syncErrorCode: "throttled", syncErrorAt: expect.any(Date) },
+      }),
+    );
+  });
+
+  it("a throttled login (Microsoft 365) is not a revoked password and advances no backoff", async () => {
+    fake.findMany.mockResolvedValue([naverRow()]);
+    fake.connect.mockRejectedValue(
+      Object.assign(authRejected(), { responseStatus: "BAD", code: "ETHROTTLE" }),
+    );
+
+    await syncImapAccountsForUser("u1", IMAP_PROVIDERS.NAVER);
+
+    expect(flagCalls()).toHaveLength(0);
+    const writes = fake.updateMany.mock.calls.map((call) => (call[0] as { data: object }).data);
+    expect(writes.some((data) => "imapAuthFailures" in data)).toBe(false);
     expect(fake.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { syncErrorCode: "throttled", syncErrorAt: expect.any(Date) },
