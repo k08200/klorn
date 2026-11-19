@@ -148,7 +148,7 @@ enum DriveImportRules {
         return size > maxFileBytes ? .tooLarge : nil
     }
 
-    /// The localized text for a failure (all 7 languages).
+    /// The localized text for a failure (every shipped language).
     static func messageKey(_ failure: DriveImportFailure) -> String {
         switch failure {
         case .featureOff: "driveImport.error.unavailable"

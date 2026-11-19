@@ -1333,8 +1333,8 @@ final class AppModel {
     /// On-demand deep re-summary of the opened email (reading pane "AI 정리").
     /// The server persists the richer summary/keyPoints/actionItems, so a
     /// re-fetch of the detail is the merge — no client-side struct surgery.
-    /// Output language follows the app UI (UI text is en/ko-fixed; only
-    /// replies mirror the mail's language).
+    /// Output language follows the app UI language (en/ko/zh; only replies
+    /// mirror the mail's language).
     func summarizeOpenedEmail() async {
         guard let email = openedEmail, !isSummarizing else { return }
         let session = sessionGeneration

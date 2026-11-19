@@ -155,12 +155,12 @@ func m34SelfChecks(sourceDir: URL) -> [(String, Bool)] {
         "prefs.group.startup", "prefs.group.appearance", "prefs.group.dock", "prefs.group.updates",
         "prefs.group.keyboard", "prefs.group.support", "prefs.group.about", "prefs.group.mail",
     ]
-    let langs = ["en", "ko", "ja", "zh", "es", "fr", "de"]
+    let langs = L10n.shipped
     let missing = langs.flatMap { lang -> [String] in
         let url = sourceDir.appendingPathComponent("Resources/\(lang).lproj/Localizable.strings")
         let table = (NSDictionary(contentsOf: url) as? [String: String]) ?? [:]
         return newKeys.filter { (table[$0] ?? "").isEmpty }.map { "\(lang):\($0)" }
     }
-    check("every new M3/M4 string exists in all seven catalogues (missing: \(missing))", missing.isEmpty)
+    check("every new M3/M4 string exists in every shipped catalogue (missing: \(missing))", missing.isEmpty)
     return results
 }

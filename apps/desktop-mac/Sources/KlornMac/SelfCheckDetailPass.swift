@@ -18,7 +18,7 @@ func detailPassSelfChecks(sourceDir: URL) -> [(String, Bool)] {
         let url = sourceDir.appendingPathComponent("Resources/\(lang).lproj/Localizable.strings")
         return (NSDictionary(contentsOf: url) as? [String: String]) ?? [:]
     }
-    let langs = ["en", "ko", "ja", "zh", "es", "fr", "de"]
+    let langs = L10n.shipped
     let tables = Dictionary(uniqueKeysWithValues: langs.map { ($0, table($0)) })
 
     // M1: the move menu never names the lane the mail is in.
@@ -70,7 +70,7 @@ func detailPassSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     // M3: tool names in the UI language, never the identifier.
     let koTools = ToolLabels.known.map { tables["ko"]?["tool.label.\($0)"] ?? "" }
     results.append((
-        "every known tool has a label in all 7 languages",
+        "every known tool has a label in every shipped language",
         ToolLabels.known.union(["unknown"]).allSatisfy { tool in
             langs.allSatisfy { tables[$0]?["tool.label.\(tool)"]?.isEmpty == false }
         }))
