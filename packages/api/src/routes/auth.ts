@@ -98,6 +98,12 @@ import {
   recordLoginAttempt,
 } from "../security/login-throttle.js";
 import {
+  PASSWORD_RESET_TOKEN_TTL_MS,
+  passwordResetThrottleRemainingMs,
+  recordPasswordResetRequest,
+  resetLinkIsFresh,
+} from "../security/password-reset-throttle.js";
+import {
   recordRegisterAttempt,
   registerThrottleRemainingMs,
 } from "../security/register-throttle.js";
@@ -345,6 +351,36 @@ export async function effectiveTierOrOwnPlan(userId: string, plan: string): Prom
     });
     return normalizeTier(plan);
   }
+}
+
+/**
+ * Replace the user's reset link with a new one and mail it. Only the hash is
+ * stored (one-time-token.ts); the raw token exists only in the mail.
+ *
+ * The swap is compare-and-swap on the link the caller read, so of two
+ * concurrent requests (a double submit) only one replaces it and mails. When
+ * the mail does not go out, nobody holds the new token: the previous link is
+ * put back (only while the new one is still the stored one), so a failed send
+ * neither kills a link already mailed nor holds off a retry as "fresh".
+ */
+async function issueResetLink(
+  user: { id: string; resetToken: string | null; resetTokenExp: Date | null },
+  normalizedEmail: string,
+): Promise<void> {
+  const { token: rawResetToken, tokenHash: resetTokenHash } = mintOneTimeToken();
+  const resetTokenExp = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
+  const claimed = await prisma.user.updateMany({
+    where: { id: user.id, resetToken: user.resetToken },
+    data: { resetToken: resetTokenHash, resetTokenExp },
+  });
+  if (claimed.count === 0) return;
+
+  const sent = await sendPasswordResetEmail(normalizedEmail, rawResetToken);
+  if (sent) return;
+  await prisma.user.updateMany({
+    where: { id: user.id, resetToken: resetTokenHash },
+    data: { resetToken: user.resetToken, resetTokenExp: user.resetTokenExp },
+  });
 }
 
 /**
@@ -1712,21 +1748,21 @@ export function authRoutes(app: FastifyInstance) {
       if (!hasMeaningfulText(normalizedEmail))
         return reply.code(400).send({ error: "Email required" });
 
+      // Per-address window on top of the per-IP limit (password-reset-throttle.ts):
+      // counted for every address alike, before the lookup and before any
+      // await. A locked address gets the same answer as any other and no mail.
+      if (passwordResetThrottleRemainingMs(normalizedEmail) > 0) {
+        return reply.send({ success: true });
+      }
+      recordPasswordResetRequest(normalizedEmail);
+
       const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
       // Always return success to prevent email enumeration
       if (!user) return reply.send({ success: true });
 
-      // Only the hash is stored (one-time-token.ts); the raw token exists
-      // only in the reset email.
-      const { token: rawResetToken, tokenHash: resetTokenHash } = mintOneTimeToken();
-      const resetTokenExp = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { resetToken: resetTokenHash, resetTokenExp },
-      });
-
-      await sendPasswordResetEmail(normalizedEmail, rawResetToken);
+      // A link mailed moments ago stays the live one: no second mail that
+      // would retire the first (password-reset-throttle.ts).
+      if (!resetLinkIsFresh(user)) await issueResetLink(user, normalizedEmail);
 
       return reply.send({ success: true });
     },

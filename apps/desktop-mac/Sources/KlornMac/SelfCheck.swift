@@ -1062,7 +1062,7 @@ func runSelfChecks() async -> Bool {
           firewallPath(selected: "primary", lang: "ko")
               == "/api/inbox/firewall?inbox=primary&lang=ko")
     check("firewall path — linked id scoped (hyphen encoded), carries lang",
-          firewallPath(selected: "li-1", lang: "ja") == "/api/inbox/firewall?inbox=li%2D1&lang=ja")
+          firewallPath(selected: "li-1", lang: "zh") == "/api/inbox/firewall?inbox=li%2D1&lang=zh")
     // Reader language: server-composed reasons follow the app UI language
     // (AppLanguage / -klorn.appLanguage), not the stored notification language.
     check("email detail path carries lang",
@@ -1627,6 +1627,24 @@ func runSelfChecks() async -> Bool {
     // only the untested locale ever sees.
     let english = L10n.keys(forLanguage: "en")
     check("English catalogue loads", !english.isEmpty)
+    // A catalogue outside the shipped set would be dead weight the picker can't
+    // reach — and for InfoPlist, a language macOS would still advertise.
+    let lprojs = { (dir: URL) -> [String] in
+        ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [])
+            .filter { $0.hasSuffix(".lproj") }.map { String($0.dropLast(".lproj".count)) }.sorted()
+    }
+    let catalogues = lprojs(sourceDir.appendingPathComponent("Resources"))
+    check("the string catalogues are exactly en, ko, zh", catalogues == L10n.shipped.sorted())
+    if catalogues != L10n.shipped.sorted() { print("      found: \(catalogues.joined(separator: ", "))") }
+    let infoPlists = lprojs(sourceDir.deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Resources/InfoPlist"))
+    check("the InfoPlist catalogues are exactly en, ko, zh", infoPlists == L10n.shipped.sorted())
+    if infoPlists != L10n.shipped.sorted() { print("      found: \(infoPlists.joined(separator: ", "))") }
+    let bundled = Bundle.module.localizations.filter { $0 != "Base" }.sorted()
+    check("the built resource bundle carries exactly en, ko, zh", bundled == L10n.shipped.sorted())
+    if bundled != L10n.shipped.sorted() {
+        print("      bundled: \(bundled.joined(separator: ", ")) — a stale build? rm -rf apps/desktop-mac/.build and rebuild")
+    }
     for code in L10n.shipped where code != "en" {
         let other = L10n.keys(forLanguage: code)
         let missing = english.subtracting(other).sorted()
@@ -1790,9 +1808,38 @@ func runSelfChecks() async -> Bool {
           L10n.resolvedCode(override: .system, preferred: ["ko-KR", "en-US"]) == "ko")
     check("region tags are matched on the base language",
           L10n.resolvedCode(override: .system, preferred: ["ko-Hang-KR"]) == "ko")
-    // fr/de shipped 2026-08-23; pt/it stand in for "unshipped" now.
     check("an unshipped language falls back to English",
           L10n.resolvedCode(override: .system, preferred: ["pt-BR", "it-IT"]) == "en")
+    // ja/es/fr/de were retired 2026-11-17: a macOS in one of them reads English,
+    // or the next Preferred Language Klorn still ships.
+    check("a retired system language falls back to English",
+          ["ja-JP", "es-ES", "fr-FR", "de-DE"].allSatisfy {
+              L10n.resolvedCode(override: .system, preferred: [$0]) == "en"
+          })
+    check("a retired system language yields to the next shipped preferred language",
+          L10n.resolvedCode(override: .system, preferred: ["ja-JP", "ko-KR"]) == "ko")
+    check("Traditional Chinese reads Simplified Chinese",
+          L10n.resolvedCode(override: .system, preferred: ["zh-Hant-TW"]) == "zh"
+          && L10n.resolvedCode(override: .system, preferred: ["zh-Hans-CN"]) == "zh")
+    check("a saved retired in-app language reads as English, not a crash or raw keys",
+          ["ja", "es", "fr", "de"].allSatisfy { AppLanguage(stored: $0) == .english }
+          && L10n.resolvedCode(override: AppLanguage(stored: "ja")) == "en")
+    check("a saved regional tag folds onto its shipped base",
+          AppLanguage(stored: "zh-Hans") == .chinese && AppLanguage(stored: "ko_KR") == .korean
+          && AppLanguage(stored: "EN-us") == .english && AppLanguage(stored: "system-x") == .english)
+    // The fold above only helps if the persisted override is read through it.
+    check("the saved in-app language is read through the fold",
+          ((try? String(contentsOf: sourceDir.appendingPathComponent("Localization.swift"), encoding: .utf8)) ?? "")
+              .contains("AppLanguage(stored: UserDefaults.standard.string(forKey: storageKey))"))
+    check("nothing saved follows macOS; a shipped choice is kept",
+          AppLanguage(stored: nil) == .system && AppLanguage(stored: "") == .system
+          && AppLanguage(stored: "system") == .system
+          && AppLanguage(stored: "ko") == .korean && AppLanguage(stored: "zh") == .chinese)
+    check("Klorn ships exactly English, Korean and Simplified Chinese",
+          L10n.shipped == ["en", "ko", "zh"]
+          && AppLanguage.allCases.filter { $0 != .system }.map(\.rawValue) == L10n.shipped)
+    check("the picker offers exactly the shipped languages",
+          AppLanguage.allCases.map(\.rawValue) == ["system"] + L10n.shipped)
     check("every shipped language is actually selectable",
           L10n.shipped.allSatisfy { code in
               L10n.resolvedCode(override: .system, preferred: ["\(code)-XX"]) == code

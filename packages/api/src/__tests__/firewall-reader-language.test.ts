@@ -103,9 +103,15 @@ describe("GET /api/inbox/firewall — reader language", () => {
     expect(keyed).toBe(COPY[lang]);
   });
 
-  it.each(["ja", "es", "fr", "de"])("a retired lang=%s reads as English", async (lang) => {
+  it.each([
+    "ja",
+    "es",
+    "fr",
+    "de",
+  ])("a retired lang=%s is ignored: the stored language answers", async (lang) => {
+    configFindUnique.mockResolvedValue({ notificationLanguage: "zh" });
     const { keyed } = await reasons(`/api/inbox/firewall/?lang=${lang}`);
-    expect(keyed).toBe(COPY.en);
+    expect(keyed).toBe(COPY.zh);
   });
 
   it("an unknown lang is ignored (no 400) and the stored language answers", async () => {

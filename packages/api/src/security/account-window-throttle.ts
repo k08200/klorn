@@ -2,8 +2,10 @@
  * A fixed-window attempt counter keyed on a normalized account address: the
  * window is anchored at the first attempt, and the key is locked for the rest
  * of the window once `maxAttempts` were counted. Shared by the per-account
- * login throttle (login-throttle.ts) and the per-address register throttle
- * (register-throttle.ts); each module states its own threshold and tradeoffs.
+ * login throttle (login-throttle.ts), the per-address register throttle
+ * (register-throttle.ts) and the per-address reset-mail window
+ * (password-reset-throttle.ts); each module states its own threshold and
+ * tradeoffs.
  *
  * In-process, like notify/sms-limiter.ts: a restart resets the counters, which
  * only ever fails open, and more than one replica multiplies the threshold by
