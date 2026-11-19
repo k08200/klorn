@@ -42,9 +42,16 @@ const UNREACHABLE_KINDS = new Set([
 /**
  * RFC 5530 response codes a server attaches to a refused LOGIN that is about the
  * moment, not the password (busy, rate limit, its own bug). imapflow marks every
- * refused LOGIN `authenticationFailed`, so these must not read as "revoked".
+ * LOGIN refused with a tagged NO or BAD `authenticationFailed`, so these must not
+ * read as "revoked".
  */
 const TRANSIENT_LOGIN_REFUSALS = new Set(["UNAVAILABLE", "LIMIT", "INUSE", "SERVERBUG"]);
+
+/**
+ * imapflow's code for a command the server throttled (Microsoft 365's "Request is
+ * throttled" BAD). Since imapflow 2 a throttled LOGIN is not `authenticationFailed`.
+ */
+const THROTTLED_KINDS = new Set(["ETHROTTLE"]);
 
 /** A refused login that is about the credentials: only the user can fix it. */
 export function isCredentialRefusal(err: unknown): boolean {
@@ -58,6 +65,7 @@ export function imapSyncErrorCode(err: unknown): SyncErrorCode {
   if (isImapAuthFailure(err)) return isCredentialRefusal(err) ? "auth" : "throttled";
   const kind = pollFailureKind(err);
   if (UNREACHABLE_KINDS.has(kind)) return "unreachable";
+  if (THROTTLED_KINDS.has(kind)) return "throttled";
   return "error";
 }
 

@@ -338,7 +338,8 @@ export async function syncImapInbox(args: SyncArgs): Promise<SyncResult> {
         if (gate === "hold") return { ...result, held: true };
       }
       const status = await client.status("INBOX", { messages: true });
-      const totalMessages = status.messages ?? 0;
+      // imapflow answers a STATUS the server refused with `false`, not a throw.
+      const totalMessages = status ? (status.messages ?? 0) : 0;
       if (totalMessages === 0) {
         return result;
       }

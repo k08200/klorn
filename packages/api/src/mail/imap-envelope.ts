@@ -78,7 +78,8 @@ export interface EnvelopeFacts {
 interface RawEnvelope {
   messageId?: string | null;
   subject?: string | null;
-  date?: Date | null;
+  /** imapflow keeps the raw header text when the Date header does not parse. */
+  date?: Date | string | null;
 }
 
 /** The facts of an imapflow envelope. */

@@ -131,7 +131,8 @@ async function openSource(ctx: RunContext, first: MoveOp): Promise<MailActionFai
     ctx.provider,
     account.rowId,
     account.inboxUidValidity,
-    liveUidValidity({ uidValidity: status.uidValidity }),
+    // `false` (a STATUS the server refused) reads as no live value: unverified.
+    liveUidValidity(status),
   );
 }
 
@@ -222,6 +223,8 @@ async function destinationBefore(
 ): Promise<DestinationBefore | null> {
   try {
     const status = await client.status(path, { uidNext: true, uidValidity: true });
+    // imapflow answers a STATUS the server refused with `false`, not a throw.
+    if (!status) return null;
     const uidNext = Number(status.uidNext);
     const uidValidity = canonicalUidValidity(status.uidValidity);
     return isValidUid(uidNext) && uidValidity ? { uidNext, uidValidity } : null;

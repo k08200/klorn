@@ -24,6 +24,10 @@ describe("imapSyncErrorCode", () => {
     expect(imapSyncErrorCode(refused())).toBe("auth");
     expect(imapSyncErrorCode(refused("UNAVAILABLE"))).toBe("throttled");
     expect(imapSyncErrorCode(refused("limit"))).toBe("throttled");
+    // imapflow 2: a throttled command (Microsoft 365) carries a code, not authenticationFailed.
+    expect(imapSyncErrorCode(Object.assign(new Error("x"), { code: "ETHROTTLE" }))).toBe(
+      "throttled",
+    );
   });
 });
 
