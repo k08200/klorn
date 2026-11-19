@@ -128,10 +128,20 @@ describe("GET /api/email/:id/reader-context — reader language", () => {
     expect(res.json().tierReason).toBe(TIER_COPY[lang]);
   });
 
-  it.each(["ja", "es", "fr", "de"])("a retired lang=%s reads as English", async (lang) => {
-    const res = await get(`/api/email/e5/reader-context?lang=${lang}`);
-    expect(res.statusCode).toBe(200);
-    expect(res.json().tierReason).toBe(TIER_COPY.en);
+  it.each([
+    "ja",
+    "es",
+    "fr",
+    "de",
+  ])("a retired lang=%s is ignored: Accept-Language, then the stored language decide", async (lang) => {
+    const byHeader = await get(`/api/email/e5/reader-context?lang=${lang}`, {
+      "accept-language": "ko-KR",
+    });
+    expect(byHeader.json().tierReason).toBe(TIER_COPY.ko);
+    configFindUnique.mockResolvedValue({ notificationLanguage: "zh" });
+    const byStored = await get(`/api/email/e5/reader-context?lang=${lang}`);
+    expect(byStored.statusCode).toBe(200);
+    expect(byStored.json().tierReason).toBe(TIER_COPY.zh);
   });
 
   it("an unknown lang is ignored; Accept-Language then decides", async () => {

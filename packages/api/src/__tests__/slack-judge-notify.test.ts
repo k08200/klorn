@@ -59,6 +59,7 @@ const db = vi.hoisted(() => ({
 vi.mock("../db.js", () => db);
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
+import { NOTIFICATION_LANGUAGES } from "../notify/notification-strings.js";
 import { captureError } from "../sentry.js";
 
 import { judgeSlackEpisode, slackConversationKind } from "../slack/judge-episode.js";
@@ -137,7 +138,7 @@ describe("slackPushContent", () => {
   });
 
   it("is localized in every notification language", () => {
-    for (const language of ["en", "ko", "ja", "zh", "es", "fr", "de"]) {
+    for (const language of NOTIFICATION_LANGUAGES) {
       const title = slackPushContent({ kind: "dm", preview: "hi", reason: "", language }).title;
       expect(title.startsWith("Slack")).toBe(true);
       expect(title.length).toBeGreaterThan("Slack · ".length);

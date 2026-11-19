@@ -338,7 +338,7 @@ describe("parseCatchUpResponse — Slack items", () => {
 });
 
 describe("the messages summary titles exist in every notification language", () => {
-  it("names the count in each of the 7 languages", () => {
+  it("names the count in each shipped language", () => {
     for (const language of NOTIFICATION_LANGUAGES) {
       const copy = notificationCopy(language);
       expect(copy.messagesWhileClosed(3)).toContain("3");
