@@ -164,7 +164,7 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent {
       key,
       STRUCTURAL_FIELDS.has(key) ? value : scrubDeep(value),
     ]),
-  ) as ErrorEvent;
+  ) as unknown as typeof rest;
   const keptBreadcrumbs = (breadcrumbs ?? [])
     .map(scrubBreadcrumb)
     .filter((crumb): crumb is Breadcrumb => crumb !== null);
