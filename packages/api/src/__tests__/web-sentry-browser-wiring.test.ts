@@ -1,6 +1,6 @@
 /**
  * Browser Sentry wiring: the REAL @sentry/browser with the web app's options
- * (packages/web/src/lib/sentry.ts `buildSentryBrowserOptions`), every envelope
+ * (packages/web/src/lib/sentry-options.ts `buildSentryBrowserOptions`), every envelope
  * it would put on the wire captured by a fake transport.
  *
  * Browser Sentry only runs when NEXT_PUBLIC_SENTRY_DSN is set at build time. The
@@ -79,7 +79,7 @@ beforeAll(async () => {
     vi.fn(async () => new Response("{}", { status: 200 })),
   );
   Sentry = await import("../../../web/node_modules/@sentry/browser");
-  const { buildSentryBrowserOptions } = await import("../../../web/src/lib/sentry");
+  const { buildSentryBrowserOptions } = await import("../../../web/src/lib/sentry-options");
   const decoder = new TextDecoder();
   Sentry.init({
     ...buildSentryBrowserOptions(TEST_DSN, "production"),

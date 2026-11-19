@@ -5,7 +5,7 @@
  * it is turned on, an event must not carry an email address, a URL's query or
  * fragment (OAuth codes, search terms), credentials in a URL, a bearer token,
  * JWT, API key or `token=` value, the IP, or text from a mail. The SDK's own
- * `dataCollection` settings are applied too (sentry.ts), but @sentry/browser 11
+ * `dataCollection` settings are applied too (sentry-options.ts), but @sentry/browser 11
  * changed those defaults once already, so these hooks are the guarantee: they
  * run on every error event and breadcrumb, whatever the SDK decides to collect.
  *
