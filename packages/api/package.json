@@ -62,7 +62,7 @@
     "secure-json-parse": "4.1.1",
     "stripe": "^23.1.0",
     "twilio": "^6.3.0",
-    "web-push": "^3.6.7",
+    "web-push": "^4.0.0",
     "ws": "^8.23.0"
   },
   "devDependencies": {
