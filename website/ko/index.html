@@ -588,9 +588,9 @@
 // Language: follow the browser preference on a first visit to the root, and
 // never again. An explicit pick is remembered, the redirect fires at most once
 // per browser session, and deep links stay where they point. Only the first
-// language a browser lists counts, and a client that lists none (most
-// crawlers) stays on English. Every Chinese locale (zh-CN, zh-TW, zh-Hant…)
-// goes to /zh/: Simplified is the only Chinese the site ships.
+// language a browser lists counts: a client that lists none, or lists another
+// language first, stays on English. Every Chinese locale (zh-CN, zh-TW,
+// zh-Hant…) goes to /zh/: Simplified is the only Chinese the site ships.
 (function () {
   var KEY = 'klorn.lang';
   document.querySelectorAll('[data-lang-pick]').forEach(function (a) {

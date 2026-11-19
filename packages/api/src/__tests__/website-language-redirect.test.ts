@@ -4,7 +4,7 @@
  * ships Simplified only, so every Chinese locale goes there). A language the
  * reader picked in the menu always wins, the redirect fires at most once per
  * browser session, deep links stay put, and a client that states no language
- * list (navigator.languages) — most crawlers — is never redirected.
+ * list (navigator.languages) is never redirected.
  *
  * The script is inline in website/index.html and copied into the ko and zh
  * landings, so this runs the copy each page ships in a sandbox with a fake
@@ -28,6 +28,7 @@ function redirectScript(rel: string): string {
   const start = html.indexOf(SCRIPT_START);
   expect(start, `${rel} carries the language redirect`).toBeGreaterThan(-1);
   const end = html.indexOf(SCRIPT_END, start);
+  expect(end, `${rel}'s language redirect ends with ${SCRIPT_END}`).toBeGreaterThan(start);
   return html.slice(start, end + SCRIPT_END.length);
 }
 
@@ -37,11 +38,22 @@ interface Visit {
   path?: string;
   stored?: string | null;
   triedThisSession?: boolean;
+  /** A language-menu link on the page, as its data-lang-pick value. */
+  menuPick?: string;
 }
 
-/** Run the page's script as a visit; the path it redirected to, or null. */
-function visit(rel: string, v: Visit): string | null {
-  let redirectedTo: string | null = null;
+interface VisitResult {
+  /** Where the script sent the browser, or null. */
+  to: string | null;
+  local: Map<string, string>;
+  session: Map<string, string>;
+  /** Click the menu link given as `menuPick`. */
+  clickMenuPick: () => void;
+}
+
+/** Run the page's script as one page load in a fake browser. */
+function load(rel: string, v: Visit): VisitResult {
+  let to: string | null = null;
   const local = new Map<string, string>();
   if (v.stored) local.set("klorn.lang", v.stored);
   const session = new Map<string, string>();
@@ -50,20 +62,45 @@ function visit(rel: string, v: Visit): string | null {
     getItem: (k: string) => m.get(k) ?? null,
     setItem: (k: string, value: string) => m.set(k, value),
   });
+  const clicks: Array<() => void> = [];
+  const menuLinks = v.menuPick
+    ? [
+        {
+          getAttribute: (name: string) => (name === "data-lang-pick" ? v.menuPick : null),
+          addEventListener: (type: string, handler: () => void) => {
+            if (type === "click") clicks.push(handler);
+          },
+        },
+      ]
+    : [];
   runInNewContext(redirectScript(rel), {
-    document: { querySelectorAll: () => [] },
+    document: {
+      querySelectorAll: (selector: string) => (selector === "[data-lang-pick]" ? menuLinks : []),
+    },
     localStorage: storage(local),
     sessionStorage: storage(session),
     navigator: { languages: v.languages, language: v.language },
     location: {
       protocol: "https:",
       pathname: v.path ?? "/",
-      replace: (to: string) => {
-        redirectedTo = to;
+      replace: (target: string) => {
+        to = target;
       },
     },
   });
-  return redirectedTo;
+  return {
+    to,
+    local,
+    session,
+    clickMenuPick: () => {
+      for (const click of clicks) click();
+    },
+  };
+}
+
+/** The path one page load redirected to, or null. */
+function visit(rel: string, v: Visit): string | null {
+  return load(rel, v).to;
 }
 
 describe("landing language redirect", () => {
@@ -112,7 +149,18 @@ describe("landing language redirect", () => {
     });
 
     it("redirects at most once per browser session", () => {
+      const first = load(page, { languages: ["zh-CN"] });
+      expect(first.to).toBe("/zh/");
+      expect(first.session.get("klorn.lang.tried")).toBe("1");
+      expect(load(page, { languages: ["en-US"] }).session.has("klorn.lang.tried")).toBe(false);
       expect(visit(page, { languages: ["zh-CN"], triedThisSession: true })).toBeNull();
+    });
+
+    it("remembers a pick in the language menu", () => {
+      const loaded = load(page, { languages: ["en-US"], path: "/zh/", menuPick: "zh" });
+      expect(loaded.local.has("klorn.lang")).toBe(false);
+      loaded.clickMenuPick();
+      expect(loaded.local.get("klorn.lang")).toBe("zh");
     });
 
     it("leaves a deep link where it points", () => {
