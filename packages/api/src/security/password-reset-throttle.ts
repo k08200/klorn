@@ -34,7 +34,6 @@
  * today).
  */
 
-import { createHash } from "node:crypto";
 import { createAccountWindowThrottle } from "./account-window-throttle.js";
 
 export const PASSWORD_RESET_MAX_REQUESTS = 5;
@@ -51,19 +50,14 @@ const throttle = createAccountWindowThrottle({
   maxTracked: PASSWORD_RESET_MAX_TRACKED,
 });
 
-/** Fixed-size key: the map never holds the address itself. */
-function windowKey(normalizedEmail: string): string {
-  return createHash("sha256").update(normalizedEmail).digest("base64url").slice(0, 22);
-}
-
 /** Milliseconds until the address's reset-mail lock expires; 0 when it is not locked. */
 export function passwordResetThrottleRemainingMs(normalizedEmail: string): number {
-  return throttle.remainingMs(windowKey(normalizedEmail));
+  return throttle.remainingMs(normalizedEmail);
 }
 
 /** Count one forgot-password request. Call synchronously right after the check, before any await. */
 export function recordPasswordResetRequest(normalizedEmail: string): void {
-  throttle.record(windowKey(normalizedEmail));
+  throttle.record(normalizedEmail);
 }
 
 /**
