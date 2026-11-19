@@ -171,6 +171,27 @@ describe("daily briefing push — NT0 brief copy", () => {
     );
   });
 
+  it("flag on, no urgent mail and no meeting: the old push (counts that say nothing do not ring)", async () => {
+    process.env.NOTIFY_PUSH_PRESENTATION = "on";
+    state.items = [];
+    state.events = [];
+
+    await ensureDailyBriefingNotification("u1", BRIEFING, "2026-11-19");
+
+    expect(push()[1]).toMatchObject({ title: "오늘의 브리핑", body: BRIEFING });
+  });
+
+  it("flag on: counts the PUSH lane under its retired v1 name too", async () => {
+    process.env.NOTIFY_PUSH_PRESENTATION = "on";
+
+    await ensureDailyBriefingNotification("u1", BRIEFING, "2026-11-19");
+
+    const { prisma } = await import("../db.js");
+    expect(vi.mocked(prisma.attentionItem.findMany).mock.calls[0][0]).toMatchObject({
+      where: { userId: "u1", status: "OPEN", tier: { in: ["PUSH", "CALL"] }, source: "EMAIL" },
+    });
+  });
+
   it("flag off: the push is exactly what it was", async () => {
     await ensureDailyBriefingNotification("u1", BRIEFING, "2026-11-19");
 

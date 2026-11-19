@@ -78,7 +78,7 @@ const KO: KindPushCopy = {
   briefLine: ({ urgentMail, meetings, freeHours }) =>
     `급한 메일 ${urgentMail} · 회의 ${meetings} · 빈 시간 ${freeHours}시간`,
   draftReadyTitle: (person) => `답장 초안 준비됨 · ${person}`,
-  draftReadyLine: "확인 후 보낼 수 있습니다",
+  draftReadyLine: "보내기 전에 확인하세요",
   disconnectedTitle: (account) => `${account} 연결 끊김`,
   reconnectLine: "다시 연결하면 이 계정 메일도 분류합니다",
 };
@@ -94,9 +94,9 @@ const ZH: KindPushCopy = {
   attendees: (n) => `${n}人`,
   briefTitle: "今日简报",
   briefLine: ({ urgentMail, meetings, freeHours }) =>
-    `紧急邮件 ${urgentMail} 封 · 会议 ${meetings} 场 · 空闲 ${freeHours} 小时`,
+    `紧急邮件${urgentMail}封 · 会议${meetings}场 · 空闲${freeHours}小时`,
   draftReadyTitle: (person) => `回复草稿已就绪 · ${person}`,
-  draftReadyLine: "确认后即可发送",
+  draftReadyLine: "发送前请确认",
   disconnectedTitle: (account) => `${account} 已断开连接`,
   reconnectLine: "重新连接后即可继续分类此账户的邮件",
 };

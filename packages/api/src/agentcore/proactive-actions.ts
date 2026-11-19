@@ -90,6 +90,12 @@ const REPLY_WAIT_SCAN = 100;
 const FOLLOW_UP_LISTED = 3;
 /** Both reminder types: the merged one dedupes against either, so a flip mid-day never sends twice. */
 const REPLY_WAIT_TYPES = ["email_followup", "followup"];
+/**
+ * The heads-up's "starts in" figure is floored to this step: a meeting the
+ * 5-minute window first sees 60–65 minutes out reads "in 1 hr", not a figure
+ * that jitters with the tick ("in 1 hr 4 min").
+ */
+const HEADS_UP_STEP_MINUTES = 5;
 /** Bell-row dedupe key of a meeting heads-up: one per calendar row and start time. */
 const MEETING_PREP_KEY_PREFIX = "meeting-prep:";
 /** The push body cap (the bell row keeps the whole message). */
@@ -296,7 +302,7 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
     const nt = language
       ? meetPushCopy({
           eventTitle: event.title,
-          startsInMinutes: (event.startTime.getTime() - now.getTime()) / MINUTE_MS,
+          startsInMinutes: headsUpMinutes(event.startTime, now),
           joinUrl: presentation.joinUrl,
           attendeeCount: event.attendeeCount,
           language,
@@ -328,6 +334,12 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
       });
     });
   }
+}
+
+/** Minutes until a heads-up's meeting, floored to HEADS_UP_STEP_MINUTES. */
+function headsUpMinutes(start: Date, now: Date): number {
+  const minutes = (start.getTime() - now.getTime()) / MINUTE_MS;
+  return Math.floor(minutes / HEADS_UP_STEP_MINUTES) * HEADS_UP_STEP_MINUTES;
 }
 
 /**

@@ -283,7 +283,8 @@ describe("proactive meeting heads-up — NT0 meet copy (NOTIFY_PUSH_PRESENTATION
 
     const payload = vi.mocked(sendPushNotification).mock.calls[0][1];
     expect(payload.title).toBe("디자인 리뷰");
-    expect(payload.body).toBe("1시간 2분 후 · Google Meet · 3명");
+    // 62 minutes out, floored to the 5-minute step: no tick-timing jitter.
+    expect(payload.body).toBe("1시간 후 · Google Meet · 3명");
     // The bell row keeps its own text.
     expect(meetingRows()[0].title).toBe("Meeting in 1 hour: 디자인 리뷰");
   });

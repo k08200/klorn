@@ -22,6 +22,7 @@ const db = vi.hoisted(() => ({
 
 vi.mock("../mail/gmail.js", () => ({ getAuthedClient: vi.fn() }));
 vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
+vi.mock("../report-db-failure.js", () => ({ logDbFailure: vi.fn(), captureDbFailure: vi.fn() }));
 vi.mock("../llm/openai.js", () => ({ createCompletion: vi.fn(), MODEL: {} }));
 vi.mock("../db.js", () => ({
   prisma: {
@@ -37,6 +38,7 @@ vi.mock("googleapis", () => ({
 
 import { getAuthedClient } from "../mail/gmail.js";
 import { getUpcomingMeetings } from "../pim/meeting.js";
+import { logDbFailure } from "../report-db-failure.js";
 
 const NOW = new Date("2026-11-18T05:00:00.000Z");
 const fakeAuth = {} as Awaited<ReturnType<typeof getAuthedClient>>;
@@ -143,8 +145,23 @@ describe("getUpcomingMeetings — the start ring's stored fallback", () => {
 
   it("a failing stored read returns [] and is reported as facts", async () => {
     eventsList.mockRejectedValue(new Error("socket hang up"));
-    db.calendarFindMany.mockRejectedValue(new Error("db down"));
+    const dbDown = new Error("db down");
+    db.calendarFindMany.mockRejectedValue(dbDown);
 
     expect(await getUpcomingMeetings("u1", { storedOnFailure: true })).toEqual([]);
+    expect(vi.mocked(logDbFailure)).toHaveBeenCalledWith(
+      "[MEETING] stored meeting fallback failed",
+      dbDown,
+      { ids: { userId: "u1" } },
+    );
+  });
+
+  it("names a stored meeting by its Google event id, the id the live read and the ring's marker use", async () => {
+    eventsList.mockRejectedValue(new Error("socket hang up"));
+    db.rows = [row("legacy", 3), row("c1", 3, { googleId: null, externalId: "ext-c1" })];
+
+    const meetings = await getUpcomingMeetings("u1", { storedOnFailure: true });
+
+    expect(meetings.map((m) => m.id)).toEqual(["g-legacy", "ext-c1"]);
   });
 });

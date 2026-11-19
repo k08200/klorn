@@ -30,6 +30,7 @@ import { meetingPresentation } from "./notify/push-presentation.js";
 import { NOTIFIED_LOOKBACK_MS } from "./notify/urgent-dedup.js";
 import { isCalendarRowVisible } from "./pim/calendar-scope.js";
 import { getUpcomingMeetings } from "./pim/meeting.js";
+import { UNTITLED_MEETING } from "./pim/meeting-stored-fallback.js";
 import { captureDbFailure, logDbFailure } from "./report-db-failure.js";
 import { recordSchedulerTick, registerScheduler } from "./scheduler-heartbeat.js";
 import { pushNotification } from "./websocket.js";
@@ -258,7 +259,8 @@ async function meetingStartCopy(
     return { title: `Meeting in ${Math.ceil(minutesUntil)} min`, body: meeting.summary };
   }
   return meetPushCopy({
-    eventTitle: meeting.summary,
+    // No title: the copy's localized stand-in, not pim/meeting.ts's English one.
+    eventTitle: meeting.summary === UNTITLED_MEETING ? "" : meeting.summary,
     startsInMinutes: minutesUntil,
     joinUrl: presentation.joinUrl,
     attendeeCount: meeting.attendeeCount,

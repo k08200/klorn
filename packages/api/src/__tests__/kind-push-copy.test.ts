@@ -110,7 +110,7 @@ describe("brief: today's briefing and its three counts", () => {
     );
     expect(briefPushCopy({ urgentMail: 2, meetings: 3, freeHours: 5 }, "zh")).toEqual({
       title: "今日简报",
-      body: "紧急邮件 2 封 · 会议 3 场 · 空闲 5 小时",
+      body: "紧急邮件2封 · 会议3场 · 空闲5小时",
     });
   });
 
@@ -148,13 +148,13 @@ describe("agent: a reply draft is ready", () => {
       });
     expect(off("ko")).toEqual({
       title: "답장 초안 준비됨 · Terry Smith",
-      body: "확인 후 보낼 수 있습니다",
+      body: "보내기 전에 확인하세요",
     });
     expect(off("en")).toEqual({
       title: "Reply draft ready · Terry Smith",
       body: "Review it before it is sent",
     });
-    expect(off("zh")).toEqual({ title: "回复草稿已就绪 · Terry Smith", body: "确认后即可发送" });
+    expect(off("zh")).toEqual({ title: "回复草稿已就绪 · Terry Smith", body: "发送前请确认" });
     for (const language of ["en", "ko", "zh"]) expect(off(language).body).not.toContain("17시");
   });
 
@@ -181,6 +181,16 @@ describe("agent: a reply draft is ready", () => {
     expect(copy.body.endsWith("…”")).toBe(true);
     expect(copy.body.length).toBeLessThanOrEqual(140);
     expect(copy.body).not.toContain("<p>");
+  });
+
+  it("shows a whole address inside the draft line as its domain", () => {
+    const copy = agentDraftPushCopy({
+      from: "Terry <t@acme.com>",
+      draft: "Hi bob@acme.com, the final deck is attached.",
+      allowQuote: true,
+      language: "en",
+    });
+    expect(copy.body).toBe("“Hi acme.com, the final deck is attached.”");
   });
 
   it("falls back to the fixed line when the draft is empty", () => {

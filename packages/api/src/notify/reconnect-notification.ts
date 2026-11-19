@@ -114,6 +114,8 @@ async function reconnectAccountAddress(
       });
       return row?.email ?? null;
     }
+    // Only the Google login has an account-wide address on its token row.
+    if ((opts?.provider ?? "GOOGLE") !== "GOOGLE") return null;
     const token = await prisma.userToken.findFirst({
       where: { userId, provider: "google" },
       select: { googleEmail: true },
@@ -190,12 +192,15 @@ export async function ensureGmailReconnectNotification(
     kind: "acct",
   });
 
-  const copy = await reconnectPushCopy(userId, label, { title, body: message }, opts);
+  const fallback = { title, body: message };
+  const copy = await reconnectPushCopy(userId, label, fallback, opts);
   await sendPushNotification(
     userId,
     {
       title: copy.title,
       body: copy.body,
+      // NT0 copy names the address: the noise policy still judges the fixed text.
+      ...(copy === fallback ? {} : { policyText: fallback }),
       url: RECONNECT_LINK,
       notificationId: notification.id,
       // NT0: an account to reconnect (Android channel "account").

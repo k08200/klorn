@@ -1,11 +1,12 @@
 /**
  * proposalPushContent — the device push of an agent approval. Under
  * NOTIFY_PUSH_PRESENTATION a reply draft (`send_email` + `in_reply_to_email_id`
- * naming one of the user's stored mails) reads the NT0 agent copy:
- * "답장 초안 준비됨 · Terry Smith" / the draft's first line in quotes. The draft
- * is message content, so it is shown only while NOTIFY_PUSH_QUOTE is also open;
- * otherwise the body is a fixed line. Everything else — another tool, a mail
- * that is not the user's, the flag off — is exactly the old push.
+ * naming one of the user's stored mails, addressed to that mail's sender) reads
+ * the NT0 agent copy: "답장 초안 준비됨 · Terry Smith" / the draft's first line in
+ * quotes. Draft text is message content, so no send_email push shows model
+ * text as its body unless NOTIFY_PUSH_QUOTE is also open: a fixed line instead.
+ * Whenever the text changes, the old text rides as `policyText` for the noise
+ * policy. Another tool, or the flag off, is exactly the old push.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -70,6 +71,7 @@ describe("proposalPushContent", () => {
       emailId: "em_1",
       pendingActionId: "pa_9",
       presentation: { kind: "agent", senderDisplayName: "Terry Smith", threadId: "thr-1" },
+      policyText: FALLBACK,
     });
     expect(db.findFirst).toHaveBeenCalledWith({
       where: { userId: "u1", OR: [{ id: "gm_abc" }, { gmailId: "gm_abc" }] },
@@ -86,7 +88,54 @@ describe("proposalPushContent", () => {
 
     expect(out.title).toBe("Reply draft ready · Terry Smith");
     expect(out.body).toBe("Review it before it is sent");
-    expect(JSON.stringify(out)).not.toContain("17시");
+    expect(out.policyText).toEqual(FALLBACK);
+    const { policyText: _old, ...shown } = out;
+    expect(JSON.stringify(shown)).not.toContain("17시");
+  });
+
+  it("flag on: a draft addressed to someone else does not name the mail's sender", async () => {
+    process.env.NOTIFY_PUSH_PRESENTATION = "on";
+    process.env.NOTIFY_PUSH_QUOTE = "on";
+    db.findFirst.mockResolvedValue(MAIL);
+
+    const out = await proposalPushContent(
+      "u1",
+      "send_email",
+      { ...REPLY, to: "someone@else.com" },
+      "pa_9",
+      FALLBACK,
+    );
+
+    expect(out).toEqual({ ...FALLBACK, emailId: "em_1", pendingActionId: "pa_9" });
+  });
+
+  it("flag on: a recipient list holding the sender, in any case, is a reply to them", async () => {
+    process.env.NOTIFY_PUSH_PRESENTATION = "on";
+    db.findFirst.mockResolvedValue(MAIL);
+
+    const out = await proposalPushContent(
+      "u1",
+      "send_email",
+      { ...REPLY, to: "cc@acme.com; Terry <TERRY@ACME.COM>" },
+      "pa_9",
+      FALLBACK,
+    );
+
+    expect(out.title).toBe("답장 초안 준비됨 · Terry Smith");
+  });
+
+  it("flag on, quote closed: a send_email push that is not a resolved reply shows no model text", async () => {
+    process.env.NOTIFY_PUSH_PRESENTATION = "on";
+    const fresh = { to: "new@acme.com", subject: "Hello", body: "Secret plan inside" };
+
+    const out = await proposalPushContent("u1", "send_email", fresh, "pa_1", FALLBACK);
+
+    expect(out).toEqual({
+      title: FALLBACK.title,
+      body: "보내기 전에 확인하세요",
+      policyText: FALLBACK,
+    });
+    expect(db.findFirst).not.toHaveBeenCalled();
   });
 
   it("flag on: a sender with no display name is named by domain and carries no name field", async () => {
@@ -97,11 +146,13 @@ describe("proposalPushContent", () => {
 
     expect(out.title).toBe("답장 초안 준비됨 · acme.com");
     expect(out.presentation).toEqual({ kind: "agent" });
-    expect(JSON.stringify(out)).not.toContain("terry@acme.com");
+    const { policyText: _old, ...shown } = out;
+    expect(JSON.stringify(shown)).not.toContain("terry@acme.com");
   });
 
-  it("flag on: anything but a reply draft to the user's own mail is the old push", async () => {
+  it("flag on, quote open: anything but a reply draft to the user's own mail is the old push", async () => {
     process.env.NOTIFY_PUSH_PRESENTATION = "on";
+    process.env.NOTIFY_PUSH_QUOTE = "on";
     expect(
       await proposalPushContent("u1", "create_event", { title: "x" }, "pa_1", FALLBACK),
     ).toEqual(FALLBACK);
@@ -114,8 +165,9 @@ describe("proposalPushContent", () => {
     );
   });
 
-  it("flag on: a failed mail read is the old push with no deep link, as before", async () => {
+  it("flag on, quote open: a failed mail read is the old push with no deep link, as before", async () => {
     process.env.NOTIFY_PUSH_PRESENTATION = "on";
+    process.env.NOTIFY_PUSH_QUOTE = "on";
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
     db.findFirst.mockRejectedValue(new Error("db down"));

@@ -588,6 +588,12 @@ describe("a one-mail sweep push carries the NT0 mail fields, as the firewall pus
       subject: "Subject mail-1",
       threadId: "thr-1",
     });
+    // The live frame (open tabs, the Windows shell) carries the same fields.
+    const { pushNotification } = await import("../websocket.js");
+    const frame = (vi.mocked(pushNotification).mock.calls as unknown as Array<[string, object]>)
+      .map(([, f]) => f as Record<string, unknown>)
+      .find((f) => f.title === "Urgent email");
+    expect(frame).toMatchObject({ kind: "push", senderDisplayName: "Kim", threadId: "thr-1" });
     const urgentRead = argsOf("emailMessage.findMany").find(
       (a) => (a as { where?: { priority?: string } }).where?.priority === "URGENT",
     ) as { select: Record<string, boolean> };

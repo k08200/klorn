@@ -23,6 +23,12 @@ import { prisma } from "../db.js";
 import { calendarSourceScope } from "./calendar-scope.js";
 import { meetingLinkInText } from "./meeting-link.js";
 
+/**
+ * The summary of an event with no title, live (pim/meeting.ts) or stored; the
+ * start ring's NT0 copy shows its own localized stand-in instead.
+ */
+export const UNTITLED_MEETING = "Untitled Meeting";
+
 /** How far ahead the start ring announces a meeting (background.ts). */
 export const START_RING_WINDOW_MINUTES = 5;
 const MS_PER_MINUTE = 60_000;
@@ -85,7 +91,7 @@ export async function storedStartRingMeetings(userId: string, now: Date): Promis
     .filter((row) => !rungKeys.has(keyOf(row)))
     .map((row) => ({
       id: row.googleId ?? row.externalId ?? row.id,
-      summary: row.title || "Untitled Meeting",
+      summary: row.title || UNTITLED_MEETING,
       start: row.startTime.toISOString(),
       end: row.endTime.toISOString(),
       meetingLink: row.meetingLink ?? meetingLinkInText(row.description, row.location),

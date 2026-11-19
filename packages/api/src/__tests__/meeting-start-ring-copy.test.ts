@@ -21,13 +21,17 @@ const mocks = vi.hoisted(() => ({
   notificationCreate: vi.fn(async () => ({ id: "notif-m1", createdAt: new Date() })),
   getUpcomingMeetings: vi.fn(),
   config: null as Row | null,
+  priorRing: null as Row | null,
 }));
 
 vi.mock("../db.js", () => ({
   prisma: {
     userToken: { findMany: vi.fn(async () => [{ userId: "u1" }]) },
     automationConfig: { findUnique: vi.fn(async () => mocks.config) },
-    notification: { findFirst: vi.fn(async () => null), create: mocks.notificationCreate },
+    notification: {
+      findFirst: vi.fn(async () => mocks.priorRing),
+      create: mocks.notificationCreate,
+    },
     calendarEvent: { findUnique: vi.fn(async () => null) },
   },
 }));
@@ -61,6 +65,7 @@ const pushes = () => mocks.sendPushNotification.mock.calls as unknown as PushCal
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.config = null;
+  mocks.priorRing = null;
   vi.spyOn(console, "log").mockImplementation(() => {});
   delete process.env.NOTIFY_PUSH_PRESENTATION;
 });
@@ -150,5 +155,25 @@ describe("meeting start ring — a failed live read", () => {
     await vi.advanceTimersByTimeAsync(60_000);
     await vi.waitFor(() => expect(mocks.getUpcomingMeetings).toHaveBeenCalledTimes(3));
     expect(pushes()).toHaveLength(1);
+  });
+
+  it("a meeting already rung under its event id (by a stored-row ring, say) does not ring again", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW.getTime());
+    // The bell row the earlier ring wrote: its message carries the [event id] marker.
+    mocks.priorRing = {
+      id: "notif-old",
+      message: "Join link: https://meet.google.com/x [evt-again]",
+    };
+    mocks.getUpcomingMeetings.mockResolvedValue([meetingWith("evt-again")]);
+
+    startBackgroundAgent();
+    await vi.waitFor(() => expect(mocks.getUpcomingMeetings).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(pushes()).toHaveLength(0);
+    const { prisma } = await import("../db.js");
+    expect(vi.mocked(prisma.notification.findFirst).mock.calls[0][0]).toMatchObject({
+      where: { userId: "u1", type: "meeting", message: { contains: "evt-again" } },
+    });
   });
 });

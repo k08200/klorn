@@ -18,7 +18,7 @@
  * The acct address is the owner's own connected account, shown only to them.
  */
 
-import { senderLabel } from "../agentcore/reply-wait-content.js";
+import { foldInlineAddresses, senderLabel } from "../agentcore/reply-wait-content.js";
 import { clampText } from "./clamp-text.js";
 import { type BriefCounts, kindPushCopy } from "./kind-push-strings.js";
 import { MAIL_PUSH_REASON_MAX, plainLine, stripEdgeQuotes } from "./mail-push-content.js";
@@ -81,12 +81,17 @@ export interface AgentDraftCopyInput {
   language: string;
 }
 
-/** The draft's first non-blank line, cleaned, without its own quotation marks. */
+/**
+ * The draft's first non-blank line, cleaned, without its own quotation marks,
+ * any whole address in it shown as its domain ("Hi bob@acme.com," → "Hi acme.com,").
+ */
 function firstDraftLine(draft: string | null | undefined): string {
   const line = (draft ?? "")
     .slice(0, MAIL_PUSH_REASON_MAX * CLEAN_FACTOR)
     .split(/\r?\n/)
-    .map((part) => stripEdgeQuotes(plainLine(part, MAIL_PUSH_REASON_MAX * CLEAN_FACTOR)))
+    .map((part) =>
+      stripEdgeQuotes(foldInlineAddresses(plainLine(part, MAIL_PUSH_REASON_MAX * CLEAN_FACTOR))),
+    )
     .find((part) => part !== "");
   return line ?? "";
 }

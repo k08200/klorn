@@ -15,7 +15,7 @@ import { getAuthedClient } from "../mail/gmail.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { googleAttendeeCount, googleMeetingLinkOf } from "./calendar-providers/google.js";
 import { meetingLinkInText } from "./meeting-link.js";
-import { storedStartRingMeetings } from "./meeting-stored-fallback.js";
+import { storedStartRingMeetings, UNTITLED_MEETING } from "./meeting-stored-fallback.js";
 
 const exec = promisify(execFile);
 const IS_MACOS = process.platform === "darwin";
@@ -99,7 +99,7 @@ export async function getUpcomingMeetings(
     return (response.data.items || [])
       .map((event) => ({
         id: event.id || "",
-        summary: event.summary || "Untitled Meeting",
+        summary: event.summary || UNTITLED_MEETING,
         start: event.start?.dateTime || event.start?.date || "",
         end: event.end?.dateTime || event.end?.date || "",
         meetingLink: meetingLinkOf(event),

@@ -9,7 +9,9 @@
  *     (briefing-structure.ts readTodayShape).
  *
  * Counts only: no mail, sender or event text travels in this push. A failed
- * read answers null and the caller sends the old push.
+ * read answers null and the caller sends the old push; so does a morning with
+ * no urgent mail and no meeting, where the counts would say nothing and the
+ * briefing text says what made it worth a push (new mail, a task due).
  */
 
 import { prisma } from "../db.js";
@@ -24,11 +26,13 @@ import { readTodayShape } from "./briefing-structure.js";
 
 /** Open PUSH mail items read for the count; far above what a morning holds. */
 const URGENT_SCAN = 200;
+/** The PUSH lane, with its retired v1 name (judge/tiers.ts reads CALL as PUSH). */
+const PUSH_TIERS = ["PUSH", "CALL"];
 
 /** Today's PUSH mail, one per thread (Today's grouping), inside Today's window. */
 async function countTodayPushMail(userId: string, now: Date): Promise<number> {
   const items = await prisma.attentionItem.findMany({
-    where: { userId, status: "OPEN", tier: "PUSH", source: "EMAIL" },
+    where: { userId, status: "OPEN", tier: { in: PUSH_TIERS }, source: "EMAIL" },
     select: { sourceId: true, createdAt: true },
     orderBy: { createdAt: "desc" },
     take: URGENT_SCAN,
@@ -57,7 +61,7 @@ async function briefCounts(userId: string, now: Date): Promise<BriefCounts> {
   return { urgentMail, meetings: shape.meetingCount, freeHours: shape.freeHours };
 }
 
-/** The NT0 brief push, or null when its counts could not be read. */
+/** The NT0 brief push; null when its counts could not be read or would say nothing. */
 export async function briefingPushCopy(
   userId: string,
   now: Date = new Date(),
@@ -67,6 +71,7 @@ export async function briefingPushCopy(
       briefCounts(userId, now),
       getUserNotificationLanguage(userId),
     ]);
+    if (counts.urgentMail === 0 && counts.meetings === 0) return null;
     return briefPushCopy(counts, language);
   } catch (err) {
     logDbFailure("[BRIEFING] push counts read failed", err, { ids: { userId } });

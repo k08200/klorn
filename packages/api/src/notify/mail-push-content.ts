@@ -146,13 +146,6 @@ export function mailPushContent(input: MailPushInput): MailPushContent {
 }
 
 /**
- * The same mail as structured fields (NT0, contract NotificationPresentation):
- * what a client needs to lay the notification out as title = person, subtitle
- * = subject, body = the quote or the reason line. Cleaned exactly as
- * mailPushContent's text. `senderDisplayName` is the From header's display
- * name only (absent when it has none, or when it is itself an address).
- */
-/**
  * The From header's display name as the `senderDisplayName` field carries it:
  * cleaned onto one line; undefined when the header has none, or when it is
  * itself an address.
@@ -162,6 +155,13 @@ export function presentedDisplayName(from: string | null | undefined): string | 
   return name && !name.includes("@") ? name : undefined;
 }
 
+/**
+ * The same mail as structured fields (NT0, contract NotificationPresentation):
+ * what a client needs to lay the notification out as title = person, subtitle
+ * = subject, body = the quote or the reason line. Cleaned exactly as
+ * mailPushContent's text. `senderDisplayName` is the From header's display
+ * name only (absent when it has none, or when it is itself an address).
+ */
 export function mailPushPresentation(
   input: MailPushInput & { lane: MailPushLane; threadId?: string | null },
 ): NotificationPresentation {

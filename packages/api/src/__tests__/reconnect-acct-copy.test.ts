@@ -151,7 +151,33 @@ describe("reconnect alert — NT0 acct copy (NOTIFY_PUSH_PRESENTATION)", () => {
       provider: "NAVER",
     });
     expect(push()[1].title).toBe("Naver Mail 연결 끊김");
+    expect(consoleText()).toContain("[RECONNECT] account address read failed");
     expect(consoleText()).not.toContain("me@icloud.com");
+  });
+
+  it("the noise policy judges the old fixed text, not the address (policyText)", async () => {
+    process.env.NOTIFY_PUSH_PRESENTATION = "on";
+    state.token = { googleEmail: "ideal.kim@gmail.com" };
+
+    await ensureGmailReconnectNotification("u1");
+
+    expect(push()[1]).toMatchObject({
+      title: "ideal.kim@gmail.com 연결 끊김",
+      policyText: {
+        title: "Gmail disconnected — 1 click to reconnect",
+        body: "Klorn lost access to your Gmail, so the firewall is paused. Reconnect in Settings to resume.",
+      },
+    });
+  });
+
+  it("a non-Google alert with no linked account never reads the Google token's address", async () => {
+    process.env.NOTIFY_PUSH_PRESENTATION = "on";
+    state.token = { googleEmail: "me@gmail.com" };
+
+    await ensureGmailReconnectNotification("u1", { provider: "OUTLOOK" });
+
+    expect(push()[1].title).toBe("Outlook 연결 끊김");
+    expect(prisma.userToken.findFirst).not.toHaveBeenCalled();
   });
 
   it("flag off: the push is exactly what it was, and no address is read", async () => {
