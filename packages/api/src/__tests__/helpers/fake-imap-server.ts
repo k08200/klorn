@@ -71,6 +71,8 @@ export class FakeImapServer {
   searchFindsNothing = false;
   /** UIDs SEARCH never reports, in any folder (a copy the server cannot find by Message-ID). */
   searchHidesUids = new Set<number>();
+  /** A SEARCH for one of these Message-IDs throws, as imapflow 2 does for a throttled SEARCH. */
+  searchThrowsFor = new Set<string>();
   /**
    * Runs once inside the next sequence-number FETCH (a poll's window), AFTER the
    * messages were read and BEFORE the first one is handed back: the moment an
@@ -102,6 +104,7 @@ export class FakeImapServer {
     this.refuseMoveFor = new Set();
     this.searchFindsNothing = false;
     this.searchHidesUids = new Set();
+    this.searchThrowsFor = new Set();
     this.midFetchHook = null;
     this.midMoveHook = null;
     this.commands = [];
@@ -311,6 +314,12 @@ export class FakeImapFlow {
     const folder = this.selected();
     const wanted = query.header?.["message-id"];
     fakeServer.commands.push(`${opts?.uid ? "UID " : ""}SEARCH HEADER Message-ID`);
+    if (wanted && fakeServer.searchThrowsFor.has(wanted)) {
+      throw Object.assign(new Error("Command failed"), {
+        code: "ETHROTTLE",
+        responseStatus: "BAD",
+      });
+    }
     if (fakeServer.searchFindsNothing) return [];
     return fakeServer
       .uidsIn(folder.path)

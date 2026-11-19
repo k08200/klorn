@@ -75,7 +75,19 @@ export interface PinnedClientArgs {
   hostname: string;
   port: number;
   /** Everything else (auth, logger, timeouts). Connection-shaping options are not accepted. */
-  options: Omit<ImapFlowOptions, "host" | "port" | "secure" | "servername" | "tls" | "proxy">;
+  options: Omit<
+    ImapFlowOptions,
+    | "host"
+    | "port"
+    | "secure"
+    | "servername"
+    | "tls"
+    | "proxy"
+    | "transport"
+    | "doSTARTTLS"
+    | "emitLogs"
+    | "logRaw"
+  >;
   /** Log prefix, e.g. "generic-imap". */
   logScope: string;
   /**

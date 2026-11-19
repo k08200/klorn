@@ -64,9 +64,21 @@ function hostRejection(host: string, provider: ImapProviderConfig): ImapRowRejec
   return hostMatchesProvider(host, provider) ? null : "host-provider-mismatch";
 }
 
+// imapflow 2's `transport` opens the socket itself (past the pinned address) and
+// `doSTARTTLS` reshapes the connection; `emitLogs`/`logRaw` would surface what
+// `logger: false` keeps quiet. None is accepted from a caller.
 type ClientShape = Omit<
   ImapFlowOptions,
-  "host" | "port" | "secure" | "servername" | "tls" | "proxy"
+  | "host"
+  | "port"
+  | "secure"
+  | "servername"
+  | "tls"
+  | "proxy"
+  | "transport"
+  | "doSTARTTLS"
+  | "emitLogs"
+  | "logRaw"
 >;
 
 /**

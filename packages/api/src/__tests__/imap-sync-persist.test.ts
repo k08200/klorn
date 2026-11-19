@@ -195,6 +195,29 @@ describe("syncImapInbox → shared persist path", () => {
     expect(judgeEmail).not.toHaveBeenCalled();
   });
 
+  it("stores the poll time for a Date header imapflow could not parse (it hands back the text)", async () => {
+    const [first] = fakeMessages();
+    imap.status.mockResolvedValue({ messages: 1 });
+    imap.fetch.mockImplementation(async function* () {
+      yield { ...first, envelope: { ...first?.envelope, date: "Someday, 99 Foo 2026" } };
+    });
+    persistGmailEmail.mockResolvedValue({ emailId: "e1", isNew: true });
+    const before = Date.now();
+
+    await syncImapInbox({
+      provider: IMAP_PROVIDERS.NAVER,
+      userId: "u1",
+      email: "me@naver.com",
+      password: "app-pw",
+      host: "imap.naver.com:993",
+      linkedInboxAccountId: "acc-naver",
+    });
+
+    const receivedAt = persistGmailEmail.mock.calls[0]?.[1]?.receivedAt;
+    expect(receivedAt).toBeInstanceOf(Date);
+    expect(receivedAt.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
   it("fetches the top-level MIME headers and persists the decoded body", async () => {
     const mime = [
       "--b1",

@@ -251,7 +251,16 @@ async function fromReadBack(
   if (!seen.messageId) return null;
   const uidValidity = await ctx.mailboxes.open(destination);
   if (!uidValidity || (before && before.uidValidity !== uidValidity)) return null;
-  const hits = await ctx.client.search({ header: { "message-id": seen.messageId } }, { uid: true });
+  let hits: number[] | false | undefined;
+  try {
+    hits = await ctx.client.search({ header: { "message-id": seen.messageId } }, { uid: true });
+  } catch (err) {
+    // imapflow 2 throws for a SEARCH that did not complete (throttled, connection
+    // lost) where 1.x answered false. On a live connection only this UID stays
+    // unconfirmed, as before; a dead one fails the run.
+    if (ctx.client.usable === false) throw err;
+    return null;
+  }
   if (!Array.isArray(hits)) return null;
   const candidates = before ? hits.filter((uid) => uid >= before.uidNext) : hits;
   if (candidates.length !== 1 || !isValidUid(candidates[0])) return null;

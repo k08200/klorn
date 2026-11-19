@@ -54,8 +54,15 @@ const PUBLIC_IP = "93.184.216.34";
 const USER = "refusal-probe@example.com";
 const PASSWORD = "refusal-probe-app-pw";
 
-/** How the server answers the login: a tagged status line, or a dropped connection. */
-type Answer = { reply: (tag: string) => string } | "drop";
+/**
+ * How the server answers the login: lines written together, lines written one
+ * after another (`gapMs` apart, so they reach the client as separate reads), or
+ * a dropped connection.
+ */
+type Answer =
+  | { reply: (tag: string) => string }
+  | { lines: (tag: string) => string[]; gapMs: number }
+  | "drop";
 
 interface LoginServer {
   port: number;
@@ -63,6 +70,9 @@ interface LoginServer {
   verbs: string[];
   stop: () => Promise<void>;
 }
+
+/** The real connect, kept before any test spies on it. */
+const realTlsConnect = tls.connect;
 
 let certDir = "";
 let identity: Identity;
@@ -82,7 +92,14 @@ async function startServer(answer: Answer, authPlain: boolean): Promise<LoginSer
     let saslTag: string | null = null;
     const refuse = (tag: string): void => {
       if (answer === "drop") socket.destroy();
-      else socket.write(`${answer.reply(tag)}\r\n`);
+      else if ("reply" in answer) socket.write(`${answer.reply(tag)}\r\n`);
+      else {
+        answer.lines(tag).forEach((line, i) => {
+          setTimeout(() => {
+            if (!socket.destroyed) socket.write(`${line}\r\n`);
+          }, i * answer.gapMs);
+        });
+      }
     };
     socket.on("data", (chunk) => {
       pending += chunk.toString("utf8");
@@ -137,16 +154,21 @@ async function startServer(answer: Answer, authPlain: boolean): Promise<LoginSer
 
 /** Aim the library's TLS connect at the local server, trusting the throwaway certificate. */
 function aimAt(server: LoginServer): void {
-  const realConnect = tls.connect;
   vi.spyOn(tls, "connect").mockImplementation(((...args: unknown[]) => {
     const [options, ...rest] = args as [Record<string, unknown>, ...unknown[]];
     const redirected = { ...options, host: "127.0.0.1", port: server.port, ca: identity.cert };
-    return (realConnect as (...a: unknown[]) => tls.TLSSocket)(redirected, ...rest);
+    return (realTlsConnect as (...a: unknown[]) => tls.TLSSocket)(redirected, ...rest);
   }) as typeof tls.connect);
 }
 
-/** Log in through Klorn's generic (pinned) client and return what connect() rejected with. */
-async function loginError(answer: Answer, authPlain: boolean): Promise<unknown> {
+/**
+ * Log in through Klorn's generic (pinned) client. Returns what connect() rejected
+ * with, and the command verbs the server received.
+ */
+async function login(
+  answer: Answer,
+  authPlain: boolean,
+): Promise<{ err: unknown; verbs: string[] }> {
   const server = await startServer(answer, authPlain);
   aimAt(server);
   const client = createImapClient({
@@ -161,7 +183,7 @@ async function loginError(answer: Answer, authPlain: boolean): Promise<unknown> 
   try {
     await client.connect();
   } catch (err) {
-    return err;
+    return { err, verbs: server.verbs };
   } finally {
     await endImapSession(client);
   }
@@ -196,7 +218,11 @@ const no = (code: string) => (tag: string) => `${tag} NO [${code}] refused`;
 /** What a refusal of the credentials must read as. */
 const REFUSED = { credentialRefusal: true, syncErrorCode: "auth", verifyCode: "IMAP_AUTH_FAILED" };
 /** What a refusal for the moment must read as: never a credential refusal. */
-const BUSY = { credentialRefusal: false, syncErrorCode: "throttled", verifyCode: "IMAP_AUTH_FAILED" };
+const BUSY = {
+  credentialRefusal: false,
+  syncErrorCode: "throttled",
+  verifyCode: "IMAP_AUTH_FAILED",
+};
 
 let consoleCalls: unknown[][] = [];
 
@@ -223,12 +249,21 @@ afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.stop()));
 });
 
+/** The two login commands, and the verb the server must see for each. */
+const METHODS = [
+  ["LOGIN", false, "LOGIN"],
+  ["AUTHENTICATE PLAIN", true, "AUTHENTICATE"],
+] as const;
+
+const THROTTLED = (tag: string) =>
+  `${tag} BAD Request is throttled. Suggested Backoff Time: 10 milliseconds`;
+
 describe.skipIf(!HAS_OPENSSL)("real imapflow: a refused login, through Klorn's classifiers", () => {
-  it.each([
-    ["LOGIN", false],
-    ["AUTHENTICATE PLAIN", true],
-  ] as const)("%s refused with AUTHENTICATIONFAILED is a credential refusal", async (_, plain) => {
-    const err = await loginError({ reply: no("AUTHENTICATIONFAILED") }, plain);
+  it.each(
+    METHODS,
+  )("%s refused with AUTHENTICATIONFAILED is a credential refusal", async (_, plain, verb) => {
+    const { err, verbs } = await login({ reply: no("AUTHENTICATIONFAILED") }, plain);
+    expect(verbs).toContain(verb);
     expect(observe(err)).toEqual({
       authenticationFailed: true,
       serverResponseCode: "AUTHENTICATIONFAILED",
@@ -239,7 +274,7 @@ describe.skipIf(!HAS_OPENSSL)("real imapflow: a refused login, through Klorn's c
   });
 
   it("a NO without a response code is a credential refusal", async () => {
-    const err = await loginError({ reply: (tag) => `${tag} NO Invalid credentials` }, false);
+    const { err } = await login({ reply: (tag) => `${tag} NO Invalid credentials` }, false);
     expect(observe(err)).toEqual({
       authenticationFailed: true,
       serverResponseCode: null,
@@ -255,7 +290,7 @@ describe.skipIf(!HAS_OPENSSL)("real imapflow: a refused login, through Klorn's c
     "INUSE",
     "SERVERBUG",
   ])("a LOGIN refused with %s is about the moment, not the password", async (rfc5530) => {
-    const err = await loginError({ reply: no(rfc5530) }, false);
+    const { err } = await login({ reply: no(rfc5530) }, false);
     expect(observe(err)).toEqual({
       authenticationFailed: true,
       serverResponseCode: rfc5530,
@@ -266,15 +301,16 @@ describe.skipIf(!HAS_OPENSSL)("real imapflow: a refused login, through Klorn's c
   });
 
   it("AUTHENTICATE PLAIN refused with UNAVAILABLE is about the moment, not the password", async () => {
-    const err = await loginError({ reply: no("UNAVAILABLE") }, true);
+    const { err, verbs } = await login({ reply: no("UNAVAILABLE") }, true);
+    expect(verbs).toContain("AUTHENTICATE");
     expect(observe(err)).toMatchObject({ serverResponseCode: "UNAVAILABLE", ...BUSY });
   });
 
-  it("a throttled LOGIN (Microsoft 365's BAD with a backoff) is throttling, not a refusal", async () => {
-    const err = await loginError(
-      { reply: (tag) => `${tag} BAD Request is throttled. Suggested Backoff Time: 10 milliseconds` },
-      false,
-    );
+  it.each(
+    METHODS,
+  )("a throttled %s (Microsoft 365's BAD with a backoff) is not a refusal", async (_, plain, verb) => {
+    const { err, verbs } = await login({ reply: THROTTLED }, plain);
+    expect(verbs).toContain(verb);
     expect(observe(err)).toEqual({
       authenticationFailed: false,
       serverResponseCode: null,
@@ -287,7 +323,8 @@ describe.skipIf(!HAS_OPENSSL)("real imapflow: a refused login, through Klorn's c
   });
 
   it("a connection lost during LOGIN says nothing about the password", async () => {
-    const err = await loginError("drop", false);
+    const { err, verbs } = await login("drop", false);
+    expect(verbs).toContain("LOGIN");
     expect(observe(err)).toEqual({
       authenticationFailed: false,
       serverResponseCode: null,
@@ -301,12 +338,39 @@ describe.skipIf(!HAS_OPENSSL)("real imapflow: a refused login, through Klorn's c
   });
 
   it("logs neither the user nor the password while a login fails", async () => {
-    await loginError({ reply: no("AUTHENTICATIONFAILED") }, false);
-    await loginError("drop", false);
+    const refused = await login({ reply: no("AUTHENTICATIONFAILED") }, false);
+    const dropped = await login("drop", false);
+    // Both logins really ran (a failed setup would also reject connect()).
+    expect(observe(refused.err)).toMatchObject({ serverResponseCode: "AUTHENTICATIONFAILED" });
+    expect(observe(dropped.err)).toMatchObject({ code: "ClosedAfterConnectTLS" });
     const printed = JSON.stringify(consoleCalls, (_, value) =>
       value instanceof Error ? { message: value.message, ...value } : value,
     );
     expect(printed).not.toContain(USER);
     expect(printed).not.toContain(PASSWORD);
+  });
+
+  it("a BYE written together with the tagged NO still reads as a credential refusal", async () => {
+    const { err } = await login(
+      { reply: (tag) => `* BYE closing\r\n${tag} NO [AUTHENTICATIONFAILED] Invalid credentials` },
+      false,
+    );
+    expect(observe(err)).toMatchObject({ serverResponseCode: "AUTHENTICATIONFAILED", ...REFUSED });
+  });
+
+  // KNOWN GAP with imapflow 2 (1.7 read this as a refusal): an untagged BYE now
+  // closes the connection at once, so a tagged NO that arrives in a later read is
+  // never parsed and the refusal reads as a closed connection. The login backoff
+  // and the reconnect alert then never start for such a server. `it.fails` keeps
+  // the gap visible and turns red once the library or Klorn closes it.
+  it.fails("a BYE that arrives before the tagged NO still reads as a credential refusal", async () => {
+    const { err } = await login(
+      {
+        lines: (tag) => ["* BYE closing", `${tag} NO [AUTHENTICATIONFAILED] Invalid credentials`],
+        gapMs: 30,
+      },
+      false,
+    );
+    expect(observe(err)).toMatchObject({ credentialRefusal: true });
   });
 });

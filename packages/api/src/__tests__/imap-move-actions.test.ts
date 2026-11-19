@@ -385,6 +385,24 @@ describe("a result is honest", () => {
     expect(localIds(db)).toEqual([id]);
   });
 
+  it("leaves only the UID whose read-back SEARCH threw unconfirmed, not the whole run", async () => {
+    // imapflow 2 throws for a throttled SEARCH where 1.x answered false.
+    const ids = [
+      deliver(db, NAVER, 101, { messageId: "<ok@example.com>" }),
+      deliver(db, NAVER, 102, { messageId: "<throttled@example.com>" }),
+    ];
+    fakeServer.copyUid = false;
+    fakeServer.searchThrowsFor = new Set(["<throttled@example.com>"]);
+
+    const results = await Promise.all(ids.map((id) => naver.trash(USER, id, NAVER.rowId)));
+
+    expect(moveCommands()).toEqual(["UID MOVE 101,102 Trash"]);
+    expect(results[0]).toEqual({ success: true });
+    expect(results[1]).toMatchObject({ error: expect.any(String) });
+    expect(results[1]).not.toMatchObject({ error: expect.stringContaining("Could not reach") });
+    expect(localIds(db)).toEqual([ids[1]]);
+  });
+
   it("finds the moved message among copies of the same Message-ID already in the destination (no COPYUID)", async () => {
     const id = deliver(db, NAVER, 101, { messageId: "<dup@example.com>" });
     // Trash already holds an older copy with the very same Message-ID.
