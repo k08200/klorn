@@ -52,6 +52,7 @@ import { captureDbFailure, logDbFailure } from "../../report-db-failure.js";
 import { Semaphore } from "../../semaphore.js";
 import { createImapClient, endImapSession } from "../imap-connection.js";
 import type { ImapProviderConfig } from "../imap-providers.js";
+import { IMAP_THROTTLED_CODE } from "../imap-throttled.js";
 import { checkLiveValidity, resetUidValidityLogState } from "../imap-uidvalidity.js";
 import { isSmtpAuthRejection } from "../smtp-transport.js";
 import { fail } from "./action-failure.js";
@@ -167,9 +168,6 @@ function serially<T>(rowId: string, work: () => Promise<T>): Promise<T> {
   return run;
 }
 
-/** imapflow's code for a command the server throttled. */
-export const THROTTLED_CODE = "ETHROTTLE";
-
 const authFailure = (label: string): MailActionFailure =>
   fail(`${label} rejected the saved app password. Reconnect your ${label} mailbox in Settings.`);
 
@@ -184,7 +182,7 @@ function isAuthFailure(err: unknown): boolean {
   // too (Microsoft 365's "Request is throttled" BAD, code ETHROTTLE). The server
   // asked to wait; it did not refuse the password, so it must not count towards
   // the login backoff (imap-auth-backoff.ts) or ask the user to reconnect.
-  if (e?.code === THROTTLED_CODE) return false;
+  if (e?.code === IMAP_THROTTLED_CODE) return false;
   return e?.authenticationFailed === true;
 }
 

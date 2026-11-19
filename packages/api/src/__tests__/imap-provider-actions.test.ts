@@ -605,6 +605,12 @@ describe("failure contract", () => {
     expect(result).toMatchObject({ error: expect.stringMatching(/try again shortly/i) });
     expect(result).not.toMatchObject({ error: expect.stringMatching(/reconnect/i) });
     expect(h.messageFlagsAdd).not.toHaveBeenCalled();
+
+    // No credential cooldown: the next action logs in again (imapflow already
+    // waited out the server's suggested backoff before it rejected).
+    await flush();
+    await actions().markAsRead("u1", NAVER_MSG, "row-1");
+    expect(h.connect).toHaveBeenCalledTimes(2);
   });
 
   it("answers a soft error (never throws) on a transport failure", async () => {

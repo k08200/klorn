@@ -26,7 +26,7 @@
  * mid-LOGIN rejects connect() before LOGIN settles.
  */
 
-import net from "node:net";
+import type net from "node:net";
 import tls from "node:tls";
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -93,6 +93,8 @@ async function startServer(answer: Answer, authPlain: boolean): Promise<LoginSer
   const sockets = new Set<net.Socket>();
   const server = tls.createServer({ key: identity.key, cert: identity.cert }, (socket) => {
     sockets.add(socket);
+    // Each write goes out as it is made, so lines written apart are read apart.
+    socket.setNoDelay(true);
     socket.on("close", () => sockets.delete(socket));
     socket.on("error", () => {});
     socket.write(`* OK [CAPABILITY ${caps}] ready\r\n`);
@@ -355,6 +357,7 @@ describe.skipIf(!HAS_OPENSSL)("real imapflow: a refused login, through Klorn's c
     const printed = JSON.stringify(consoleCalls, (_, value) =>
       value instanceof Error ? { message: value.message, ...value } : value,
     );
+    expect(consoleCalls.length).toBeGreaterThan(0); // the failures were logged, as facts
     expect(printed).not.toContain(USER);
     expect(printed).not.toContain(PASSWORD);
   });
@@ -373,7 +376,7 @@ describe.skipIf(!HAS_OPENSSL)("real imapflow: a refused login, through Klorn's c
     const { err } = await login(
       {
         lines: (tag) => ["* BYE closing", `${tag} NO [AUTHENTICATIONFAILED] Invalid credentials`],
-        gapMs: 30,
+        gapMs: 100,
       },
       false,
     );
