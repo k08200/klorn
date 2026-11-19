@@ -17,8 +17,12 @@
  *
  * The English post pages themselves must also declare `"inLanguage": "en"`.
  *
- * Everything is derived from the filesystem: a new post or a new locale is
- * covered without editing this file.
+ * Posts are derived from the filesystem, so a new post is covered without
+ * editing this file. Listings are pinned to the languages the site ships
+ * (founder decision, 2026-11-17: en at the root, ko, zh); the retired /ja/,
+ * /de/, /es/ and /fr/ listings are redirect stubs with no JSON-LD. A shipped
+ * listing that is missing, or that carries no post entries, fails — that is
+ * this guard going blind, not the listing becoming correct.
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -28,6 +32,7 @@ const ROOT = "website";
 const BLOG_DIR = join(ROOT, "blog");
 const POST_URL = /^https:\/\/klorn\.ai\/blog\/([^/]+)\/$/;
 const POST_TYPES = new Set(["BlogPosting", "Article"]);
+const SHIPPED_LOCALES = ["ko", "zh"];
 const LD_JSON = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g;
 
 function readJsonLd(file) {
@@ -56,11 +61,7 @@ function listPostSlugs() {
 }
 
 function listListingPages() {
-  const localized = readdirSync(ROOT, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => join(ROOT, d.name, "blog", "index.html"))
-    .filter(existsSync);
-  return [join(BLOG_DIR, "index.html"), ...localized];
+  return [join(BLOG_DIR, "index.html"), ...SHIPPED_LOCALES.map((l) => join(ROOT, l, "blog", "index.html"))];
 }
 
 function checkPostPages(slugs, errors) {
@@ -82,7 +83,12 @@ function checkPostPages(slugs, errors) {
 }
 
 function checkListing(file, headlines, errors) {
+  if (!existsSync(file)) {
+    errors.push(`${file}: missing — every shipped language has a blog listing`);
+    return 0;
+  }
   const entries = readJsonLd(file).flatMap(collectPosts);
+  if (entries.length === 0) errors.push(`${file}: no BlogPosting/Article JSON-LD entries`);
   for (const entry of entries) {
     const slug = POST_URL.exec(entry.url ?? "")?.[1];
     if (!slug || !headlines.has(slug)) {

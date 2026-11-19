@@ -75,6 +75,12 @@ calendar time.
   a stored ja/es/fr/de notification language to English. Daily
   digest mail, the judge's PUSH reason and the on-demand summary, sender
   dossier and thread brief now also come in Simplified Chinese.
+- The Mac app ships the same three languages. Its Japanese, Spanish, French
+  and German catalogues are removed; a saved in-app language from that set
+  reads as English, and a macOS in one of them shows the next Preferred
+  Language Klorn ships, else English. A Traditional Chinese macOS shows the
+  app in Simplified Chinese; prompts macOS itself shows (calendar access)
+  follow macOS's own language matching.
 - **Quiet hours hold urgent mail instead of dropping it.** A PUSH-lane mail
   that rang no web push, Telegram, Android or iOS push because of quiet hours
   now rings once after they end, as the Mac and Windows apps already do. One
@@ -94,6 +100,11 @@ calendar time.
   kept, the month-long meeting fingerprint, retention, and use in
   classification. The `calendar.events` and `calendar.readonly` scope entries
   say so too (#1607).
+- **klorn.ai ships in English, Korean and Simplified Chinese only.** The
+  Japanese, German, Spanish and French pages are gone from the language
+  menus, hreflang sets and sitemap; their old URLs (`/ja/`, `/de/`, `/es/`,
+  `/fr/` and every page under them) are noindex stubs that redirect to the
+  matching English page.
 
 ### Fixed
 - **Only PUSH mail rings from the urgent sweep.** The urgent-priority sweep

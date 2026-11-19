@@ -28,9 +28,9 @@ describe("parseAdvertisedAmount", () => {
     expect(parseAdvertisedAmount("$34.99")).toBe(34.99);
   });
 
-  // de and fr write prices as "30 $". A dollar-first parser skips them
-  // silently, which is how those two landings came to disagree with their own
-  // price card before 2026-10-14.
+  // The de and fr landings (retired 2026-11-17) wrote prices as "30 $". A
+  // dollar-first parser skips them silently, which is how those two landings
+  // came to disagree with their own price card before 2026-10-14.
   it("reads the European trailing-sign form", () => {
     expect(parseAdvertisedAmount("30 $")).toBe(30);
     expect(parseAdvertisedAmount("8,99 $")).toBe(8.99);

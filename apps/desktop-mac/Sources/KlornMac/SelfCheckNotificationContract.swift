@@ -24,12 +24,10 @@ func notificationContractSelfChecks() async -> [(String, Bool)] {
     func utf16(_ s: String) -> Int { s.utf16.count }
     let noSubject = L10n.value("banner.noSubject", language: "en") ?? ""
     check("the English stand-in is the server's \"(no subject)\"", noSubject == "(no subject)")
-    let serverNoSubject = [
-        "en": "(no subject)", "ko": "(제목 없음)", "ja": "(件名なし)", "zh": "（无主题）",
-        "es": "(sin asunto)", "fr": "(sans objet)", "de": "(kein Betreff)",
-    ]
+    let serverNoSubject = ["en": "(no subject)", "ko": "(제목 없음)", "zh": "（无主题）"]
     check("every language's stand-in is the server's notification-strings.ts noSubject",
-          serverNoSubject.allSatisfy { L10n.value("banner.noSubject", language: $0.key) == $0.value })
+          Set(serverNoSubject.keys) == Set(L10n.shipped)
+          && serverNoSubject.allSatisfy { L10n.value("banner.noSubject", language: $0.key) == $0.value })
 
     let a = compose("Alice Kim <alice@example.com>", "Contract", reason("Signature needed today"))
     check("titles the notification with the sender's name only, no app prefix",

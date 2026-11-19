@@ -463,7 +463,7 @@ func quietHoursSummarySelfChecks(sourceDir: URL) async -> [(String, Bool)] {
 
     // MARK: copy
     check("the summary title exists in every locale, with %d and never %@",
-          ["en", "ko", "de", "es", "fr", "ja", "zh"].allSatisfy { locale in
+          L10n.shipped.allSatisfy { locale in
               let line = quietSourceText(sourceDir, "Resources/\(locale).lproj/Localizable.strings")
                   .split(separator: "\n").first { $0.hasPrefix("\"push.heldSummary.title\" = ") }
               return line?.contains("%d") == true && line?.contains("%@") == false
