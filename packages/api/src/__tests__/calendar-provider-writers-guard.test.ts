@@ -268,6 +268,7 @@ describe("CalendarEvent readers: one event can be two rows (C2)", () => {
     "pim/device-calendar/device-ingest.ts", // C6: reconciles one device calendar's own rows with its snapshot
     "pim/linked-calendar-unlink.ts",
     "pim/meeting-prep-pack.ts",
+    "pim/meeting-stored-fallback.ts", // the start ring's fallback: primary Google rows only (no linked copy)
     "pim/team-availability.ts",
     "org/org-availability.ts", // a co-member's busy times under their free/busy grant
   ];

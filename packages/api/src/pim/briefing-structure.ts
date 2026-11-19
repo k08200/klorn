@@ -20,6 +20,7 @@ import {
   DAY_END_HOUR,
   DAY_START_HOUR,
   type DaySegment,
+  type DayShape,
   localHour,
 } from "./day-shape.js";
 
@@ -203,6 +204,37 @@ function isWeekend(now: Date, timeZone: string): boolean {
 }
 
 /**
+ * The shape of the user's current local day from its timed events: the one
+ * read the briefing page and the briefing push (briefing-push.ts) share, so
+ * the push's meeting and free-hour counts are the page's.
+ */
+export async function readTodayShape(
+  userId: string,
+  timeZone: string,
+  now: Date,
+): Promise<DayShape> {
+  const { gte, lt } = localDayUtcRange(now, timeZone);
+  // OVERLAP with today (not started-today): an event that began yesterday
+  // and runs into this morning still occupies today's narrated window.
+  // Through the one read path: the scope, and an invite in the primary and a
+  // linked calendar (two rows, C2) counted as one meeting, with the cap applied
+  // after that (C7).
+  const rows = await readCalendarRows({
+    userId,
+    when: { allDay: false, startTime: { lt }, endTime: { gt: gte } },
+    limit: DAY_SHAPE_EVENT_LIMIT,
+  });
+  const events = rows.map((row) => ({
+    title: row.title,
+    // Clamp instants outside today's local day to the day edges — localHour
+    // alone is date-blind and would wrap (23:00 yesterday → "23h today").
+    startHour: row.startTime <= gte ? 0 : localHour(row.startTime, timeZone),
+    endHour: row.endTime >= lt ? 24 : localHour(row.endTime, timeZone),
+  }));
+  return buildDayShape(events, isWeekend(now, timeZone) && events.length === 0);
+}
+
+/**
  * Compute the structure for the user's current local day. Deterministic from
  * calendar + signals at read time — nothing to store or invalidate.
  */
@@ -219,18 +251,8 @@ export async function buildBriefingStructure(
   ]);
   const lang = toShippedLanguage(config?.notificationLanguage);
 
-  const { gte, lt } = localDayUtcRange(now, timeZone);
-  // OVERLAP with today (not started-today): an event that began yesterday
-  // and runs into this morning still occupies today's narrated window.
-  const [rows, pushItems] = await Promise.all([
-    // Through the one read path: the scope, and an invite in the primary and a
-    // linked calendar (two rows, C2) counted as one meeting, with the cap applied
-    // after that (C7).
-    readCalendarRows({
-      userId,
-      when: { allDay: false, startTime: { lt }, endTime: { gt: gte } },
-      limit: DAY_SHAPE_EVENT_LIMIT,
-    }),
+  const [shape, pushItems] = await Promise.all([
+    readTodayShape(userId, timeZone, now),
     // "Needs attention" = the open PUSH lane, cheapest honest source (pure
     // DB — this endpoint is polled, so it must never touch the Gmail API).
     // Overfetched: an item that mirrors a hidden calendar event is dropped below
@@ -248,15 +270,6 @@ export async function buildBriefingStructure(
     0,
     ATTENTION_LIMIT,
   );
-  const events = rows.map((row) => ({
-    title: row.title,
-    // Clamp instants outside today's local day to the day edges — localHour
-    // alone is date-blind and would wrap (23:00 yesterday → "23h today").
-    startHour: row.startTime <= gte ? 0 : localHour(row.startTime, timeZone),
-    endHour: row.endTime >= lt ? 24 : localHour(row.endTime, timeZone),
-  }));
-
-  const shape = buildDayShape(events, isWeekend(now, timeZone) && events.length === 0);
   const count = shape.segments.length;
   return {
     dateLabel: dateLabel(now, timeZone, lang),

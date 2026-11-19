@@ -9,7 +9,7 @@
  * Runs every 60 seconds, checks all users with active automation configs.
  */
 
-import type { DesktopMailToast } from "@klorn/contract";
+import type { DesktopMailToast, NotificationPresentation } from "@klorn/contract";
 import { drainActionOutbox } from "./agentcore/action-outbox.js";
 import { findAutoModeCandidates } from "./agentcore/auto-mode-candidates.js";
 import {
@@ -81,7 +81,7 @@ import { desktopAlertTag } from "./notify/desktop-alert.js";
 import { mailOpenPath } from "./notify/mail-path.js";
 import { formatUrgentEmailBody, senderName } from "./notify/notification-format.js";
 import { notificationCopy, URGENT_EMAIL_TITLES } from "./notify/notification-strings.js";
-import { urgentLeadPushContent, urgentSweepItemIdsFailClosed } from "./notify/open-push-mail.js";
+import { urgentLeadPush, urgentSweepItemIdsFailClosed } from "./notify/open-push-mail.js";
 import { escalateUnackedPush } from "./notify/phone-escalation.js";
 import { sendPushNotification } from "./notify/push.js";
 import { sendQuietHoursSummaries } from "./notify/quiet-hours-summary.js";
@@ -834,6 +834,8 @@ export async function ensureUrgentEmailNotification(
   /** A batch of ONE mail: its N1 toast for the desktop shell, and the mail id
    *  on the row for the desktop catch-up (decision N6). */
   mail?: DesktopMailToast,
+  /** A batch of ONE mail: its NT0 fields on the live frame, as the firewall push's frame. */
+  presentation?: NotificationPresentation,
 ): Promise<{ id: string; createdAt: Date } | null> {
   const title = notificationCopy(language).urgentMailTitle;
   let notification: { id: string; createdAt: Date };
@@ -866,6 +868,7 @@ export async function ensureUrgentEmailNotification(
     // OS banner in the desktop shell, under the Web Push gate.
     ...(await desktopAlertTag(userId, "push")),
     ...(mail ? { mail, link: mailOpenPath(mail.emailId) } : {}),
+    ...(presentation ?? {}),
   });
   return notification;
 }
@@ -888,8 +891,10 @@ export function urgentMailPushPayload(input: {
   leads: ReadonlyArray<{ id: string }>;
   attentionItemId: string | null;
   language: string | null | undefined;
+  /** The one mail's NT0 fields (open-push-mail.ts urgentLeadPush); a batch has none. */
+  presentation?: NotificationPresentation;
 }) {
-  const { notificationId, title, body, leads, attentionItemId, language } = input;
+  const { notificationId, title, body, leads, attentionItemId, language, presentation } = input;
   return {
     title,
     body,
@@ -897,7 +902,12 @@ export function urgentMailPushPayload(input: {
     attentionItemId: attentionItemId ?? undefined,
     bellNotificationId: notificationId,
     ...(leads.length === 1
-      ? { emailId: leads[0].id, lane: "PUSH" as const, ...(language ? { language } : {}) }
+      ? {
+          emailId: leads[0].id,
+          lane: "PUSH" as const,
+          ...(language ? { language } : {}),
+          ...(presentation ? { presentation } : {}),
+        }
       : {}),
   };
 }
@@ -939,6 +949,8 @@ export async function sweepUrgentEmails(config: {
           createdAt: true,
           receivedAt: true,
           linkedInboxAccountId: true,
+          // NT0: a one-mail ring carries its thread, as the firewall push does.
+          threadId: true,
         },
       });
   // Lane contract (tier-ontology-v2.md): the keyword priority never
@@ -1019,10 +1031,11 @@ export async function sweepUrgentEmails(config: {
       // A push about ONE mail says what every surface says about it
       // (decision N1 + NC1 reason line): the live frame, the device
       // push, Telegram. A batch keeps the digest.
-      const leadContent =
+      const leadPush =
         newUrgent.length === 1
-          ? await urgentLeadPushContent(config.userId, newUrgent[0], notificationLanguage ?? "en")
+          ? await urgentLeadPush(config.userId, newUrgent[0], notificationLanguage ?? "en")
           : null;
+      const leadContent = leadPush?.content ?? null;
       const notification = await ensureUrgentEmailNotification(
         config.userId,
         newUrgent[0],
@@ -1030,6 +1043,7 @@ export async function sweepUrgentEmails(config: {
         userBody,
         notificationLanguage,
         leadContent ? { emailId: newUrgent[0].id, ...leadContent } : undefined,
+        leadPush?.presentation,
       );
 
       // WINNER-ONLY: a concurrent tick lost the create (null) and must NOT
@@ -1048,6 +1062,7 @@ export async function sweepUrgentEmails(config: {
             leads: newUrgent,
             attentionItemId,
             language: notificationLanguage,
+            presentation: leadPush?.presentation,
           }),
           "email_urgent",
           // The urgent keyword sweep: an interrupt caller (push-bucket.ts).

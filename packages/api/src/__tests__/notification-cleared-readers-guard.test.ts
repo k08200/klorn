@@ -141,6 +141,12 @@ const SEES_CLEARED: Record<string, { reads: number; why: string }> = {
   // The queue join resolves rows its FOLLOWUP items point at; clearing drops
   // those items, so a cleared row has no item left to resolve.
   "pim/inbox-summary.ts#buildInboxSummary": { reads: 1, why: "queue join by item source id" },
+  // The meeting start ring's stored fallback skips a meeting whose T-60 heads-up
+  // already rang; a heads-up row the user cleared still rang.
+  "pim/meeting-stored-fallback.ts#storedStartRingMeetings": {
+    reads: 1,
+    why: "heads-up dedupe look-back",
+  },
   // Every stored row is the user's data, cleared or not.
   "routes/core.ts#registerCoreRoutes": { reads: 1, why: "the user's data export" },
   // The sweep that deletes cleared rows after 30 days reads only cleared rows.

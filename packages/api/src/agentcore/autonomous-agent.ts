@@ -70,7 +70,7 @@ import {
   safeJson,
 } from "./agent-proposal-dedup.js";
 import { notifyRepeatsUrgentMail } from "./agent-urgent-overlap.js";
-import { proposalPushMailFields } from "./proposal-push-target.js";
+import { proposalPushContent } from "./proposal-push-target.js";
 import { ALL_TOOLS, executeToolCall, isToolAllowedForPlan } from "./tool-executor.js";
 
 const MAX_TOOL_CALLS = AGENT_MAX_TOOLS_PER_LOOP;
@@ -817,21 +817,25 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 });
 
                 // Always send push notification for proposed actions (phone/browser).
-                // A reply draft to one mail also deep-links the native apps to it.
-                const proposalMail = await proposalPushMailFields(
+                // A reply draft to one mail also deep-links the native apps to it
+                // (and, under NOTIFY_PUSH_PRESENTATION, reads the NT0 agent copy).
+                const {
+                  title: proposalTitle,
+                  body: proposalBody,
+                  ...proposalMail
+                } = await proposalPushContent(
                   userId,
                   proposedToolName,
                   args.toolArgs,
                   (pendingAction as { id: string }).id,
-                );
-                sendPushNotification(
-                  userId,
                   {
                     title: `${AGENT_NOTIFICATION_PREFIX} Review needed`,
                     body: args.message.slice(0, 100),
-                    url: proposalLink,
-                    ...proposalMail,
                   },
+                );
+                sendPushNotification(
+                  userId,
+                  { title: proposalTitle, body: proposalBody, url: proposalLink, ...proposalMail },
                   "agent_proposal",
                   // Agent-originated: always ambient (push-bucket.ts).
                   { bucket: "ambient" },
@@ -1146,20 +1150,20 @@ Silently ignore. The user does not want a push every time a newsletter arrives o
                 conversationId: agentConvo.id,
                 link: riskLink,
               });
-              const riskMail = await proposalPushMailFields(
+              const {
+                title: riskTitle,
+                body: riskBody,
+                ...riskMail
+              } = await proposalPushContent(
                 userId,
                 fnName,
                 args,
                 (pendingAction as { id: string }).id,
+                { title: notifTitle, body: proposalMessage.slice(0, 100) },
               );
               sendPushNotification(
                 userId,
-                {
-                  title: notifTitle,
-                  body: proposalMessage.slice(0, 100),
-                  url: riskLink,
-                  ...riskMail,
-                },
+                { title: riskTitle, body: riskBody, url: riskLink, ...riskMail },
                 "agent_proposal",
                 // Agent-originated: always ambient (push-bucket.ts).
                 { bucket: "ambient" },

@@ -9,6 +9,7 @@
 import type { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { getUserId, requireAuth } from "../auth.js";
+import { pushPresentationOpenTo } from "../config.js";
 import { meetingPrepRoutes } from "../context/meeting-prep-routes.js";
 import { meetingPrepForUser } from "../context/meeting-prep-surface.js";
 import { prisma } from "../db.js";
@@ -41,6 +42,7 @@ import {
   renderBriefingAnswer,
 } from "./briefing-picks.js";
 import { BRIEFING_SYSTEM_PROMPT } from "./briefing-prompt.js";
+import { briefingPushCopy } from "./briefing-push.js";
 import type { BriefingSignals } from "./briefing-signals.js";
 import { getBriefingStatus } from "./briefing-status.js";
 
@@ -474,11 +476,14 @@ export async function ensureDailyBriefingNotification(
     createdAt: notification.createdAt.toISOString(),
   });
 
+  // NOTIFY_PUSH_PRESENTATION: the NT0 brief copy (counts only) on the device
+  // push; the bell row and the live frame keep the briefing itself.
+  const nt = pushPresentationOpenTo(userId) ? await briefingPushCopy(userId) : null;
   await sendPushNotification(
     userId,
     {
-      title,
-      body: briefingMsg,
+      title: nt?.title ?? title,
+      body: nt?.body ?? briefingMsg,
       url: "/briefing",
       notificationId: notification.id,
     },
