@@ -18,16 +18,19 @@ import {
 import { SHIPPED_LANGUAGES } from "../shipped-languages.js";
 
 describe("shipped languages", () => {
-  it("ships the seven launch languages", () => {
-    expect([...NOTIFICATION_LANGUAGES]).toEqual(["en", "ko", "ja", "zh", "es", "fr", "de"]);
+  it("ships en, ko and zh (the 2026-11-17 cut)", () => {
+    expect([...NOTIFICATION_LANGUAGES]).toEqual(["en", "ko", "zh"]);
   });
 
   it("folds regional tags onto a shipped base and degrades the rest to English", () => {
     expect(resolveNotificationLanguage("zh-Hans")).toBe("zh");
     expect(resolveNotificationLanguage("zh_TW")).toBe("zh");
-    expect(resolveNotificationLanguage("ja-JP")).toBe("ja");
-    expect(resolveNotificationLanguage("es-419")).toBe("es");
-    expect(resolveNotificationLanguage("DE")).toBe("de");
+    expect(resolveNotificationLanguage("ko-KR")).toBe("ko");
+    // Retired on 2026-11-17: a value stored before the cut reads English.
+    expect(resolveNotificationLanguage("ja-JP")).toBe("en");
+    expect(resolveNotificationLanguage("es-419")).toBe("en");
+    expect(resolveNotificationLanguage("DE")).toBe("en");
+    expect(resolveNotificationLanguage("fr")).toBe("en");
     // Not shipped → English, never a blank or a throw.
     expect(resolveNotificationLanguage("pt-BR")).toBe("en");
     expect(resolveNotificationLanguage(null)).toBe("en");
@@ -71,6 +74,11 @@ describe("shipped languages", () => {
     // The legacy titles keep rows written before localization counting.
     expect(URGENT_EMAIL_TITLES).toContain("Urgent email");
     expect(URGENT_EMAIL_TITLES).toContain("긴급 이메일");
+    // Titles of the languages retired on 2026-11-17 stay deduped: rows written
+    // under them are still in the table, and must not ring the mail again.
+    for (const retired of ["緊急メール", "Correo urgente", "E-mail urgent", "Dringende Mail"]) {
+      expect(URGENT_EMAIL_TITLES).toContain(retired);
+    }
     for (const lang of NOTIFICATION_LANGUAGES) {
       expect(URGENT_EMAIL_TITLES).toContain(notificationCopy(lang).urgentMailTitle);
     }

@@ -31,35 +31,11 @@ const COPY: Record<NotificationLanguage, PushActionCopy> = {
     notUrgent: "급하지 않음",
     laterReminderTitle: (subject) => `다시 보기: ${subject}`,
   },
-  ja: {
-    reply: "返信",
-    later: "あとで",
-    notUrgent: "急ぎではない",
-    laterReminderTitle: (subject) => `あとで確認: ${subject}`,
-  },
   zh: {
     reply: "回复",
     later: "稍后",
     notUrgent: "不紧急",
     laterReminderTitle: (subject) => `稍后处理：${subject}`,
-  },
-  es: {
-    reply: "Responder",
-    later: "Más tarde",
-    notUrgent: "No urgente",
-    laterReminderTitle: (subject) => `Seguimiento: ${subject}`,
-  },
-  fr: {
-    reply: "Répondre",
-    later: "Plus tard",
-    notUrgent: "Pas urgent",
-    laterReminderTitle: (subject) => `À suivre : ${subject}`,
-  },
-  de: {
-    reply: "Antworten",
-    later: "Später",
-    notUrgent: "Nicht dringend",
-    laterReminderTitle: (subject) => `Nachfassen: ${subject}`,
   },
 };
 
