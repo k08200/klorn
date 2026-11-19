@@ -3131,6 +3131,8 @@ const zh: Record<string, string> = {
   "settings.org.error.SEATS_INCREASE_CAPPED":
     "这超出了不用付款邮箱地址时可以添加的席位数。付款邮箱的主人可以用自己的 Klorn 账户添加更多（即接收 Paddle 收据邮件的人）。你仍然可以减少席位。",
   "settings.org.error.SEATS_CHANGED": "保存期间席位数已变更。请查看当前席位数后重试。",
+  "settings.org.error.SEATS_CHANGE_IN_FLIGHT":
+    "之前的席位变更仍在处理中，因此未做任何更改。请几分钟后重试。",
   "settings.org.error.RESUME_PAYER_ONLY":
     "保留订阅会重新开始从付款人的银行卡扣款，因此只有支付团队费用的人，或在 Klorn 中设置结束的所有者，可以操作。请让付款人用自己的 Klorn 账户保留订阅（即接收 Paddle 收据邮件的人）。",
   "settings.org.error.BILLING_PROVIDER_READ_FAILED":
