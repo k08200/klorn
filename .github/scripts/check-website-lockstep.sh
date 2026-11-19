@@ -65,11 +65,27 @@ for dir in website/*/; do
 done
 [ "$failed" -eq 0 ] || exit 1
 
+# The first-visit language redirect is inline script, copied into every
+# landing; the skeleton above cannot see script text. Its behaviour is tested
+# in packages/api/src/__tests__/website-language-redirect.test.ts, which runs
+# only when code changes, so a website-only edit to one copy is caught here.
+lang_redirect() {
+  sed -n '/^\/\/ Language: follow the browser preference/,/^})();$/p' "$1"
+}
+[ -n "$(lang_redirect "$EN")" ] || {
+  echo "::error::${EN} has no language redirect block (// Language: follow the browser preference … })();)"
+  failed=1; }
+
 for code in "${langs[@]}"; do
   page="website/${code}/index.html"
   if ! diff <(skeleton "$EN") <(skeleton "$page") > "/tmp/lockstep-${code}.diff"; then
     echo "::error::website EN/${code} structural drift — edit every landing in lockstep (< only in EN, > only in ${code}):"
     cat "/tmp/lockstep-${code}.diff"
+    failed=1
+  fi
+  if ! diff <(lang_redirect "$EN") <(lang_redirect "$page") > "/tmp/lockstep-redirect-${code}.diff"; then
+    echo "::error::website EN/${code} language redirect script differs — keep the copies identical:"
+    cat "/tmp/lockstep-redirect-${code}.diff"
     failed=1
   fi
 done
@@ -350,6 +366,7 @@ done < <(find website -name index.html | sort)
 [ "$failed" -eq 0 ] || exit 1
 
 echo "EN skeleton matches ${#langs[@]} translated landing(s) [${langs[*]}] ($(skeleton "$EN" | wc -l | tr -d ' ') anchors)."
+echo "language redirect script identical on en + [${langs[*]}] ($(lang_redirect "$EN" | wc -l | tr -d ' ') lines)."
 echo "hreflang + sitemap complete for ${#all[@]} language(s) [${all[*]}]."
 echo "${#LOCALIZED_SUBPAGES[@]} subpage(s) × ${#SUB_LANGS[@]} language(s): ${sub_pages} page(s) present, skeleton + hreflang + language menu + in-locale links verified."
 echo "canonical + sitemap + OG card + attribution verified on ${pages} page(s)."

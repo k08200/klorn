@@ -63,6 +63,7 @@ vi.mock("../sentry.js", () => ({ captureError: h.captureError }));
 const { imapMailActions } = await import("../mail/providers/imap.js");
 const {
   IMAP_AUTH_COOLDOWN_MS,
+  IMAP_TRANSIENT_PAUSE_MS,
   IMAP_TRANSPORT_CAPTURE_INTERVAL_MS,
   MAX_CONCURRENT_IMAP_ACTION_SESSIONS,
   MAX_OPS_PER_IMAP_SESSION,
@@ -466,6 +467,102 @@ describe("auth-failure cooldown", () => {
     const result = await actions.markAsRead("u1", msg("a", 1), "a");
     expect(result).toEqual({ success: true });
     expect(h.connect).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("a login refused for the moment (RFC 5530), as the poll reads it", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-30T12:00:00Z"));
+  });
+
+  // imapflow 1.x marks every refused LOGIN authenticationFailed, a busy server's
+  // too (imap-login-refusal-wire.test.ts pins it over real TLS). The poll reads
+  // these codes as "throttled", not "auth" (sync-error-code.ts).
+  const refusedFor = (code: string) =>
+    Object.assign(new Error("Command failed"), {
+      authenticationFailed: true,
+      responseStatus: "NO",
+      serverResponseCode: code,
+    });
+
+  it.each([
+    "UNAVAILABLE",
+    "LIMIT",
+    "INUSE",
+    "SERVERBUG",
+    "unavailable",
+  ])("[%s]: a retryable answer, no password copy, a short pause instead of the cooldown", async (code) => {
+    armServer([1]);
+    h.connect.mockRejectedValueOnce(refusedFor(code));
+
+    const burst = await Promise.all(
+      [1, 1, 1].map((uid) => actions.markAsRead("u1", msg("a", uid), "a")),
+    );
+    for (const result of burst) {
+      expect(result).toEqual({ error: "Could not reach Naver. Try again shortly." });
+    }
+    expect(h.connect).toHaveBeenCalledTimes(1);
+    expect(warnedText()).not.toMatch(/login rejected/i);
+
+    // Within the pause: the same retryable answer, without connecting.
+    vi.setSystemTime(Date.now() + IMAP_TRANSIENT_PAUSE_MS - 1);
+    const paused = await actions.markAsRead("u1", msg("a", 1), "a");
+    expect(paused).toEqual({ error: "Could not reach Naver. Try again shortly." });
+    expect(h.connect).toHaveBeenCalledTimes(1);
+
+    // A minute, not the 15-minute credential cooldown.
+    vi.setSystemTime(Date.now() + 1);
+    const next = await actions.markAsRead("u1", msg("a", 1), "a");
+    expect(next).toEqual({ success: true });
+    expect(h.connect).toHaveBeenCalledTimes(2);
+  });
+
+  it("callers one after another (promo auto-read, the agent) do not log in once each", async () => {
+    armServer([1, 2, 3, 4, 5]);
+    h.connect.mockRejectedValue(refusedFor("UNAVAILABLE"));
+
+    for (const uid of [1, 2, 3, 4, 5]) {
+      const result = await actions.markAsRead("u1", msg("a", uid), "a");
+      expect(result).toEqual({ error: "Could not reach Naver. Try again shortly." });
+    }
+
+    expect(h.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it("is reported like any session failure: once per account per interval", async () => {
+    armServer([1]);
+    h.connect.mockRejectedValue(refusedFor("UNAVAILABLE"));
+
+    await actions.markAsRead("u1", msg("a", 1), "a");
+    vi.setSystemTime(Date.now() + IMAP_TRANSIENT_PAUSE_MS);
+    await actions.markAsRead("u1", msg("a", 1), "a");
+
+    expect(h.connect).toHaveBeenCalledTimes(2);
+    expect(h.captureError).toHaveBeenCalledTimes(1);
+  });
+
+  it("the pause is per credential: another mailbox still connects, a reconnect ends it", async () => {
+    armServer([1]);
+    h.connect.mockRejectedValueOnce(refusedFor("LIMIT"));
+    await actions.markAsRead("u1", msg("a", 1), "a");
+
+    expect(await actions.markAsRead("u1", msg("b", 1), "b")).toEqual({ success: true });
+    cipherOf = (id) => `rotated-${id}`;
+    expect(await actions.markAsRead("u1", msg("a", 1), "a")).toEqual({ success: true });
+    expect(h.connect).toHaveBeenCalledTimes(3);
+  });
+
+  it("an AUTHENTICATIONFAILED refusal still starts the cooldown", async () => {
+    armServer([1]);
+    h.connect.mockRejectedValueOnce(refusedFor("AUTHENTICATIONFAILED"));
+
+    const refused = await actions.markAsRead("u1", msg("a", 1), "a");
+    const blocked = await actions.markAsRead("u1", msg("a", 1), "a");
+
+    expect(refused).toMatchObject({ error: expect.stringMatching(/reconnect/i) });
+    expect(blocked).toMatchObject({ error: expect.stringMatching(/reconnect/i) });
+    expect(h.connect).toHaveBeenCalledTimes(1);
   });
 });
 
