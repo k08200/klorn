@@ -2063,12 +2063,39 @@ describe("auth email fields take an address string, never a coerced scalar", () 
       const res = await app.inject({ method: "POST", url: route, payload: body(email) });
 
       expect(res.statusCode).toBe(400);
-      expect(res.json().message).toMatch(/^body\/email /);
+      expect(res.json().message).toBe("Enter a valid email address");
       expect(userStore.size).toBe(0);
       expect(sendPasswordResetEmailSpy).not.toHaveBeenCalled();
       await app.close();
     });
   }
+
+  async function buildAppWithErrorHandler() {
+    const { handleError } = await import("../error-handler.js");
+    const { authRoutes } = await import("../routes/auth.js");
+    const app = Fastify();
+    app.setErrorHandler(handleError);
+    await app.register(authRoutes, { prefix: "/api/auth" });
+    return app;
+  }
+
+  for (const { route, body } of CASES) {
+    it(`${route} answers the production 400 shape with a sentence, not ajv's pattern`, async () => {
+      const app = await buildAppWithErrorHandler();
+      const res = await app.inject({ method: "POST", url: route, payload: body(12345) });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({ error: "Enter a valid email address" });
+      await app.close();
+    });
+  }
+
+  it("keeps Fastify's own text for a body error that is not the email field", async () => {
+    const app = await buildAppWithErrorHandler();
+    const res = await app.inject({ method: "POST", url: "/api/auth/forgot-password", payload: {} });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "body must have required property 'email'" });
+    await app.close();
+  });
 
   it("still takes an address with surrounding whitespace and capitals (the handler normalizes)", async () => {
     const app = await buildApp();
@@ -2539,6 +2566,33 @@ describe("POST /api/auth/resend-verification", () => {
     const after = userStore.get("user-1")!;
     expect(after.verifyToken).toBe(before.verifyToken);
     expect(after.verifyTokenExp).toEqual(before.verifyTokenExp);
+    await app.close();
+  });
+
+  it("mails nothing when another request replaced the link after this one read it", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "raced@example.com");
+    sendVerificationEmailSpy.mockClear();
+    const { prisma } = await import("../db.js");
+    const updateMany = vi.mocked(prisma.user.updateMany);
+    const storeUpdateMany = updateMany.getMockImplementation()!;
+    // A concurrent request's claim lands between this request's read and its own.
+    updateMany.mockImplementationOnce(async (args) => {
+      const current = userStore.get("user-1")!;
+      userStore.set("user-1", { ...current, verifyToken: "hash-from-the-other-request" });
+      return storeUpdateMany(args);
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/resend-verification",
+      headers: authHeader(token),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    expect(sendVerificationEmailSpy).not.toHaveBeenCalled();
+    expect(userStore.get("user-1")?.verifyToken).toBe("hash-from-the-other-request");
     await app.close();
   });
 

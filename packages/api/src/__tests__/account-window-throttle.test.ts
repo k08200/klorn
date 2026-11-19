@@ -2,7 +2,11 @@
  * The shared per-address window (login, register, password reset). Its map is
  * capped, and a flood of new addresses keeps it at the cap: the cost of one
  * new key there has to stay constant, not grow with the cap (the API runs on
- * one 0.1-CPU instance). Measured as windows examined, never as wall time.
+ * one 0.1-CPU instance). Measured as walks over the map and windows examined,
+ * never as wall time. A walk starts at the Map's front, where V8 also skips the
+ * slots of deleted entries, so walks are counted on their own: one walk per
+ * new key at the cap would cost up to the map's capacity each time even when
+ * it examines a single window.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAccountWindowThrottle } from "../security/account-window-throttle.js";
@@ -30,9 +34,11 @@ describe("createAccountWindowThrottle — cost at the cap", () => {
 
     for (let i = 0; i < cap + flood; i++) throttle.record(`flood-${i}@example.com`);
 
-    expect(throttle.trackedCount()).toBe(cap);
+    expect(throttle.trackedCount()).toBeLessThanOrEqual(cap);
     // A full scan per insert at the cap would be ~cap × flood (a million here).
     expect(throttle.sweepVisitsForTests()).toBeLessThanOrEqual(3 * (cap + flood));
+    // One walk makes room for many new keys, not one.
+    expect(throttle.sweepPassesForTests()).toBeLessThanOrEqual(flood / 10);
   });
 
   it("drops expired windows without a full scan per insert", () => {
@@ -51,6 +57,7 @@ describe("createAccountWindowThrottle — cost at the cap", () => {
     // Every expired window is examined once, when it is dropped.
     expect(throttle.trackedCount()).toBe(cap);
     expect(throttle.sweepVisitsForTests() - before).toBeLessThanOrEqual(3 * cap);
+    expect(throttle.sweepPassesForTests()).toBe(1);
     expect(throttle.remainingMs("old-0@example.com")).toBe(0);
   });
 });
@@ -95,6 +102,34 @@ describe("createAccountWindowThrottle — limits and order", () => {
     expect(throttle.remainingMs("c@example.com")).toBe(WINDOW_MS / 2);
     expect(throttle.remainingMs("d@example.com")).toBe(WINDOW_MS);
     expect(throttle.remainingMs("e@example.com")).toBe(WINDOW_MS);
+  });
+
+  it("walks the map only when a new window finds it full", () => {
+    const throttle = createAccountWindowThrottle({
+      maxAttempts: 5,
+      windowMs: WINDOW_MS,
+      maxTracked: 100,
+    });
+    for (let i = 0; i < 100; i++) throttle.record(`k-${i}@example.com`);
+    for (let i = 0; i < 100; i++) throttle.record(`k-${i}@example.com`);
+    expect(throttle.sweepPassesForTests()).toBe(0);
+  });
+
+  it("drops a key's own expired window before evicting a live one at the cap", () => {
+    const throttle = createAccountWindowThrottle({
+      maxAttempts: 1,
+      windowMs: WINDOW_MS,
+      maxTracked: 2,
+    });
+    throttle.record("a@example.com");
+    vi.advanceTimersByTime(WINDOW_MS / 2);
+    throttle.record("b@example.com");
+    vi.advanceTimersByTime(WINDOW_MS / 2);
+
+    throttle.record("a@example.com");
+
+    expect(throttle.remainingMs("a@example.com")).toBe(WINDOW_MS);
+    expect(throttle.remainingMs("b@example.com")).toBe(WINDOW_MS / 2);
   });
 
   it("keeps counting inside a window without moving the key", () => {

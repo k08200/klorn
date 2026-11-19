@@ -9,13 +9,17 @@
  *
  * The map holds a digest of each address, never the address itself.
  *
- * Cost: the map is kept in window-start order (a key whose window restarts is
- * moved to the back), so expired windows are always at the front. A new window
- * drops expired windows from the front and stops at the first live one, and at
- * the cap evicts from the front: each window is examined about once over its
- * life, so a flood of new addresses costs constant work per request instead of
- * a scan of the whole map. A clock that steps back can leave an expired window
- * behind a live one until it reaches the front; the cap still bounds the map.
+ * Cost under a flood of new addresses (the API runs on one 0.1-CPU
+ * instance). The map is kept in window-start order: a key whose window
+ * restarts is moved to the back, so expired windows sit at the front. Nothing
+ * is swept while the map is under its cap (an expired window is dropped when
+ * its key is next read). A new window that finds the map full makes room in
+ * one walk from the front: it drops expired windows, and if that is not
+ * enough evicts the windows that started first until EVICTION_BATCH_SHARE of
+ * the cap is free. So a walk happens at most once per that many new keys, and
+ * its cost is shared by them, including the deleted slots V8's Map skips at
+ * its front. A clock that steps back can leave an expired window behind a
+ * live one until it reaches the front; the cap still bounds the map.
  *
  * In-process, like notify/sms-limiter.ts: a restart resets the counters, which
  * only ever fails open, and more than one replica multiplies the threshold by
@@ -29,10 +33,10 @@ export interface AccountWindowThrottleOptions {
   maxAttempts: number;
   windowMs: number;
   /**
-   * Hard ceiling on tracked keys. When a new window would exceed it (after
-   * dropping expired windows), the windows that started first are evicted —
-   * the limiter fails open rather than letting unique-key floods grow the map
-   * without bound.
+   * Hard ceiling on tracked keys. When a new window finds the map full and
+   * dropping expired windows is not enough, the windows that started first
+   * are evicted — the limiter fails open rather than letting unique-key floods
+   * grow the map without bound.
    */
   maxTracked: number;
 }
@@ -47,8 +51,10 @@ export interface AccountWindowThrottle {
   reset(): void;
   /** Test helper: current number of tracked windows. */
   trackedCount(): number;
-  /** Test helper: windows examined by expiry sweeps and cap eviction so far. */
+  /** Test helper: windows examined while making room so far. */
   sweepVisitsForTests(): number;
+  /** Test helper: walks over the map (each starts at its front) so far. */
+  sweepPassesForTests(): number;
 }
 
 interface AttemptWindow {
@@ -61,6 +67,13 @@ interface AttemptWindow {
 /** Characters of the base64url SHA-256 kept per key (132 bits). */
 const KEY_DIGEST_CHARS = 22;
 
+/**
+ * Share of the cap one walk frees when a new window finds the map full: 500
+ * windows at a 50k cap. The evicted windows are the oldest, the ones the next
+ * new keys would have evicted one by one.
+ */
+const EVICTION_BATCH_SHARE = 0.01;
+
 /** Fixed-size key: the map never holds the address itself. */
 function digestKey(key: string): string {
   return createHash("sha256").update(key).digest("base64url").slice(0, KEY_DIGEST_CHARS);
@@ -70,34 +83,28 @@ export function createAccountWindowThrottle(
   options: AccountWindowThrottleOptions,
 ): AccountWindowThrottle {
   const { maxAttempts, windowMs, maxTracked } = options;
+  /** The size one walk brings a full map down to. */
+  const sizeAfterRoom = maxTracked - Math.max(1, Math.ceil(maxTracked * EVICTION_BATCH_SHARE));
   /** Insertion order is window-start order: see the module doc. */
   const windows = new Map<string, AttemptWindow>();
   let sweepVisits = 0;
+  let sweepPasses = 0;
 
   const isExpired = (w: AttemptWindow, now: number) => now - w.windowStartedAt >= windowMs;
 
-  /** Drop expired windows from the front; stop at the first live one. */
-  const dropExpiredFromFront = (now: number) => {
+  /** One walk from the front: drop expired windows, then evict the oldest live ones. */
+  const makeRoom = (now: number) => {
+    sweepPasses++;
     for (const [key, w] of windows) {
       sweepVisits++;
-      if (!isExpired(w, now)) return;
-      windows.delete(key);
-    }
-  };
-
-  /** Evict the windows that started first until one more fits under the cap. */
-  const evictOldestToFit = () => {
-    for (const key of windows.keys()) {
-      if (windows.size < maxTracked) return;
-      sweepVisits++;
+      if (!isExpired(w, now) && windows.size <= sizeAfterRoom) return;
       windows.delete(key);
     }
   };
 
   const startWindow = (digest: string, now: number) => {
     windows.delete(digest);
-    dropExpiredFromFront(now);
-    evictOldestToFit();
+    if (windows.size >= maxTracked) makeRoom(now);
     windows.set(digest, { count: 1, windowStartedAt: now });
   };
 
@@ -136,6 +143,9 @@ export function createAccountWindowThrottle(
     },
     sweepVisitsForTests() {
       return sweepVisits;
+    },
+    sweepPassesForTests() {
+      return sweepPasses;
     },
   };
 }
