@@ -25,31 +25,7 @@ const TITLES: Record<NotificationLanguage, KindTitles> = {
     mention: "회원님 멘션",
     opt_in: "팔로우한 채널",
   },
-  ja: {
-    dm: "ダイレクトメッセージ",
-    group_dm: "グループメッセージ",
-    mention: "あなたへのメンション",
-    opt_in: "フォロー中のチャンネル",
-  },
   zh: { dm: "私信", group_dm: "群组消息", mention: "有人提到了你", opt_in: "关注的频道" },
-  es: {
-    dm: "Mensaje directo",
-    group_dm: "Mensaje de grupo",
-    mention: "Te mencionaron",
-    opt_in: "Canal que sigues",
-  },
-  fr: {
-    dm: "Message direct",
-    group_dm: "Message de groupe",
-    mention: "On vous a mentionné",
-    opt_in: "Canal suivi",
-  },
-  de: {
-    dm: "Direktnachricht",
-    group_dm: "Gruppennachricht",
-    mention: "Du wurdest erwähnt",
-    opt_in: "Gefolgter Kanal",
-  },
 };
 
 /** Every Slack push title starts with this; disconnect finds Slack bell rows by it. */
