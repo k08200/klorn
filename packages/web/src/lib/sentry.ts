@@ -12,7 +12,10 @@ import { scrubBreadcrumb, scrubEvent } from "./sentry-scrub";
 const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN || "";
 
 type SentryModule = Awaited<typeof import("@sentry/browser")>;
-type BrowserOptions = Parameters<SentryModule["init"]>[0];
+type BrowserOptions = NonNullable<Parameters<SentryModule["init"]>[0]>;
+
+/** Default integrations Klorn turns off: console arguments are app text (a mail's among it); the culture context is the user's timezone. */
+const DROPPED_INTEGRATIONS = new Set(["Console", "CultureContext"]);
 
 /**
  * The options `Sentry.init` gets, built in one place so a test can run the real
@@ -45,10 +48,14 @@ export function buildSentryBrowserOptions(dsn: string, environment: string): Bro
     },
     // v10 behaviour: no synthetic stack trace on captureMessage or a non-Error value.
     attachStacktrace: false,
-    // Console arguments are app text, a mail's among it: never a breadcrumb.
-    integrations: (defaults) => defaults.filter((integration) => integration.name !== "Console"),
+    integrations: (defaults) =>
+      defaults.filter((integration) => !DROPPED_INTEGRATIONS.has(integration.name)),
     beforeBreadcrumb: scrubBreadcrumb,
     beforeSend: scrubEvent,
+    // Nothing in the app sends logs or metrics, and spans are off (tracesSampleRate 0).
+    // These bypass beforeSend, so they are dropped outright should a call appear.
+    beforeSendLog: () => null,
+    beforeSendMetric: () => null,
   };
 }
 

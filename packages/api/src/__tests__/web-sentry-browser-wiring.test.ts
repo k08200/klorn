@@ -41,7 +41,8 @@ const SECRETS = [
   MAIL_TEXT,
 ];
 
-const PAGE_URL = `https://app.klorn.ai/email/thread?id=${MESSAGE_ID}&q=${encodeURIComponent(MAIL_ADDRESS)}#${SEARCH_TERM}`;
+const EMAIL_ROW_ID = "cm9wiringrow01";
+const PAGE_URL = `https://app.klorn.ai/email/${EMAIL_ROW_ID}?thread=${MESSAGE_ID}&q=${encodeURIComponent(MAIL_ADDRESS)}#${SEARCH_TERM}`;
 const REFERRER = `https://accounts.google.com/o/oauth2/auth?code=${encodeURIComponent(OAUTH_CODE)}`;
 const API_URL = `https://api.klorn.ai/api/email/search?q=${SEARCH_TERM}&token=${BEARER}`;
 const TEST_DSN = "https://public@o0.ingest.sentry.io/0";
@@ -120,7 +121,8 @@ describe("browser Sentry on the wire", () => {
 
     expect(payload).toContain("inbox load failed");
     expect(payload).toContain("inbox.load");
-    expect(payload).toContain("https://app.klorn.ai/email/thread");
+    // The path's opaque row id is kept on purpose (sentry-scrub.ts header).
+    expect(payload).toContain(`https://app.klorn.ai/email/${EMAIL_ROW_ID}"`);
     expectNothingIdentifying(payload);
   });
 
@@ -149,11 +151,25 @@ describe("browser Sentry on the wire", () => {
     expectNothingIdentifying(payload);
   });
 
-  it("does not let Sentry infer the user's IP from the request", async () => {
+  it("redacts the query of an API error body (a dark route's 404 quotes the raw URL)", async () => {
+    const body = JSON.stringify({
+      message: `Route GET:/api/email/search?q=${SEARCH_TERM},${MESSAGE_ID} not found`,
+      error: "Not Found",
+      statusCode: 404,
+    });
+    const payload = await captureLikeTheApp(new Error(`API 404: ${body}`), { scope: "search" });
+
+    expect(payload).toContain("Route GET:/api/email/search");
+    expectNothingIdentifying(payload);
+  });
+
+  it("does not let Sentry infer the user's IP, and sends no timezone", async () => {
     const payload = await captureLikeTheApp(new Error("ip probe"), { scope: "ip" });
 
     expect(payload).toContain("ip probe");
-    expect(payload).not.toMatch(/"infer_ip":"auto"/);
+    expect(payload).toContain('"infer_ip":"never"');
     expect(payload).not.toContain("ip_address");
+    expect(payload).not.toContain('"culture"');
+    expect(payload).not.toContain("timezone");
   });
 });

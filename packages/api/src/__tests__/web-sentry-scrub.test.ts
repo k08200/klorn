@@ -34,28 +34,98 @@ describe("scrubText", () => {
     expect(scrubText("q=a.b%40example.com")).toBe(REDACTED_ADDRESS);
   });
 
-  it("keeps an @ that is not an address", () => {
-    expect(scrubText("@mention and user@localhost")).toBe("@mention and user@localhost");
+  it.each([
+    "mailto:a.b@example.com?subject=hi",
+    "'a.b@example.com'",
+    "o'brien@example.com",
+    "a.b%2540example.com",
+    "a.b&#64;example.com",
+    "a.b&#x40;example.com",
+    "a.b&commat;example.com",
+    "a.b＠example.com",
+    "bob@gmail.com.",
+  ])("redacts the address in %s", (text) => {
+    expect(scrubText(text)).toBe(REDACTED_ADDRESS);
   });
 
-  it("redacts bearer tokens and JWTs, cuts URL queries", () => {
-    expect(scrubText("Authorization: Bearer abc.def")).toBe(
+  it("redacts only the address part of a bracketed address or a URL path", () => {
+    expect(scrubText("To: Bob <a.b@example.com>")).toBe(`To: Bob <${REDACTED_ADDRESS}>`);
+    expect(scrubText("/email/thread/bob@example.com")).toBe(`/email/thread/${REDACTED_ADDRESS}`);
+    expect(scrubText("https://user:pw@app.klorn.ai/x")).toBe(`https://${REDACTED_ADDRESS}/x`);
+  });
+
+  it.each([
+    "@mention and user@localhost",
+    "/./node_modules/@tanstack/react-query/build/modern/useQuery.js",
+    "https://cdn.jsdelivr.net/npm/@sentry/browser@8/bundle.js",
+    "klorn-web@1.2.3",
+    "Token refresh failed",
+    "The token is invalid",
+    "Basic validation failed",
+    "error code: ECONNREFUSED",
+  ])("keeps %s", (text) => {
+    expect(scrubText(text)).toBe(text);
+  });
+
+  it("redacts bearer tokens, JWTs, key=value secrets and provider keys", () => {
+    expect(scrubText("Authorization: Bearer abc123def456")).toBe(
       `Authorization: Bearer ${REDACTED_SECRET}`,
     );
     expect(scrubText("token eyJa.eyJb.sig")).toBe(`token ${REDACTED_SECRET}`);
-    expect(scrubText("GET https://api.klorn.ai/x?code=123 failed")).toBe(
-      "GET https://api.klorn.ai/x failed",
+    expect(scrubText("#id_token=eyJhbGci.eyJzdWIi.c2ln&x=1")).not.toContain("eyJ");
+    expect(scrubText("access_token=opaque-value-123 end")).toBe(
+      `access_token=${REDACTED_SECRET} end`,
+    );
+    expect(scrubText("form code=4/0AbOauthCode done")).toBe(`form code=${REDACTED_SECRET} done`);
+    expect(scrubText("key sk-ant-api03-abcdefghij and AIzaSyQQQQQQQQQQQQQQQQQQQQQQQ")).toBe(
+      `key ${REDACTED_SECRET} and ${REDACTED_SECRET}`,
     );
   });
 
-  it("cuts long text before scanning it", () => {
-    const scrubbed = scrubText(`${"a".repeat(100_000)}@example.com`);
-    expect(scrubbed.length).toBeLessThan(2_100);
-    expect(scrubbed).not.toContain("example.com");
+  it.each([
+    ["GET https://api.klorn.ai/x?code=123 failed", "GET https://api.klorn.ai/x failed"],
+    ["Route GET:/api/email/search?q=secret not found", "Route GET:/api/email/search not found"],
+    ["https://api.klorn.ai/x?ids=1,2,3&q=bob,smith", "https://api.klorn.ai/x"],
+    ["/api/search?filter[subject]=merger", "/api/search"],
+    ["/api/search?fields=(a)&q=quarterly", "/api/search"],
+    ["api.klorn.ai/api/email?q=secret", "api.klorn.ai/api/email"],
+    ["/email?q='x'&code=secret", "/email"],
+    ["What? Nothing to cut.", "What? Nothing to cut."],
+  ])("cuts the URL query in %s", (input, output) => {
+    expect(scrubText(input)).toBe(output);
+  });
+
+  it("scrubs before cutting, so an address across the cut leaves no fragment", () => {
+    const filler = "word ".repeat(399);
+    const scrubbed = scrubText(`${filler}jane.doe@example.com and more text`);
+    expect(scrubbed).not.toContain("jane");
+    expect(scrubbed.length).toBeLessThanOrEqual(2_001);
+  });
+
+  it("bounds what it scans: one huge token is dropped, long text is cut at a space", () => {
+    expect(scrubText(`${"a".repeat(100_000)}@example.com`)).not.toContain("example.com");
+    expect(scrubText(`${"word ".repeat(10_000)}bob@example.com`)).not.toContain("bob@");
+  });
+
+  it("stays fast on adversarial input", () => {
+    const started = performance.now();
+    scrubText("/".repeat(19_000));
+    scrubText(`x@${"a.".repeat(9_000)}1`);
+    scrubText("%25".repeat(6_000));
+    scrubText(`${"a@".repeat(9_000)}`);
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 });
 
 describe("scrubDeep", () => {
+  it("scrubs keys too, and keeps an own __proto__ key as a key", () => {
+    expect(scrubDeep({ "bob@example.com": 1 })).toEqual({ [REDACTED_ADDRESS]: 1 });
+    const parsed = JSON.parse('{"__proto__": "x@y.io"}') as object;
+    expect(Object.getOwnPropertyDescriptor(scrubDeep(parsed), "__proto__")?.value).toBe(
+      REDACTED_ADDRESS,
+    );
+  });
+
   it("scrubs nested strings and leaves other values alone", () => {
     expect(scrubDeep({ to: ["x@y.io"], n: 3, ok: true, none: null })).toEqual({
       to: [REDACTED_ADDRESS],
@@ -115,6 +185,16 @@ describe("scrubBreadcrumb", () => {
 });
 
 describe("scrubEvent", () => {
+  it("strips credentials and addresses from the request URL, keeps the SDK's own fields", () => {
+    const event = scrubEvent({
+      type: undefined,
+      release: "klorn-web@1.2.3",
+      request: { url: "https://user:pw@app.klorn.ai/email/thread/bob@example.com?x=1" },
+    });
+    expect(event.request).toEqual({ url: `https://app.klorn.ai/email/thread/${REDACTED_ADDRESS}` });
+    expect(event.release).toBe("klorn-web@1.2.3");
+  });
+
   it("drops the user, request headers, cookies and query; scrubs the rest", () => {
     const event = scrubEvent({
       type: undefined,
