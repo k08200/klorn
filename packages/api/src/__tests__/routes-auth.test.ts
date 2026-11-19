@@ -2039,6 +2039,50 @@ describe("POST /api/auth/forgot-password", () => {
   });
 });
 
+// Fastify's default ajv runs with coerceTypes: "array", so `type: "string"`
+// alone turned `{"email":123}` into "123" and let it through.
+describe("auth email fields take an address string, never a coerced scalar", () => {
+  beforeEach(resetStores);
+
+  const CASES: ReadonlyArray<{ route: string; body: (email: unknown) => Record<string, unknown> }> =
+    [
+      { route: "/api/auth/register", body: (email) => ({ email, password: "testpassword123" }) },
+      { route: "/api/auth/login", body: (email) => ({ email, password: "testpassword123" }) },
+      { route: "/api/auth/forgot-password", body: (email) => ({ email }) },
+    ];
+
+  for (const { route, body } of CASES) {
+    it.each([
+      ["a number", 12345],
+      ["a boolean", true],
+      ["a string with no @", "not-an-address"],
+      ["a string with two @", "a@b@example.com"],
+      ["a string with inner whitespace", "a b@example.com"],
+    ])(`${route} answers 400 for %s`, async (_label, email) => {
+      const app = await buildApp();
+      const res = await app.inject({ method: "POST", url: route, payload: body(email) });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().message).toMatch(/^body\/email /);
+      expect(userStore.size).toBe(0);
+      expect(sendPasswordResetEmailSpy).not.toHaveBeenCalled();
+      await app.close();
+    });
+  }
+
+  it("still takes an address with surrounding whitespace and capitals (the handler normalizes)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { email: "  Mixed.Case+tag@Example.com ", password: "testpassword123" },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(userByEmail.has("mixed.case+tag@example.com")).toBe(true);
+    await app.close();
+  });
+});
+
 describe("POST /api/auth/forgot-password — per-address window and link reuse", () => {
   const T0 = new Date("2026-11-18T09:00:00.000Z").getTime();
   const MINUTE = 60 * 1000;
@@ -2472,6 +2516,29 @@ describe("POST /api/auth/resend-verification", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
     expect(sendVerificationEmailSpy).toHaveBeenCalledWith("unver@example.com", expect.any(String));
+    await app.close();
+  });
+
+  it("answers 502 and keeps the previous link when the mail did not go out", async () => {
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "unsent@example.com");
+    const before = userStore.get("user-1")!;
+    expect(before.verifyToken).toBeTruthy();
+    sendVerificationEmailSpy.mockResolvedValueOnce(false);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/resend-verification",
+      headers: authHeader(token),
+    });
+
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toEqual({
+      error: "The verification email could not be sent. Try again.",
+    });
+    const after = userStore.get("user-1")!;
+    expect(after.verifyToken).toBe(before.verifyToken);
+    expect(after.verifyTokenExp).toEqual(before.verifyTokenExp);
     await app.close();
   });
 

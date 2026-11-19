@@ -153,12 +153,29 @@ export function isDemoUser(userId: string): boolean {
   return userId === DEMO_USER_ID;
 }
 
+/**
+ * The email field of an auth body. Fastify's default ajv runs with
+ * coerceTypes: "array", so `type: "string"` alone turns `123` or `true` into
+ * "123" / "true" and the route ran on it (register created an account named
+ * "12345"). The pattern is what refuses a coerced scalar: one "@" between
+ * runs of non-space characters. Surrounding whitespace is allowed because the
+ * handlers trim (normalizeEmail), and a dotless domain because a self-hosted
+ * deployment may use one. Linear: the classes on each side of every
+ * quantifier are disjoint.
+ */
+const authEmailSchema = {
+  type: "string",
+  minLength: 3,
+  maxLength: 320,
+  pattern: "^\\s*[^\\s@]+@[^\\s@]+\\s*$",
+} as const;
+
 const registerBodySchema = {
   type: "object",
   additionalProperties: false,
   required: ["email", "password"],
   properties: {
-    email: { type: "string", minLength: 3, maxLength: 320 },
+    email: authEmailSchema,
     password: { type: "string", minLength: 1, maxLength: 200 },
     name: { type: "string", minLength: 1, maxLength: 120 },
     // First-touch inflow attribution the login surface captured. 300 mirrors
@@ -173,7 +190,7 @@ const loginBodySchema = {
   additionalProperties: false,
   required: ["email", "password"],
   properties: {
-    email: { type: "string", minLength: 3, maxLength: 320 },
+    email: authEmailSchema,
     password: { type: "string", minLength: 1, maxLength: 200 },
   },
 } as const;
@@ -255,7 +272,7 @@ const forgotPasswordBodySchema = {
   additionalProperties: false,
   required: ["email"],
   properties: {
-    email: { type: "string", minLength: 3, maxLength: 320 },
+    email: authEmailSchema,
   },
 } as const;
 
@@ -1939,8 +1956,18 @@ export function authRoutes(app: FastifyInstance) {
         data: { verifyToken: verifyTokenHash, verifyTokenExp },
       });
 
-      await sendVerificationEmail(user.email, rawVerifyToken);
-      return reply.send({ success: true });
+      const sent = await sendVerificationEmail(user.email, rawVerifyToken);
+      if (sent) return reply.send({ success: true });
+      // Nobody holds the new link: put the previous one back while the new
+      // one is still the stored one (issueResetLink does the same), and do
+      // not claim a mail went out.
+      await prisma.user.updateMany({
+        where: { id: user.id, verifyToken: verifyTokenHash },
+        data: { verifyToken: user.verifyToken, verifyTokenExp: user.verifyTokenExp },
+      });
+      return reply
+        .code(502)
+        .send({ error: "The verification email could not be sent. Try again." });
     },
   );
 
