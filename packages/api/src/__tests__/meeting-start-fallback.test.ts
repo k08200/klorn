@@ -97,7 +97,6 @@ describe("getUpcomingMeetings — the start ring's stored fallback", () => {
     const [{ where }] = db.calendarFindMany.mock.calls[0] as [{ where: Record<string, unknown> }];
     expect(where).toMatchObject({
       userId: "u1",
-      provider: "GOOGLE",
       sourceAccountId: null,
       allDay: false,
       externalId: { not: null },

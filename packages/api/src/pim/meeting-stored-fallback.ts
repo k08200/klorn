@@ -11,7 +11,8 @@
  * event id ([id] marker on its bell row), so a later live read that does
  * succeed cannot ring the meeting again.
  *
- * Rows read: the primary Google calendar (no linked account; an external id),
+ * Rows read: the primary Google calendar (no linked account; an external id —
+ * readers never branch on a provider name, calendar-outlook-read.test.ts),
  * timed, starting inside the window, with a join link pim/meeting.ts would find
  * (meeting-start-ring.ts ringsAtStart) — minus any meeting whose heads-up
  * already rang (its bell key `meeting-prep:<rowId>:<startMs>`), so one meeting
@@ -51,7 +52,9 @@ export async function storedStartRingMeetings(userId: string, now: Date): Promis
   const rows = await prisma.calendarEvent.findMany({
     where: {
       userId,
-      provider: "GOOGLE",
+      // The primary (Google login) calendar as meeting-start-ring.ts defines it:
+      // no linked account and an external id (a LOCAL row has none; device and
+      // linked rows carry their account).
       sourceAccountId: null,
       externalId: { not: null },
       allDay: false,
