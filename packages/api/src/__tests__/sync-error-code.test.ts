@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const updateMany = vi.hoisted(() => vi.fn());
 vi.mock("../db.js", () => ({ prisma: { linkedInboxAccount: { updateMany } }, db: {} }));
 
-const { imapSyncErrorCode, recordSyncError } = await import("../mail/sync-error-code.js");
+const { imapSyncErrorCode, isCredentialRefusal, recordSyncError } = await import(
+  "../mail/sync-error-code.js"
+);
 
 describe("imapSyncErrorCode", () => {
   it("maps a refused login, a dead host, and anything else to short codes", () => {
@@ -24,6 +26,27 @@ describe("imapSyncErrorCode", () => {
     expect(imapSyncErrorCode(refused())).toBe("auth");
     expect(imapSyncErrorCode(refused("UNAVAILABLE"))).toBe("throttled");
     expect(imapSyncErrorCode(refused("limit"))).toBe("throttled");
+  });
+
+  it("reads a throttled command (Microsoft 365) as throttled, never as a refused password", () => {
+    // imapflow 1.x marks a throttled LOGIN authenticationFailed as well.
+    const throttledLogin = Object.assign(new Error("Command failed"), {
+      authenticationFailed: true,
+      responseStatus: "BAD",
+      code: "ETHROTTLE",
+    });
+    expect(isCredentialRefusal(throttledLogin)).toBe(false);
+    expect(imapSyncErrorCode(throttledLogin)).toBe("throttled");
+    // A throttled FETCH or SELECT carries the code alone.
+    expect(imapSyncErrorCode(Object.assign(new Error("x"), { code: "ETHROTTLE" }))).toBe(
+      "throttled",
+    );
+    // An explicit AUTHENTICATIONFAILED still wins over the throttle text.
+    const refusedAnyway = Object.assign(throttledLogin, {
+      serverResponseCode: "AUTHENTICATIONFAILED",
+    });
+    expect(isCredentialRefusal(refusedAnyway)).toBe(true);
+    expect(imapSyncErrorCode(refusedAnyway)).toBe("auth");
   });
 });
 
