@@ -7,9 +7,50 @@
  * Captures unhandled errors and provides manual captureError() helper.
  */
 
+import { scrubBreadcrumb, scrubEvent } from "./sentry-scrub";
+
 const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN || "";
 
 type SentryModule = Awaited<typeof import("@sentry/browser")>;
+type BrowserOptions = Parameters<SentryModule["init"]>[0];
+
+/**
+ * The options `Sentry.init` gets, built in one place so a test can run the real
+ * SDK with them (api/src/__tests__/web-sentry-browser-wiring.test.ts).
+ *
+ * @sentry/browser 11 collects everything unless told otherwise: `dataCollection`
+ * defaults turn on `userInfo` (Sentry then infers the IP from the request), raw
+ * headers and URL queries. Each is turned off here, and the scrub hooks
+ * (sentry-scrub.ts) run on every event and breadcrumb whatever the SDK collects.
+ */
+export function buildSentryBrowserOptions(dsn: string, environment: string): BrowserOptions {
+  return {
+    dsn,
+    environment,
+    tracesSampleRate: 0,
+    replaysSessionSampleRate: 0,
+    replaysOnErrorSampleRate: 0,
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      httpBodies: [],
+      urlQueryParams: false,
+      graphQL: { document: false, variables: false },
+      genAI: { inputs: false, outputs: false },
+      mcp: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+      stackFrameVariables: false,
+    },
+    // v10 behaviour: no synthetic stack trace on captureMessage or a non-Error value.
+    attachStacktrace: false,
+    // Console arguments are app text, a mail's among it: never a breadcrumb.
+    integrations: (defaults) => defaults.filter((integration) => integration.name !== "Console"),
+    beforeBreadcrumb: scrubBreadcrumb,
+    beforeSend: scrubEvent,
+  };
+}
 
 let initialized = false;
 let sentryPromise: Promise<SentryModule | null> | null = null;
@@ -24,13 +65,7 @@ async function ensureSentry(): Promise<SentryModule | null> {
   const Sentry = await loadSentry();
   if (!Sentry) return null;
   if (!initialized) {
-    Sentry.init({
-      dsn: DSN,
-      environment: process.env.NODE_ENV || "development",
-      tracesSampleRate: 0,
-      replaysSessionSampleRate: 0,
-      replaysOnErrorSampleRate: 0,
-    });
+    Sentry.init(buildSentryBrowserOptions(DSN, process.env.NODE_ENV || "development"));
     initialized = true;
   }
   return Sentry;
