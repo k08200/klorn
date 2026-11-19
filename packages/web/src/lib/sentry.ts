@@ -14,26 +14,19 @@ type SentryModule = Awaited<typeof import("@sentry/browser")>;
 let initialized = false;
 let sentryPromise: Promise<SentryModule | null> | null = null;
 
-function loadSentry(): Promise<SentryModule | null> {
+/** The SDK, initialised once with Klorn's options (sentry-options.ts); null without a DSN or a window. */
+function ensureSentry(): Promise<SentryModule | null> {
   if (!DSN || typeof window === "undefined") return Promise.resolve(null);
-  sentryPromise ??= import("@sentry/browser");
+  sentryPromise ??= Promise.all([import("@sentry/browser"), import("./sentry-options")]).then(
+    ([Sentry, { buildSentryBrowserOptions }]) => {
+      if (!initialized) {
+        Sentry.init(buildSentryBrowserOptions(DSN, process.env.NODE_ENV || "development"));
+        initialized = true;
+      }
+      return Sentry;
+    },
+  );
   return sentryPromise;
-}
-
-async function ensureSentry(): Promise<SentryModule | null> {
-  const Sentry = await loadSentry();
-  if (!Sentry) return null;
-  if (!initialized) {
-    Sentry.init({
-      dsn: DSN,
-      environment: process.env.NODE_ENV || "development",
-      tracesSampleRate: 0,
-      replaysSessionSampleRate: 0,
-      replaysOnErrorSampleRate: 0,
-    });
-    initialized = true;
-  }
-  return Sentry;
 }
 
 export function initSentryClient(): void {
