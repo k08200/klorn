@@ -152,7 +152,7 @@ describe("the PUSH notification follows the user's notification language", () =>
   });
 
   it("keeps the subject as written: only Klorn's own words are translated", async () => {
-    seed("ja");
+    seed("zh");
 
     await judge("Q4 contract — please sign");
 
@@ -200,8 +200,21 @@ describe("the 7-day dedupe does not depend on the title's language", () => {
     expect(notifications()).toHaveLength(1);
   });
 
+  it.each([
+    "緊急メール",
+    "Correo urgente",
+    "E-mail urgent",
+    "Dringende Mail",
+  ])("a row titled in a retired language (%s) still silences the mail", async (title) => {
+    seed("ko", [priorRow(title)]);
+
+    await judge();
+
+    expect(sendPushNotification).not.toHaveBeenCalled();
+  });
+
   it("the older Korean urgent title the sweep wrote still counts", async () => {
-    seed("de", [priorRow("긴급 이메일")]);
+    seed("zh", [priorRow("긴급 이메일")]);
 
     await judge();
 
@@ -211,7 +224,7 @@ describe("the 7-day dedupe does not depend on the title's language", () => {
   it.each(
     NOTIFICATION_LANGUAGES,
   )("a row titled in %s silences the mail whatever the user's language now is", async (lang) => {
-    seed(lang === "en" ? "fr" : "en", [priorRow(notificationCopy(lang).urgentMailTitle)]);
+    seed(lang === "en" ? "ko" : "en", [priorRow(notificationCopy(lang).urgentMailTitle)]);
 
     await judge();
 

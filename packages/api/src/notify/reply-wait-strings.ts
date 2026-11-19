@@ -8,14 +8,13 @@
  * reads English: a missing translation must never cost a notification.
  */
 
-export const REPLY_WAIT_LANGUAGES = ["en", "ko", "zh"] as const;
-export type ReplyWaitLanguage = (typeof REPLY_WAIT_LANGUAGES)[number];
+import { type ShippedLanguage, toShippedLanguage } from "../shipped-languages.js";
 
+export type ReplyWaitLanguage = ShippedLanguage;
+
+/** A shipped language (shipped-languages.ts); anything else reads English. */
 export function replyWaitLanguage(raw: string | null | undefined): ReplyWaitLanguage {
-  const base = (raw ?? "").toLowerCase().split(/[-_]/)[0];
-  return (REPLY_WAIT_LANGUAGES as readonly string[]).includes(base)
-    ? (base as ReplyWaitLanguage)
-    : "en";
+  return toShippedLanguage(raw);
 }
 
 export interface ReplyWaitCopy {

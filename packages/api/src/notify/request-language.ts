@@ -8,7 +8,7 @@
  *
  *   `lang` query → Accept-Language best match → stored notificationLanguage → en
  *
- * Anything outside the seven shipped UI locales is ignored, never an error —
+ * Anything outside the shipped UI locales (en / ko / zh) is ignored, never an error —
  * an old or foreign client still gets an answer in the stored language.
  */
 
