@@ -99,8 +99,8 @@ importers:
         specifier: 2.2.1
         version: 2.2.1
       imapflow:
-        specifier: ^1.7.0
-        version: 1.7.0
+        specifier: ^2.12.1
+        version: 2.12.1
       jose:
         specifier: ^6.2.15
         version: 6.2.17
@@ -1722,8 +1722,9 @@ packages:
   '@vitest/utils@4.1.12':
     resolution: {integrity: sha512-Q3awXrwOfEV+qc3WmO5ONyE0yO7Q1gQ9/oyHxGLZ/pl7N3NO/ZztqQwKLuwMkV+CA1JYSIeO3gkHnRDIo4AVaA==}
 
-  '@zone-eu/mailsplit@5.4.15':
-    resolution: {integrity: sha512-c7ZpxauvF4AEkDJlKDYO7iMUtMuqJMBnDWNff1cyx+d7zaBVR3iFEmXhNHOVoMmVyVF3pTZLsLIJsEFKDldOAA==}
+  '@zone-eu/mailsplit@5.4.31':
+    resolution: {integrity: sha512-P031SeyobwXE/aZf1f/hN9RZm/t8ZSibCUYA7Us6Fory4b1p5HxNEA08YcfTynkPnvJ3nFjMFguwSp30TXc4Tw==}
+    engines: {node: '>=20.0.0'}
 
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
@@ -2227,9 +2228,9 @@ packages:
     resolution: {integrity: sha512-Q0n9HRi4m6JuGIV1eFlmvJB7ZEVxu93IrMyiMsGC0lrMJMWzRgx6WGquyfQgZVb31vhGgXnfmPNNXmxnOkRBrg==}
     engines: {node: '>= 0.8'}
 
-  encoding-japanese@2.2.0:
-    resolution: {integrity: sha512-EuJWwlHPZ1LbADuKTClvHtwbaFn4rOD+dRAbWysqEOXRc2Uui0hJInNJrsdH0c+OhJA4nrCBdSkW4DD5YxAo6A==}
-    engines: {node: '>=8.10.0'}
+  encoding-japanese@2.5.0:
+    resolution: {integrity: sha512-5TKhaMWTUF777NQ16OrAkJFuEd1uOnEBw8ODeXFTc/Y9csZZQ6/jiIS5r4aFuzfowu9gLGrE51zqI2H0dLwlmg==}
+    engines: {node: '>=18.0.0'}
 
   end-of-stream@1.4.5:
     resolution: {integrity: sha512-ooEGc6HP26xXq/N+GCGOT0JKCLDGrq2bQUZrQ7gyrJiZANJ/8YDTxTpQBXGMn+WbIQXNVpyWymm7KYVICQnyOg==}
@@ -2786,8 +2787,9 @@ packages:
     resolution: {integrity: sha512-Hs59xBNfUIunMFgWAbGX5cq6893IbWg4KnrjbYwX3tx0ztorVgTDA6B2sxf8ejHJ4wz8BqGUMYlnzNBer5NvGg==}
     engines: {node: '>= 4'}
 
-  imapflow@1.7.0:
-    resolution: {integrity: sha512-wWs6g5SBC7OEobQ82T3Jou/KlKl2f37mTCCuGkBrUB0irvYUodkUYMe36GSq1TLs/FM+j/hLmmAgm3CBZkVMyQ==}
+  imapflow@2.12.1:
+    resolution: {integrity: sha512-mM0FAU13CU1DMZG9ylow3GgyU+rs0UvWcoZuLpYXWNq3tie0MGNqE/aJqOnNb25kJgeNVtU/spfJ0I0qCYxbpQ==}
+    engines: {node: '>=20.0.0'}
 
   import-fresh@3.3.1:
     resolution: {integrity: sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==}
@@ -2810,6 +2812,10 @@ packages:
 
   ip-address@10.7.4:
     resolution: {integrity: sha512-DWBMKyeM25D70nrIiTkgQth59/G+naKOTep6huF9j+GmeK3DMD60Zvxg5d5qQnz+38AHgou6ean2LECX+lrKDg==}
+    engines: {node: '>= 12'}
+
+  ip-address@10.7.6:
+    resolution: {integrity: sha512-00LYkM6byILa9eQIx6qoaXCM40xTLd56AZ4vyaPW3YTyb49VZYPo5xsiAq4tuQ54GH4R7gVdYScJ1B7B77PuTg==}
     engines: {node: '>= 12'}
 
   ipaddr.js@1.9.1:
@@ -3029,14 +3035,17 @@ packages:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
 
-  libbase64@1.3.0:
-    resolution: {integrity: sha512-GgOXd0Eo6phYgh0DJtjQ2tO8dc0IVINtZJeARPeiIJqge+HdsWSuaDTe8ztQ7j/cONByDZ3zeB325AHiv5O0dg==}
+  libbase64@1.4.1:
+    resolution: {integrity: sha512-Nyh3H90B3gRtrcxIe56Ayy7635J0jmh6AbxbQgQae8wrSPQMH5wFqJChiMTB13yKG512L3YspbA5DzumhFTITA==}
+    engines: {node: '>=20.0.0'}
 
-  libmime@5.4.2:
-    resolution: {integrity: sha512-+IQnCOdPiufGBkOii+Ze8F7iniyBzOwvWDbn1DyExBpc9pT2B3IEMQi7GUc/PpqhNUh/sr1SG9UXDITQoR0VIA==}
+  libmime@5.6.5:
+    resolution: {integrity: sha512-2mbKYlwUP2mWys7kUE0MBHNdOndOe++8TIdmGXtt/hMYWSgbjHkSIXyC4jCpVSc/sAox3GSxWn1dSmyiQimLNA==}
+    engines: {node: '>=20.0.0'}
 
-  libqp@2.1.1:
-    resolution: {integrity: sha512-0Wd+GPz1O134cP62YU2GTOPNA7Qgl09XwCqM5zpBv87ERCXdfDtyKXvV7c9U22yWJh44QZqBocFnXN11K96qow==}
+  libqp@3.0.2:
+    resolution: {integrity: sha512-24oL5vCMpFd6lGLbD3vPrmcAEGFScDPX9eARY8TXsRVBSde93xP2iG7+8pg5M56Yiu9Uy14hCVN1E+yj5LMtyQ==}
+    engines: {node: '>=20.0.0'}
 
   light-my-request@6.6.0:
     resolution: {integrity: sha512-CHYbu8RtboSIoVsHZ6Ye4cj4Aw/yg2oAFimlF7mNvfDV192LR7nDiKtSIfCuLT7KokPSTn/9kfVLm5OGN0A28A==}
@@ -3537,6 +3546,9 @@ packages:
   process-warning@5.1.0:
     resolution: {integrity: sha512-jQSaVHsPgtyw60e1rQ/A+/ArPEj/S8pS/vFnyGa/gYFXrKk/6RuDkoqVDQ5NI5MmS01698ltlAk0NoDBNLujRw==}
 
+  process-warning@5.1.1:
+    resolution: {integrity: sha512-oCkNVj4OKnKEcocVBcDfiIugN1/cE6rgfT3nCtzeqZPA8+rIxMaQ0xXzIkGP8Gj2qUaP1UR7uhJ1VD8lUCpzCg==}
+
   prop-types@15.8.1:
     resolution: {integrity: sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==}
 
@@ -3816,8 +3828,8 @@ packages:
     resolution: {integrity: sha512-94hK0Hh8rPqQl2xXc3HsaBoOXKV20MToPkcXvwbISWLEs+64sBq5kFgn2kJDHb1Pry9yrP0dxrCI9RRci7RXKg==}
     engines: {node: '>= 6.0.0', npm: '>= 3.0.0'}
 
-  socks@2.8.9:
-    resolution: {integrity: sha512-LJhUYUvItdQ0LkJTmPeaEObWXAqFyfmP85x0tch/ez9cahmhlBBLbIqDFnvBnUJGagb0JbIQrkBs1wJ+yRYpEw==}
+  socks@2.8.10:
+    resolution: {integrity: sha512-e0VyvkVTwVYViNovRkZ9aodhxVlyoMn7eJhVUPxZ+eK9P/7CBkxvvsBOHqFPEH416726W8tLXXXjKwqgTErrCQ==}
     engines: {node: '>= 10.0.0', npm: '>= 3.0.0'}
 
   sonic-boom@4.2.1:
@@ -3962,8 +3974,8 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  thread-stream@4.2.0:
-    resolution: {integrity: sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ==}
+  thread-stream@4.2.1:
+    resolution: {integrity: sha512-Stg6edJXC/6/xqGwSXwFokrUhChJ18amEjpKH89WrQQ0oVFDF+pUUcTpiwWhFUrE89Vf16FBOlwhaw+lescxMQ==}
     engines: {node: '>=20'}
 
   three-forcegraph@1.43.4:
@@ -5502,11 +5514,11 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.2.0
 
-  '@zone-eu/mailsplit@5.4.15':
+  '@zone-eu/mailsplit@5.4.31':
     dependencies:
-      libbase64: 1.3.0
-      libmime: 5.4.2
-      libqp: 2.1.1
+      libbase64: 1.4.1
+      libmime: 5.6.5
+      libqp: 3.0.2
 
   abort-controller@3.0.0:
     dependencies:
@@ -6016,7 +6028,7 @@ snapshots:
 
   encodeurl@2.0.0: {}
 
-  encoding-japanese@2.2.0: {}
+  encoding-japanese@2.5.0: {}
 
   end-of-stream@1.4.5:
     dependencies:
@@ -6178,8 +6190,8 @@ snapshots:
       '@typescript-eslint/parser': 8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-react: 7.37.5(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-react-hooks: 5.2.0(eslint@9.39.4(jiti@2.7.0))
@@ -6198,7 +6210,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3
@@ -6209,22 +6221,22 @@ snapshots:
       tinyglobby: 0.2.17
       unrs-resolver: 1.11.1
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       '@typescript-eslint/parser': 8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -6235,7 +6247,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.57.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
       hasown: 2.0.4
       is-core-module: 2.16.1
       is-glob: 4.0.3
@@ -6890,16 +6902,16 @@ snapshots:
 
   ignore@7.0.5: {}
 
-  imapflow@1.7.0:
+  imapflow@2.12.1:
     dependencies:
-      '@zone-eu/mailsplit': 5.4.15
-      encoding-japanese: 2.2.0
+      '@zone-eu/mailsplit': 5.4.31
+      encoding-japanese: 2.5.0
       iconv-lite: 0.7.3
-      libbase64: 1.3.0
-      libmime: 5.4.2
-      libqp: 2.1.1
+      libbase64: 1.4.1
+      libmime: 5.6.5
+      libqp: 3.0.2
       pino: 10.3.1
-      socks: 2.8.9
+      socks: 2.8.10
 
   import-fresh@3.3.1:
     dependencies:
@@ -6919,6 +6931,8 @@ snapshots:
   internmap@2.0.3: {}
 
   ip-address@10.7.4: {}
+
+  ip-address@10.7.6: {}
 
   ipaddr.js@1.9.1: {}
 
@@ -7161,16 +7175,16 @@ snapshots:
       prelude-ls: 1.2.1
       type-check: 0.4.0
 
-  libbase64@1.3.0: {}
+  libbase64@1.4.1: {}
 
-  libmime@5.4.2:
+  libmime@5.6.5:
     dependencies:
-      encoding-japanese: 2.2.0
+      encoding-japanese: 2.5.0
       iconv-lite: 0.7.3
-      libbase64: 1.3.0
-      libqp: 2.1.1
+      libbase64: 1.4.1
+      libqp: 3.0.2
 
-  libqp@2.1.1: {}
+  libqp@3.0.2: {}
 
   light-my-request@6.6.0:
     dependencies:
@@ -7563,12 +7577,12 @@ snapshots:
       on-exit-leak-free: 2.1.2
       pino-abstract-transport: 3.0.0
       pino-std-serializers: 7.1.0
-      process-warning: 5.1.0
+      process-warning: 5.1.1
       quick-format-unescaped: 4.0.4
       real-require: 0.2.0
       safe-stable-stringify: 2.5.0
       sonic-boom: 4.2.1
-      thread-stream: 4.2.0
+      thread-stream: 4.2.1
 
   pkce-challenge@5.0.1: {}
 
@@ -7616,6 +7630,8 @@ snapshots:
   process-warning@4.0.1: {}
 
   process-warning@5.1.0: {}
+
+  process-warning@5.1.1: {}
 
   prop-types@15.8.1:
     dependencies:
@@ -7975,9 +7991,9 @@ snapshots:
 
   smart-buffer@4.2.0: {}
 
-  socks@2.8.9:
+  socks@2.8.10:
     dependencies:
-      ip-address: 10.7.4
+      ip-address: 10.7.6
       smart-buffer: 4.2.0
 
   sonic-boom@4.2.1:
@@ -8149,7 +8165,7 @@ snapshots:
       source-map-support: 0.5.21
     optional: true
 
-  thread-stream@4.2.0:
+  thread-stream@4.2.1:
     dependencies:
       real-require: 1.0.0
 
