@@ -48,7 +48,7 @@ beforeEach(() => {
 
 describe("sendDigestEmail opt-out", () => {
   it("carries a List-Unsubscribe header, bracketed as RFC 2369 requires", async () => {
-    await expect(sendDigestEmail("a@example.com", "Subject", "body")).resolves.toBe(true);
+    await expect(sendDigestEmail("a@example.com", "Subject", "body")).resolves.toBe("sent");
     expect(sentPayload().headers).toEqual({ "List-Unsubscribe": `<${UNSUBSCRIBE_URL}>` });
   });
 
@@ -107,7 +107,7 @@ describe("sendDigestEmail opt-out", () => {
     // exists to prevent, so a misconfigured WEB_URL costs a skipped digest.
     await expect(
       sendDigestEmail("a@example.com", "Subject", "body", { webUrl: "app.klorn.ai" }),
-    ).resolves.toBe(false);
+    ).resolves.toBe("skipped");
     expect(send).not.toHaveBeenCalled();
   });
 

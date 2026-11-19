@@ -10,6 +10,12 @@ import crypto from "node:crypto";
  * token and looks the hash up.
  */
 
+/**
+ * How long an email-verification link works. routes/auth.ts stamps it on the
+ * link and mail/email.ts states it in the mail, so the two cannot drift.
+ */
+export const EMAIL_VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
 export function mintOneTimeToken(): { token: string; tokenHash: string } {
   const token = crypto.randomBytes(32).toString("hex");
   return { token, tokenHash: hashOneTimeToken(token) };

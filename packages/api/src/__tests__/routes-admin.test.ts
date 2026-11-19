@@ -2,7 +2,9 @@ import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 
-const sendBetaInviteEmailSpy = vi.fn(async () => true);
+const sendBetaInviteEmailSpy = vi.fn(
+  async (): Promise<{ sent: true } | { sent: false; code: string }> => ({ sent: true }),
+);
 // GET /email-config builds its own Resend client; the SDK answers a refusal
 // with `{ data: null, error }`, not a throw.
 const resendOutcome = vi.hoisted(() => ({ next: null as unknown }));
@@ -910,9 +912,42 @@ describe("PATCH /api/admin/waitlist/:id", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    // Invite email is fire-and-forget — let the microtask queue flush.
-    await new Promise((resolve) => setImmediate(resolve));
     expect(sendBetaInviteEmailSpy).toHaveBeenCalledWith("applicant@example.com", "Applicant");
+    expect(res.json()).toMatchObject({ status: "APPROVED", inviteEmail: { sent: true } });
+  });
+
+  it("tells the admin when the invite email did not go out, with Resend's code", async () => {
+    seedWaitlistEntry({ id: "w-5", email: "bounce@example.com", name: "Bounce" });
+    sendBetaInviteEmailSpy.mockResolvedValueOnce({ sent: false, code: "VALIDATION_ERROR" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/admin/waitlist/w-5",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload: { status: "APPROVED" },
+    });
+
+    // The approval itself stands; only the mail is reported as not sent.
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      status: "APPROVED",
+      inviteEmail: { sent: false, code: "VALIDATION_ERROR" },
+    });
+    expect(waitlistById.get("w-5")?.status).toBe("APPROVED");
+  });
+
+  it("says nothing about an invite when the change sends none", async () => {
+    seedWaitlistEntry({ id: "w-6", email: "nope@example.com" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/admin/waitlist/w-6",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload: { status: "REJECTED" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).not.toHaveProperty("inviteEmail");
   });
 
   it("does not re-send invite when entry is already APPROVED", async () => {

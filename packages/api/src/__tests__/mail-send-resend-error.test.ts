@@ -68,8 +68,8 @@ const SENDERS: ReadonlyArray<{
   {
     name: "sendBetaInviteEmail",
     send: (e) => e.sendBetaInviteEmail(RECIPIENT, "Applicant"),
-    sent: true,
-    failed: false,
+    sent: { sent: true },
+    failed: expect.objectContaining({ sent: false }),
   },
   {
     name: "sendOrgInviteEmail",
@@ -99,8 +99,8 @@ const SENDERS: ReadonlyArray<{
     name: "sendDigestEmail",
     send: (e) =>
       e.sendDigestEmail(RECIPIENT, "Subject", "body", { webUrl: "https://app.klorn.ai" }),
-    sent: true,
-    failed: false,
+    sent: "sent",
+    failed: "failed",
   },
 ];
 
@@ -116,7 +116,7 @@ describe.each(SENDERS)("$name and Resend's { error } answer", ({ send, sent, fai
   it("reports the mail as sent when Resend accepted it", async () => {
     quietConsole();
     const email = await loadEmail();
-    await expect(send(email)).resolves.toBe(sent);
+    await expect(send(email)).resolves.toEqual(sent);
   });
 
   it("reports a failure when Resend answers with an error instead of throwing", async () => {
@@ -124,7 +124,7 @@ describe.each(SENDERS)("$name and Resend's { error } answer", ({ send, sent, fai
     refuse("rate_limit_exceeded", 429);
     const email = await loadEmail();
 
-    await expect(send(email)).resolves.toBe(failed);
+    await expect(send(email)).resolves.toEqual(failed);
 
     const logged = JSON.stringify([
       consoleSpies.log.mock.calls,
@@ -142,7 +142,7 @@ describe.each(SENDERS)("$name and Resend's { error } answer", ({ send, sent, fai
     quietConsole();
     outcome.next = { data: null, error: null };
     const email = await loadEmail();
-    await expect(send(email)).resolves.toBe(failed);
+    await expect(send(email)).resolves.toEqual(failed);
   });
 });
 
@@ -150,18 +150,16 @@ describe("requireResendAccepted", () => {
   it("returns the data of an accepted send", async () => {
     const { requireResendAccepted } = await import("../mail/resend-send.js");
     await expect(
-      requireResendAccepted(Promise.resolve({ data: { id: "m1" }, error: null })),
+      requireResendAccepted(async () => ({ data: { id: "m1" }, error: null })),
     ).resolves.toEqual({ id: "m1" });
   });
 
   it("throws facts only: an upper-case code and the status, never Resend's message", async () => {
     const { requireResendAccepted, ResendSendError } = await import("../mail/resend-send.js");
-    const failure = await requireResendAccepted(
-      Promise.resolve({
-        data: null,
-        error: { name: "invalid_from_address" as const, message: RESEND_MESSAGE, statusCode: 422 },
-      }),
-    ).catch((err: unknown) => err);
+    const failure = await requireResendAccepted(async () => ({
+      data: null,
+      error: { name: "invalid_from_address" as const, message: RESEND_MESSAGE, statusCode: 422 },
+    })).catch((err: unknown) => err);
 
     expect(failure).toBeInstanceOf(ResendSendError);
     const error = failure as InstanceType<typeof ResendSendError>;
@@ -173,12 +171,10 @@ describe("requireResendAccepted", () => {
 
   it("does not copy an error name that is not a plain Resend code", async () => {
     const { requireResendAccepted } = await import("../mail/resend-send.js");
-    const failure = (await requireResendAccepted(
-      Promise.resolve({
-        data: null,
-        error: { name: "see me@example.com" as never, message: "x", statusCode: null },
-      }),
-    ).catch((err: unknown) => err)) as { code: string; statusCode: number | null };
+    const failure = (await requireResendAccepted(async () => ({
+      data: null,
+      error: { name: "see me@example.com" as never, message: "x", statusCode: null },
+    })).catch((err: unknown) => err)) as { code: string; statusCode: number | null };
 
     expect(failure.code).toBe("RESEND_ERROR");
     expect(failure.statusCode).toBeNull();

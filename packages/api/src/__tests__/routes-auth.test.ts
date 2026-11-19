@@ -2546,6 +2546,45 @@ describe("POST /api/auth/resend-verification", () => {
     await app.close();
   });
 
+  it("stamps the new link with EMAIL_VERIFY_TOKEN_TTL_MS, the lifetime the mail states", async () => {
+    const { EMAIL_VERIFY_TOKEN_TTL_MS } = await import("../one-time-token.js");
+    const app = await buildApp();
+    const token = await registerAndGetToken(app, "ttl@example.com");
+    const registered = userStore.get("user-1")!.verifyTokenExp!.getTime();
+
+    const before = Date.now();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/resend-verification",
+      headers: authHeader(token),
+    });
+    const after = Date.now();
+
+    expect(res.statusCode).toBe(200);
+    const stamped = userStore.get("user-1")!.verifyTokenExp!.getTime();
+    expect(stamped).toBeGreaterThanOrEqual(before + EMAIL_VERIFY_TOKEN_TTL_MS);
+    expect(stamped).toBeLessThanOrEqual(after + EMAIL_VERIFY_TOKEN_TTL_MS);
+    // Registration stamps the same lifetime.
+    expect(registered).toBeLessThanOrEqual(before + EMAIL_VERIFY_TOKEN_TTL_MS);
+    expect(registered).toBeGreaterThan(before + EMAIL_VERIFY_TOKEN_TTL_MS - 60_000);
+    await app.close();
+  });
+
+  it("derives every verification-link expiry in the route from EMAIL_VERIFY_TOKEN_TTL_MS, never a literal", async () => {
+    // The behaviour test above cannot tell the constant from an equal literal;
+    // this pins that both mint sites (register, resend) read the constant the
+    // verification mail states (mail/email.ts).
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(new URL("../routes/auth.ts", import.meta.url), "utf8");
+    const stamps = source.match(/const verifyTokenExp = new Date\([^;]*\);/g) ?? [];
+    expect(stamps).toHaveLength(2);
+    for (const stamp of stamps) {
+      expect(stamp).toBe(
+        "const verifyTokenExp = new Date(Date.now() + EMAIL_VERIFY_TOKEN_TTL_MS);",
+      );
+    }
+  });
+
   it("answers 502 and keeps the previous link when the mail did not go out", async () => {
     const app = await buildApp();
     const token = await registerAndGetToken(app, "unsent@example.com");
