@@ -2577,7 +2577,7 @@ describe("POST /api/auth/resend-verification", () => {
     const updateMany = vi.mocked(prisma.user.updateMany);
     const storeUpdateMany = updateMany.getMockImplementation()!;
     // A concurrent request's claim lands between this request's read and its own.
-    updateMany.mockImplementationOnce(async (args) => {
+    updateMany.mockImplementationOnce((args) => {
       const current = userStore.get("user-1")!;
       userStore.set("user-1", { ...current, verifyToken: "hash-from-the-other-request" });
       return storeUpdateMany(args);
