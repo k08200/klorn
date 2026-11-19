@@ -1,16 +1,29 @@
-import { Resend } from "resend";
+import { type CreateEmailOptions, Resend } from "resend";
+import { EMAIL_VERIFY_TOKEN_TTL_MS } from "../one-time-token.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { addressLogTag } from "../security/address-log-tag.js";
 import { PASSWORD_RESET_TOKEN_TTL_MS } from "../security/password-reset-throttle.js";
 import { captureError } from "../sentry.js";
 import { digestUnsubscribeLabel, digestUnsubscribeUrl } from "./digest-unsubscribe.js";
 import { parseAddress } from "./email-address.js";
-import { requireResendAccepted } from "./resend-send.js";
+import {
+  type ResendRequestOptions,
+  ResendSendError,
+  requireResendAccepted,
+} from "./resend-send.js";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const FROM_EMAIL = process.env.FROM_EMAIL || "Klorn <onboarding@resend.dev>";
 const WEB_URL = process.env.WEB_URL || "http://localhost:8001";
+
+/**
+ * One send for requireResendAccepted: the payload now, the abort signal (and
+ * idempotency key) when it runs, so every send is bounded (resend-send.ts).
+ */
+function sendThrough(client: Resend, payload: CreateEmailOptions) {
+  return (options: ResendRequestOptions) => client.emails.send(payload, options);
+}
 
 /** Extract the bare address from a `Name <addr@x>` header, or pass through. */
 function addressOf(fromHeader: string): string {
@@ -65,6 +78,26 @@ export function formatLinkLifetime(ms: number): string {
   return `${minutes} minute${minutes === 1 ? "" : "s"}`;
 }
 
+/**
+ * What became of one mail, for the senders whose callers retry:
+ * - `sent`: Resend accepted it.
+ * - `skipped`: nothing was sent and nothing was wrong with the mail (Resend
+ *   unconfigured, or no opt-out target for the digest); the caller decides.
+ * - `failed`: not sent, worth retrying (rate limit, quota, 5xx, network, no
+ *   answer in time, Klorn's own key or domain; resend-send.ts).
+ * - `rejected`: Resend refused this mail for good (a malformed field or a
+ *   recipient it will not take); sending it again gets the same refusal.
+ */
+export type MailSendResult = "sent" | "skipped" | "failed" | "rejected";
+
+/** The failure class of a caught send error; anything but a permanent refusal is retryable. */
+function failureResult(err: unknown): "failed" | "rejected" {
+  return err instanceof ResendSendError && err.permanent ? "rejected" : "failed";
+}
+
+/** What the admin who approved a waitlist entry is told about the invite mail. */
+export type InviteEmailReport = { sent: true } | { sent: false; code: string };
+
 export async function sendPasswordResetEmail(to: string, resetToken: string): Promise<boolean> {
   const resetUrl = `${WEB_URL}/reset-password?token=${resetToken}`;
   const addressTag = addressLogTag(to);
@@ -78,7 +111,7 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
     // The caller puts the previous reset link back when this mail did not go
     // out (resend-send.ts: a refusal is an answer, not a throw).
     await requireResendAccepted(
-      resend.emails.send({
+      sendThrough(resend, {
         from: FROM_EMAIL,
         to,
         subject: "Reset your Klorn password",
@@ -110,20 +143,28 @@ export async function sendPasswordResetEmail(to: string, resetToken: string): Pr
   }
 }
 
-export async function sendBetaInviteEmail(to: string, name?: string | null): Promise<boolean> {
+/**
+ * The "you're approved" mail. Never throws: the admin route awaits it and
+ * hands the report to the admin, so a mail that did not go out is visible
+ * where the approval was made (routes/admin.ts).
+ */
+export async function sendBetaInviteEmail(
+  to: string,
+  name?: string | null,
+): Promise<InviteEmailReport> {
   const loginUrl = `${WEB_URL}/login`;
   const addressTag = addressLogTag(to);
   const safeName = name?.trim()?.replace(/[<>]/g, "");
   const greeting = safeName ? `Hi ${escapeHtml(safeName)},` : "Hi,";
 
   if (!resend) {
-    console.log("[EMAIL] No RESEND_API_KEY — invite link generated for", addressTag);
-    return true;
+    console.log("[EMAIL] No RESEND_API_KEY — invite not sent to", addressTag);
+    return { sent: false, code: "RESEND_NOT_CONFIGURED" };
   }
 
   try {
     await requireResendAccepted(
-      resend.emails.send({
+      sendThrough(resend, {
         from: FROM_EMAIL,
         to,
         subject: "You're approved — sign in to Klorn",
@@ -157,10 +198,10 @@ export async function sendBetaInviteEmail(to: string, name?: string | null): Pro
       }),
     );
     console.log("[EMAIL] Beta invite email sent to", addressTag);
-    return true;
+    return { sent: true };
   } catch (err) {
     logDbFailure("[EMAIL] Failed to send invite email", err, { level: "error" });
-    return false;
+    return { sent: false, code: err instanceof ResendSendError ? err.code : "SEND_FAILED" };
   }
 }
 
@@ -195,7 +236,7 @@ export async function sendOrgInviteEmail(input: {
     : `You were invited to join <strong>${escapeHtml(org)}</strong> on Klorn.`;
   try {
     await requireResendAccepted(
-      resend.emails.send({
+      sendThrough(resend, {
         from: FROM_EMAIL,
         to: input.to,
         subject: `Join ${org} on Klorn`,
@@ -237,7 +278,7 @@ export async function sendVerificationEmail(to: string, verifyToken: string): Pr
 
   try {
     await requireResendAccepted(
-      resend.emails.send({
+      sendThrough(resend, {
         from: FROM_EMAIL,
         to,
         subject: "Verify your Klorn account",
@@ -251,7 +292,7 @@ export async function sendVerificationEmail(to: string, verifyToken: string): Pr
             Verify Email
           </a>
           <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
-            This link expires in 24 hours.
+            This link expires in ${formatLinkLifetime(EMAIL_VERIFY_TOKEN_TTL_MS)}.
           </p>
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
           <p style="color: #9ca3af; font-size: 12px;">
@@ -362,17 +403,19 @@ export function buildWelcomeEmail(
 }
 
 /**
- * Outcome of a welcome-email attempt. `skipped` (Resend unconfigured) is kept
- * distinct from `failed` so the caller releases its once-per-user claim in
- * BOTH cases — a missing key must not permanently suppress the welcome — while
- * only `failed` is logged as an error.
+ * Outcome of a welcome-email attempt (MailSendResult). The caller releases its
+ * once-per-user claim on `skipped` (Resend unconfigured: a missing key must
+ * not permanently suppress the welcome) and on `failed` (retry on a later
+ * sign-in), and keeps it on `rejected`: Resend will refuse the same address
+ * again, so retrying on every sign-in only repeats the refusal.
  */
-export type WelcomeSendResult = "sent" | "skipped" | "failed";
+export type WelcomeSendResult = MailSendResult;
 
 /** Send the founder welcome email via Resend. See WelcomeSendResult. */
 export async function sendWelcomeEmail(
   to: string,
   name?: string | null,
+  opts: { idempotencyKey?: string } = {},
 ): Promise<WelcomeSendResult> {
   const addressTag = addressLogTag(to);
   const founder = resolveFounder();
@@ -399,7 +442,7 @@ export async function sendWelcomeEmail(
 
   try {
     await requireResendAccepted(
-      resend.emails.send({
+      sendThrough(resend, {
         from,
         to,
         replyTo,
@@ -407,6 +450,7 @@ export async function sendWelcomeEmail(
         html: content.html,
         text: content.text,
       }),
+      { idempotencyKey: opts.idempotencyKey },
     );
     console.log("[EMAIL] Welcome email sent to", addressTag);
     return "sent";
@@ -417,7 +461,7 @@ export async function sendWelcomeEmail(
     captureDbFailure("[EMAIL] Failed to send welcome email", err, {
       tags: { scope: "email.welcome-send" },
     });
-    return "failed";
+    return failureResult(err);
   }
 }
 
@@ -451,20 +495,22 @@ export async function sendWelcomeEmail(
  * with no way out is the exact thing this function exists to prevent, so a
  * misconfigured WEB_URL has to cost a skipped digest rather than silently
  * produce the non-compliant mail the old code would have sent. The digest is a
- * safety net, and the sweep already tolerates a false return per user.
+ * safety net, and the sweep already tolerates a skipped send per user.
  *
- * Returns false rather than throwing: the digest sweep runs over every user,
- * and one bad address must not end it.
+ * Answers a MailSendResult rather than throwing: the digest sweep runs over
+ * every user, and one bad address must not end it. `skipped` covers both
+ * refusals above (no Resend key, no opt-out target); the sweep retries only
+ * `failed` (pim/daily-digest.ts), under the caller's idempotency key.
  */
 export async function sendDigestEmail(
   to: string,
   subject: string,
   text: string,
-  opts: { language?: string; webUrl?: string } = {},
-): Promise<boolean> {
+  opts: { language?: string; webUrl?: string; idempotencyKey?: string } = {},
+): Promise<MailSendResult> {
   if (!resend) {
     console.log("[EMAIL] No RESEND_API_KEY — digest not sent to", addressLogTag(to));
-    return false;
+    return "skipped";
   }
   const unsubscribeUrl = digestUnsubscribeUrl(opts.webUrl ?? WEB_URL);
   if (!unsubscribeUrl) {
@@ -476,12 +522,12 @@ export async function sendDigestEmail(
     captureError(new Error("digest unsubscribe URL unavailable"), {
       tags: { scope: "digest-email" },
     });
-    return false;
+    return "skipped";
   }
   const label = digestUnsubscribeLabel(opts.language ?? "en");
   try {
     await requireResendAccepted(
-      resend.emails.send({
+      sendThrough(resend, {
         from: FROM_EMAIL,
         to,
         subject,
@@ -497,11 +543,12 @@ export async function sendDigestEmail(
           `</div>`,
         headers: { "List-Unsubscribe": `<${unsubscribeUrl}>` },
       }),
+      { idempotencyKey: opts.idempotencyKey },
     );
-    return true;
+    return "sent";
   } catch (err) {
     logDbFailure("[EMAIL] digest send failed", err);
     captureDbFailure("[EMAIL] digest send failed", err, { tags: { scope: "digest-email" } });
-    return false;
+    return failureResult(err);
   }
 }

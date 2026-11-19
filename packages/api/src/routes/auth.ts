@@ -79,7 +79,11 @@ import {
   markGoogleTokenForReconnect,
 } from "../mail/gmail.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
-import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
+import {
+  EMAIL_VERIFY_TOKEN_TTL_MS,
+  hashOneTimeToken,
+  mintOneTimeToken,
+} from "../one-time-token.js";
 import {
   effectiveTier,
   normalizeTier,
@@ -526,7 +530,7 @@ export function authRoutes(app: FastifyInstance) {
       // Only the hash is stored (one-time-token.ts); the raw token exists
       // only in the verification email.
       const { token: rawVerifyToken, tokenHash: verifyTokenHash } = mintOneTimeToken();
-      const verifyTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      const verifyTokenExp = new Date(Date.now() + EMAIL_VERIFY_TOKEN_TTL_MS);
 
       const user = await prisma.user.create({
         data: {
@@ -1967,7 +1971,7 @@ export function authRoutes(app: FastifyInstance) {
       // Only the hash is stored (one-time-token.ts); the raw token exists
       // only in the verification email.
       const { token: rawVerifyToken, tokenHash: verifyTokenHash } = mintOneTimeToken();
-      const verifyTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const verifyTokenExp = new Date(Date.now() + EMAIL_VERIFY_TOKEN_TTL_MS);
 
       // Compare-and-swap on the link this request read, as issueResetLink
       // does: of two overlapping requests only one replaces it and mails, so

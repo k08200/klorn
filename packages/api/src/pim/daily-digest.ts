@@ -34,7 +34,7 @@
 
 import { prisma } from "../db.js";
 import { isScreenerEnabled, listPendingScreener } from "../judge/screener.js";
-import { sendDigestEmail } from "../mail/email.js";
+import { type MailSendResult, sendDigestEmail } from "../mail/email.js";
 import { evaluateNotificationGate } from "../notify/notification-prefs.js";
 import {
   getUserNotificationLanguage,
@@ -191,6 +191,51 @@ export function digestSubject(stats: DigestStats, language: NotificationLanguage
 }
 
 /**
+ * Waits before each retry round of a digest Resend did not take for a reason
+ * that can clear (`failed`: rate limit, quota, 5xx, network, no answer in
+ * time). A rate limit clears within a minute, a Resend blip within a few; two
+ * rounds means at most three attempts per digest, all inside one sweep.
+ */
+export const DIGEST_RETRY_DELAYS_MS: readonly number[] = [60_000, 5 * 60_000];
+
+/** The sweep's waiting and clock, injectable so tests do not wait minutes. */
+export interface DigestSweepDeps {
+  sleep?: (ms: number) => Promise<void>;
+  clock?: () => Date;
+}
+
+interface PendingDigest {
+  userId: string;
+  email: string;
+  subject: string;
+  text: string;
+  language: NotificationLanguage;
+  dayKey: string;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * One attempt. Every attempt of a user's digest that day carries the same
+ * idempotency key and the same payload, so a retry after a send that timed out
+ * here but did land at Resend is answered with the first send, not a second
+ * mail.
+ */
+function deliverDigest(digest: PendingDigest): Promise<MailSendResult> {
+  // The language picks the opt-out wording in the mail's footer and text
+  // part; WEB_URL is passed from here because this module already owns
+  // where the digest's links point, and letting mail/email.ts read the env
+  // var separately let the body and the opt-out disagree.
+  return sendDigestEmail(digest.email, digest.subject, digest.text, {
+    language: digest.language,
+    webUrl: WEB_URL,
+    idempotencyKey: `daily-digest/${digest.userId}/${digest.dayKey}`,
+  });
+}
+
+/**
  * One digest per user per UTC day.
  *
  * The Note row is created BEFORE the mail goes out, not after. Its
@@ -198,8 +243,16 @@ export function digestSubject(stats: DigestStats, language: NotificationLanguage
  * claiming the day first means a crash between "sent" and "recorded" costs the
  * user nothing, while the reverse order would mail them twice. For a digest,
  * a missed day is a smaller failure than a duplicate.
+ *
+ * The day stays claimed whatever the send answers. A permanent refusal or a
+ * skipped send is that day's drop; a retryable failure is tried again in this
+ * sweep (retryFailedDigests), still under the claim, so a restart in between
+ * drops it rather than mailing twice.
  */
-export async function sendDailyDigests(now: Date = new Date()): Promise<number> {
+export async function sendDailyDigests(
+  now: Date = new Date(),
+  deps: DigestSweepDeps = {},
+): Promise<number> {
   if (!isDailyDigestEnabled()) return 0;
 
   const dayKey = dayKeyUtc(now);
@@ -208,6 +261,7 @@ export async function sendDailyDigests(now: Date = new Date()): Promise<number> 
   })) as { id: string; email: string | null }[];
 
   let sent = 0;
+  const failed: PendingDigest[] = [];
   for (const user of users) {
     try {
       if (!user.email) continue;
@@ -237,19 +291,18 @@ export async function sendDailyDigests(now: Date = new Date()): Promise<number> 
       }
 
       const language = await getUserNotificationLanguage(user.id);
-      // The language picks the opt-out wording in the mail's footer and text
-      // part; WEB_URL is passed from here because this module already owns
-      // where the digest's links point, and letting mail/email.ts read the env
-      // var separately let the body and the opt-out disagree.
-      // False when the mail did not go out (sendDigestEmail logged why). The
-      // day stays claimed either way: a missed digest beats a duplicate.
-      const delivered = await sendDigestEmail(
-        user.email,
-        digestSubject(stats, language),
-        formatDigest(stats, language),
-        { language, webUrl: WEB_URL },
-      );
-      if (delivered) sent++;
+      const digest: PendingDigest = {
+        userId: user.id,
+        email: user.email,
+        subject: digestSubject(stats, language),
+        text: formatDigest(stats, language),
+        language,
+        dayKey,
+      };
+      // sendDigestEmail logged why a mail did not go out.
+      const result = await deliverDigest(digest);
+      if (result === "sent") sent++;
+      else if (result === "failed") failed.push(digest);
     } catch (err) {
       // One user's bad address or provider blip must not end the sweep.
       logDbFailure("[DIGEST] daily digest failed", err, { ids: { userId: user.id } });
@@ -259,5 +312,52 @@ export async function sendDailyDigests(now: Date = new Date()): Promise<number> 
       });
     }
   }
+  return sent + (await retryFailedDigests(failed, dayKey, deps));
+}
+
+/**
+ * Retry rounds for the digests whose send failed retryably, after each delay
+ * in DIGEST_RETRY_DELAYS_MS. Stops when nothing is left, when the UTC day has
+ * turned (that day's digest is over; tomorrow's sweep mails tomorrow's), or
+ * after the last round. A permanent refusal or a skip ends a digest's retries.
+ */
+async function retryFailedDigests(
+  failed: PendingDigest[],
+  dayKey: string,
+  deps: DigestSweepDeps,
+): Promise<number> {
+  const sleep = deps.sleep ?? wait;
+  const clock = deps.clock ?? (() => new Date());
+  let pending = failed;
+  let sent = 0;
+  for (const delay of DIGEST_RETRY_DELAYS_MS) {
+    if (pending.length === 0) return sent;
+    await sleep(delay);
+    if (dayKeyUtc(clock()) !== dayKey) break;
+    const stillFailing: PendingDigest[] = [];
+    for (const digest of pending) {
+      const result = await retryOnce(digest);
+      if (result === "sent") sent++;
+      else if (result === "failed") stillFailing.push(digest);
+    }
+    pending = stillFailing;
+  }
+  if (pending.length > 0) {
+    console.warn(`[DIGEST] ${pending.length} digest(s) for ${dayKey} not delivered — dropped`);
+  }
   return sent;
+}
+
+/** A retry that throws (sendDigestEmail does not) ends that digest's retries, not the sweep. */
+async function retryOnce(digest: PendingDigest): Promise<MailSendResult | "dropped"> {
+  try {
+    return await deliverDigest(digest);
+  } catch (err) {
+    logDbFailure("[DIGEST] daily digest retry failed", err, { ids: { userId: digest.userId } });
+    captureDbFailure("[DIGEST] daily digest retry failed", err, {
+      tags: { scope: "daily-digest" },
+      extra: { userId: digest.userId },
+    });
+    return "dropped";
+  }
 }
