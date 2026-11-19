@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import formbody from "@fastify/formbody";
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifySchemaValidationError } from "fastify";
 import {
   beginDesktopConfirmation,
   desktopConfirmExpiredPage,
@@ -153,12 +153,44 @@ export function isDemoUser(userId: string): boolean {
   return userId === DEMO_USER_ID;
 }
 
+/**
+ * The email field of an auth body. Fastify's default ajv runs with
+ * coerceTypes: "array", so `type: "string"` alone turns `123` or `true` into
+ * "123" / "true" and the route ran on it (register created an account named
+ * "12345"). The pattern is what refuses a coerced scalar: one "@" between
+ * runs of non-space characters. Surrounding whitespace is allowed because the
+ * handlers trim (normalizeEmail), and a dotless domain because a self-hosted
+ * deployment may use one. Linear: the classes on each side of every
+ * quantifier are disjoint.
+ */
+const authEmailSchema = {
+  type: "string",
+  minLength: 3,
+  maxLength: 320,
+  pattern: "^\\s*[^\\s@]+@[^\\s@]+\\s*$",
+} as const;
+
+/** The 400 a malformed email field answers, in place of ajv's pattern text. */
+const INVALID_EMAIL_MESSAGE = "Enter a valid email address";
+
+/**
+ * Route schemaErrorFormatter for the bodies that carry authEmailSchema. An
+ * error on the email field reads as a sentence a client can show (the mobile
+ * app shows a register 400's text as is) rather than "must match pattern"
+ * with the regex. Any other error keeps Fastify's default text
+ * (`body must have required property 'email'`).
+ */
+function authBodyErrorFormatter(errors: FastifySchemaValidationError[], dataVar: string): Error {
+  if (errors.some((e) => e.instancePath === "/email")) return new Error(INVALID_EMAIL_MESSAGE);
+  return new Error(errors.map((e) => `${dataVar}${e.instancePath} ${e.message}`).join(", "));
+}
+
 const registerBodySchema = {
   type: "object",
   additionalProperties: false,
   required: ["email", "password"],
   properties: {
-    email: { type: "string", minLength: 3, maxLength: 320 },
+    email: authEmailSchema,
     password: { type: "string", minLength: 1, maxLength: 200 },
     name: { type: "string", minLength: 1, maxLength: 120 },
     // First-touch inflow attribution the login surface captured. 300 mirrors
@@ -173,7 +205,7 @@ const loginBodySchema = {
   additionalProperties: false,
   required: ["email", "password"],
   properties: {
-    email: { type: "string", minLength: 3, maxLength: 320 },
+    email: authEmailSchema,
     password: { type: "string", minLength: 1, maxLength: 200 },
   },
 } as const;
@@ -255,7 +287,7 @@ const forgotPasswordBodySchema = {
   additionalProperties: false,
   required: ["email"],
   properties: {
-    email: { type: "string", minLength: 3, maxLength: 320 },
+    email: authEmailSchema,
   },
 } as const;
 
@@ -431,6 +463,7 @@ export function authRoutes(app: FastifyInstance) {
     "/register",
     {
       schema: { body: registerBodySchema },
+      schemaErrorFormatter: authBodyErrorFormatter,
       config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
     },
     async (request, reply) => {
@@ -574,6 +607,7 @@ export function authRoutes(app: FastifyInstance) {
     "/login",
     {
       schema: { body: loginBodySchema },
+      schemaErrorFormatter: authBodyErrorFormatter,
       config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
     },
     async (request, reply) => {
@@ -1740,6 +1774,7 @@ export function authRoutes(app: FastifyInstance) {
     "/forgot-password",
     {
       schema: { body: forgotPasswordBodySchema },
+      schemaErrorFormatter: authBodyErrorFormatter,
       config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
     },
     async (request, reply) => {
@@ -1934,13 +1969,27 @@ export function authRoutes(app: FastifyInstance) {
       const { token: rawVerifyToken, tokenHash: verifyTokenHash } = mintOneTimeToken();
       const verifyTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      await prisma.user.update({
-        where: { id: user.id },
+      // Compare-and-swap on the link this request read, as issueResetLink
+      // does: of two overlapping requests only one replaces it and mails, so
+      // a failed send's restore below cannot kill a link the other mailed.
+      const claimed = await prisma.user.updateMany({
+        where: { id: user.id, verifyToken: user.verifyToken },
         data: { verifyToken: verifyTokenHash, verifyTokenExp },
       });
+      if (claimed.count === 0) return reply.send({ success: true });
 
-      await sendVerificationEmail(user.email, rawVerifyToken);
-      return reply.send({ success: true });
+      const sent = await sendVerificationEmail(user.email, rawVerifyToken);
+      if (sent) return reply.send({ success: true });
+      // Nobody holds the new link: put the previous one back while the new
+      // one is still the stored one (issueResetLink does the same), and do
+      // not claim a mail went out.
+      await prisma.user.updateMany({
+        where: { id: user.id, verifyToken: verifyTokenHash },
+        data: { verifyToken: user.verifyToken, verifyTokenExp: user.verifyTokenExp },
+      });
+      return reply
+        .code(502)
+        .send({ error: "The verification email could not be sent. Try again." });
     },
   );
 
