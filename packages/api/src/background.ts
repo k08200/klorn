@@ -12,12 +12,18 @@
  * Notifications are persisted to PostgreSQL (Notification model).
  */
 
-import type { DesktopAlertKind, NotificationCenterFields, NotificationRow } from "@klorn/contract";
+import type {
+  DesktopAlertKind,
+  NotificationCenterFields,
+  NotificationPresentation,
+  NotificationRow,
+} from "@klorn/contract";
 import { HIDDEN_CLAIM_TYPE, REPLY_CLAIM_ROWS } from "./agentcore/auto-reply-ledger-keys.js";
 import { prisma } from "./db.js";
 import { escapeLikePattern } from "./db-like.js";
 import { INTERRUPT_SLOT_ROOT } from "./judge/v3/interrupt-budget.js";
 import { desktopAlertTag } from "./notify/desktop-alert.js";
+import { meetingPresentation } from "./notify/push-presentation.js";
 import { NOTIFIED_LOOKBACK_MS } from "./notify/urgent-dedup.js";
 import { isCalendarRowVisible } from "./pim/calendar-scope.js";
 import { getUpcomingMeetings } from "./pim/meeting.js";
@@ -45,6 +51,8 @@ async function addNotification(
     message: string;
     link?: string;
     alert?: DesktopAlertKind;
+    /** NT0 structured fields for the live frame (first-party: carried as given). */
+    presentation?: NotificationPresentation;
   },
 ): Promise<{ id: string }> {
   // Persist to DB
@@ -71,6 +79,7 @@ async function addNotification(
     link: notif.link,
     createdAt: entry.createdAt.toISOString(),
     ...(notif.alert ? { alert: notif.alert } : {}),
+    ...(notif.presentation ?? {}),
   });
   return { id: entry.id };
 }
@@ -283,6 +292,8 @@ async function checkUpcomingMeetings() {
               ? `Join link: ${meeting.meetingLink} [${meeting.id}]`
               : `${meeting.summary} starts soon [${meeting.id}]`;
 
+            // NT0 meet: the join link and how many people are invited, never who.
+            const presentation = meetingPresentation(meeting.meetingLink, meeting.attendeeCount);
             // The bell row keeps the join link: the web bell validates it and
             // opens it outside the app (lib/notification-target.ts).
             const bellRow = await addNotification(userId, {
@@ -293,6 +304,7 @@ async function checkUpcomingMeetings() {
               // Meeting starting soon → OS banner in the desktop shell, under
               // the same "meeting" gate as the web push below.
               ...(await desktopAlertTag(userId, "meeting")),
+              presentation,
             });
 
             // Also send the device push, which opens the event's page. AWAIT
@@ -313,6 +325,7 @@ async function checkUpcomingMeetings() {
                   // Web push tags its OS notification with the bell row, as
                   // an open tab does, so the meeting shows once.
                   bellNotificationId: bellRow.id,
+                  presentation,
                 },
                 "meeting",
                 // A meeting starting: an interrupt caller (push-bucket.ts).

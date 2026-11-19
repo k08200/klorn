@@ -13,8 +13,8 @@ import { parseLlmJson } from "../llm/llm-json.js";
 import { createCompletion, MODEL } from "../llm/openai.js";
 import { getAuthedClient } from "../mail/gmail.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
-import { googleMeetingLinkOf } from "./calendar-providers/google.js";
-import { safeMeetingLink } from "./meeting-link.js";
+import { googleAttendeeCount, googleMeetingLinkOf } from "./calendar-providers/google.js";
+import { meetingLinkInText } from "./meeting-link.js";
 
 const exec = promisify(execFile);
 const IS_MACOS = process.platform === "darwin";
@@ -26,6 +26,8 @@ interface MeetingEvent {
   end: string;
   meetingLink: string | null;
   attendees: string[];
+  /** CalendarEvent.attendeeCount's rule (google.ts googleAttendeeCount): a count, never who. */
+  attendeeCount: number | null;
 }
 
 interface MeetingSummary {
@@ -44,8 +46,6 @@ interface MeetingSummary {
 // The Zoom host must be zoom.us or a subdomain of it: an invite's text is
 // attacker-controlled, and an unanchored match turned any https page that merely
 // mentions "zoom.us/" into the meeting link a notification opens.
-const ZOOM_LINK_IN_TEXT = /https:\/\/(?:[a-z0-9-]+\.)*zoom\.us\/[^\s]*/i;
-const MEET_LINK_IN_TEXT = /https:\/\/meet\.google\.com\/[^\s]*/;
 
 /**
  * The join link of a Google event: conferenceData / hangoutLink first, else a
@@ -53,13 +53,7 @@ const MEET_LINK_IN_TEXT = /https:\/\/meet\.google\.com\/[^\s]*/;
  * https-only gate, so an unsafe one is skipped for the next.
  */
 function meetingLinkOf(event: calendar_v3.Schema$Event): string | null {
-  const fromConference = googleMeetingLinkOf(event);
-  if (fromConference) return fromConference;
-  const text = `${event.description || ""} ${event.location || ""}`;
-  return (
-    safeMeetingLink(text.match(ZOOM_LINK_IN_TEXT)?.[0]) ??
-    safeMeetingLink(text.match(MEET_LINK_IN_TEXT)?.[0])
-  );
+  return googleMeetingLinkOf(event) ?? meetingLinkInText(event.description, event.location);
 }
 
 /** Check calendar for upcoming meetings with video links */
@@ -96,6 +90,7 @@ export async function getUpcomingMeetings(userId: string): Promise<MeetingEvent[
         end: event.end?.dateTime || event.end?.date || "",
         meetingLink: meetingLinkOf(event),
         attendees: (event.attendees || []).map((a) => a.email || "").filter(Boolean),
+        attendeeCount: googleAttendeeCount(event),
       }))
       .filter((e) => e.meetingLink); // Only meetings with links
   } catch (err) {

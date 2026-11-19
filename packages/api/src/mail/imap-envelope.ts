@@ -78,16 +78,25 @@ export interface EnvelopeFacts {
 interface RawEnvelope {
   messageId?: string | null;
   subject?: string | null;
-  date?: Date | null;
+  /** imapflow keeps the raw header text when the Date header does not parse. */
+  date?: Date | string | null;
+}
+
+/**
+ * The envelope's Date header as a Date. Null when there is none or it does not
+ * parse: imapflow then hands back the raw header text instead of a Date (its
+ * type declarations say Date either way).
+ */
+export function envelopeDate(date: Date | string | null | undefined): Date | null {
+  return date instanceof Date && !Number.isNaN(date.getTime()) ? date : null;
 }
 
 /** The facts of an imapflow envelope. */
 export function envelopeFacts(envelope: RawEnvelope | null | undefined): EnvelopeFacts {
-  const date = envelope?.date;
   return {
     messageId: envelope?.messageId?.trim() || null,
     subject: envelopeSubject(envelope?.subject),
-    date: date instanceof Date && !Number.isNaN(date.getTime()) ? date : null,
+    date: envelopeDate(envelope?.date),
   };
 }
 

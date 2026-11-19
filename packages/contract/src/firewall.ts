@@ -65,6 +65,10 @@ export interface FirewallSourceWire {
 export interface FirewallEmailContext {
   /** EmailMessage.id (DB id) — used by /email/[id]. */
   emailDbId: string;
+  /** The provider thread id (EmailMessage.threadId: `/api/email/thread/:threadId`,
+   *  the web lists' thread key), so a client can group a thread's notifications.
+   *  Null when the mail has none; absent on older servers. */
+  threadId?: string | null;
   subject: string | null;
   from: string | null;
   snippet: string | null;

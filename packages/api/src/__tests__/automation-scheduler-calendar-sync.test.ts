@@ -383,6 +383,8 @@ describe("scheduler calendar step — primary calendar", () => {
       location: "Room 4",
       meetingLink: "https://meet.google.com/abc",
       allDay: false,
+      // No guest list on the fixture (CalendarEvent.attendeeCount).
+      attendeeCount: null,
       startTime: new Date("2026-10-02T00:00:00.000Z"),
       endTime: new Date("2026-10-02T01:00:00.000Z"),
     });
@@ -398,6 +400,7 @@ describe("scheduler calendar step — primary calendar", () => {
       location: null,
       meetingLink: "https://hangouts.google.com/xyz",
       allDay: true,
+      attendeeCount: null,
       startTime: new Date("2026-10-03"),
       endTime: new Date("2026-10-04"),
     });

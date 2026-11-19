@@ -23,7 +23,7 @@
  * before any pattern runs on it.
  */
 
-import type { NotificationReason } from "@klorn/contract";
+import type { NotificationPresentation, NotificationReason } from "@klorn/contract";
 import { boundedFromValue, displayNameOf, parseAddress } from "../mail/email-address.js";
 import { type NotificationLanguage, notificationCopy } from "./notification-strings.js";
 import { pushActionCopy } from "./push-action-strings.js";
@@ -87,29 +87,82 @@ export interface MailPushContent {
   body: string;
 }
 
-/** Line 2: the verified quote in curly quotes, else the short reason, else nothing. */
-export function reasonLine(reason: NotificationReason | null | undefined): string {
-  if (!reason) return "";
-  if (reason.verified && reason.quote) {
-    const quote = plainLine(reason.quote, MAIL_PUSH_REASON_MAX - 2)
-      .replace(EDGE_QUOTES, "")
-      .trim();
-    if (quote) return `“${quote}”`;
-  }
-  return plainLine(reason.text, MAIL_PUSH_REASON_MAX);
+/** The verified quote as shown (no quotation marks), or "" — only when quotes may be shown. */
+function shownQuote(reason: NotificationReason | null | undefined, allowQuote: boolean): string {
+  if (!allowQuote || !reason?.verified || !reason.quote) return "";
+  return plainLine(reason.quote, MAIL_PUSH_REASON_MAX - 2)
+    .replace(EDGE_QUOTES, "")
+    .trim();
 }
 
-export function mailPushContent(input: {
+/**
+ * The judge's short reason, never the quote: notificationReason falls back to
+ * the quote as the text when the item has no reason of its own, and that text
+ * is mail text just the same.
+ */
+function reasonText(reason: NotificationReason | null | undefined): string {
+  if (!reason) return "";
+  const text = plainLine(reason.text, MAIL_PUSH_REASON_MAX);
+  const quote = reason.quote ? plainLine(reason.quote, MAIL_PUSH_REASON_MAX) : "";
+  return quote && text === quote ? "" : text;
+}
+
+/**
+ * Line 2: the verified quote in curly quotes, else the short reason, else
+ * nothing. The quote is mail text that would travel through Apple's and
+ * Google's push services, so it shows only with `allowQuote` (the
+ * NOTIFY_PUSH_QUOTE flag, config.ts pushQuoteOpenTo); without it a verified
+ * reason shows its short text.
+ */
+export function reasonLine(
+  reason: NotificationReason | null | undefined,
+  allowQuote = false,
+): string {
+  const quote = shownQuote(reason, allowQuote);
+  return quote ? `“${quote}”` : reasonText(reason);
+}
+
+export interface MailPushInput {
   from: string;
   subject: string | null | undefined;
   reason?: NotificationReason | null;
   language: NotificationLanguage | string;
-}): MailPushContent {
+  /** The verified quote may be shown (NOTIFY_PUSH_QUOTE open to the user). */
+  allowQuote?: boolean;
+}
+
+function subjectLine(input: MailPushInput): string {
+  return plainLine(input.subject, SUBJECT_MAX) || notificationCopy(input.language).noSubject;
+}
+
+export function mailPushContent(input: MailPushInput): MailPushContent {
   const title = senderTitle(input.from);
-  const subject =
-    plainLine(input.subject, SUBJECT_MAX) || notificationCopy(input.language).noSubject;
-  const line2 = reasonLine(input.reason);
+  const subject = subjectLine(input);
+  const line2 = reasonLine(input.reason, input.allowQuote === true);
   return { title, body: line2 ? `${subject}\n${line2}` : subject };
+}
+
+/**
+ * The same mail as structured fields (NT0, contract NotificationPresentation):
+ * what a client needs to lay the notification out as title = person, subtitle
+ * = subject, body = the quote or the reason line. Cleaned exactly as
+ * mailPushContent's text. `senderDisplayName` is the From header's display
+ * name only (absent when it has none, or when it is itself an address).
+ */
+export function mailPushPresentation(
+  input: MailPushInput & { lane: MailPushLane; threadId?: string | null },
+): NotificationPresentation {
+  const name = plainLine(displayNameOf(boundedFromValue(input.from).trim()), TITLE_MAX);
+  const quote = shownQuote(input.reason, input.allowQuote === true);
+  const reason = reasonText(input.reason);
+  return {
+    kind: input.lane === "MEETING" ? "meet" : "push",
+    ...(name && !name.includes("@") ? { senderDisplayName: name } : {}),
+    subject: subjectLine(input),
+    ...(quote ? { quote } : {}),
+    ...(reason ? { reasonLine: reason } : {}),
+    ...(input.threadId ? { threadId: input.threadId } : {}),
+  };
 }
 
 export interface WebPushAction {

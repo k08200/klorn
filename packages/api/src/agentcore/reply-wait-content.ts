@@ -16,6 +16,7 @@
  * recognise the thread.
  */
 
+import type { NotificationPresentation } from "@klorn/contract";
 import { boundedFromValue, displayNameOf, parseAddress } from "../mail/email-address.js";
 import { clampText } from "../notify/clamp-text.js";
 import { plainLine } from "../notify/mail-push-content.js";
@@ -48,6 +49,8 @@ export interface WaitingMail {
   receivedAt: Date;
   /** The item's short reason, already resolved for the reader; the single reminder shows it. */
   reason?: string | null;
+  /** The provider thread id; the single reminder carries it (NT0 `threadId`). */
+  threadId?: string | null;
 }
 
 export interface ReplyWaitContent {
@@ -58,21 +61,30 @@ export interface ReplyWaitContent {
   body: string;
   /** The bell row's message: subtitle and body on two lines, or the body. */
   message: string;
+  /** The same as structured fields (contract NotificationPresentation). */
+  presentation: NotificationPresentation;
 }
 
 /** The sender as the user would name them; never a whole address. */
 export function senderLabel(from: string | null | undefined, language: string): string {
   const unknown = replyWaitCopy(language).unknownSender;
   if (!from) return unknown;
+  const name = displayNameOnly(from);
+  if (name) return name;
   const header = boundedFromValue(from).trim();
-  const name = plainLine(displayNameOf(header), SENDER_MAX * CLEAN_FACTOR);
-  if (name && !name.includes("@")) return clampText(name, SENDER_MAX);
   if (!header.includes("@")) {
     const bare = plainLine(header.replace(/[<>]/g, " "), SENDER_MAX * CLEAN_FACTOR);
     return bare ? clampText(bare, SENDER_MAX) : unknown;
   }
   const domain = domainOf(parseAddress(header));
   return domain ? clampText(domain, SENDER_MAX) : unknown;
+}
+
+/** The From header's display name, cleaned and cut; "" when it has none or it is an address. */
+function displayNameOnly(from: string | null): string {
+  if (!from) return "";
+  const name = plainLine(displayNameOf(boundedFromValue(from).trim()), SENDER_MAX * CLEAN_FACTOR);
+  return name && !name.includes("@") ? clampText(name, SENDER_MAX) : "";
 }
 
 function domainOf(address: string): string {
@@ -121,12 +133,20 @@ export function replyWaitContent(
     const reason = freeText(mail.reason, REASON_MAX);
     const subtitle = subjectLabel(mail.subject, language);
     const body = reason ? `${copy.waiting(days)}${LINE_SEPARATOR}${reason}` : copy.waiting(days);
+    const name = displayNameOnly(mail.from);
     return {
       kind: "wait",
       title: senderLabel(mail.from, language),
       subtitle,
       body,
       message: `${subtitle}\n${body}`,
+      presentation: {
+        kind: "wait",
+        ...(name ? { senderDisplayName: name } : {}),
+        subject: subtitle,
+        reasonLine: body,
+        ...(mail.threadId ? { threadId: mail.threadId } : {}),
+      },
     };
   }
   const listed = mails.length > DIGEST_LINES ? mails.slice(0, DIGEST_LINES - 1) : mails;
@@ -139,6 +159,7 @@ export function replyWaitContent(
     subtitle: null,
     body,
     message: body,
+    presentation: { kind: "digest" },
   };
 }
 

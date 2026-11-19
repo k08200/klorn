@@ -52,6 +52,7 @@ import { captureDbFailure, logDbFailure } from "../../report-db-failure.js";
 import { Semaphore } from "../../semaphore.js";
 import { createImapClient, endImapSession } from "../imap-connection.js";
 import type { ImapProviderConfig } from "../imap-providers.js";
+import { IMAP_THROTTLED_CODE } from "../imap-throttled.js";
 import { checkLiveValidity, resetUidValidityLogState } from "../imap-uidvalidity.js";
 import { isSmtpAuthRejection } from "../smtp-transport.js";
 import { fail } from "./action-failure.js";
@@ -171,8 +172,18 @@ const authFailure = (label: string): MailActionFailure =>
   fail(`${label} rejected the saved app password. Reconnect your ${label} mailbox in Settings.`);
 
 function isAuthFailure(err: unknown): boolean {
-  const e = err as { authenticationFailed?: unknown; serverResponseCode?: unknown } | null;
-  return e?.authenticationFailed === true || e?.serverResponseCode === "AUTHENTICATIONFAILED";
+  const e = err as {
+    authenticationFailed?: unknown;
+    serverResponseCode?: unknown;
+    code?: unknown;
+  } | null;
+  if (e?.serverResponseCode === "AUTHENTICATIONFAILED") return true;
+  // imapflow 1.x marks every failed LOGIN `authenticationFailed`, a throttled one
+  // too (Microsoft 365's "Request is throttled" BAD, code ETHROTTLE). The server
+  // asked to wait; it did not refuse the password, so it must not count towards
+  // the login backoff (imap-auth-backoff.ts) or ask the user to reconnect.
+  if (e?.code === IMAP_THROTTLED_CODE) return false;
+  return e?.authenticationFailed === true;
 }
 
 /** The same test for the generic poller (imap-accounts.ts): one definition of "login rejected". */

@@ -166,6 +166,11 @@ export interface CalendarEventWire {
   provider?: string;
   /** The linked account's label, on a linked calendar's event only. */
   sourceLabel?: string;
+  /**
+   * People the invite lists (CalendarEvent.attendeeCount: resources and those
+   * who declined left out). Null / absent = unknown; never addresses.
+   */
+  attendeeCount?: number | null;
 }
 
 interface ZoneClock {

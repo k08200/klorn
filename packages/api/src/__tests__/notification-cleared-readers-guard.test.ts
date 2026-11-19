@@ -84,7 +84,6 @@ const SEES_CLEARED: Record<string, { reads: number; why: string }> = {
     reads: 1,
     why: "dedupe: mail an urgent alert already covered",
   },
-  "agentcore/proactive-actions.ts#checkUpcomingMeetings": { reads: 1, why: "dedupe: per meeting" },
   "agentcore/proactive-actions.ts#checkOverdueTasks": { reads: 1, why: "dedupe: daily" },
   "agentcore/proactive-actions.ts#checkWeeklyReview": { reads: 1, why: "dedupe: weekly" },
   "agentcore/proactive-actions.ts#checkEndOfDayReview": { reads: 1, why: "dedupe: daily" },
