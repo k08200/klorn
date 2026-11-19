@@ -320,7 +320,7 @@ func notificationCenterSelfChecks(sourceDir: URL) async -> [(String, Bool)] {
     let missing = L10n.shipped.flatMap { language in
         keys.filter { L10n.value($0, language: language) == nil }.map { "\(language):\($0)" }
     }
-    check("every bell string exists in all seven languages", missing.isEmpty)
+    check("every bell string exists in every shipped language", missing.isEmpty)
     for entry in missing.prefix(6) { print("      missing \(entry)") }
     check("counts are %d, never %@",
           L10n.shipped.allSatisfy { language in

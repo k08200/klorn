@@ -274,7 +274,7 @@ one file on an idle machine, say so in the PR; don't loosen the budget.
 | Web (`packages/web`) | `packages/web/src/lib/locales/*.ts`, 3 locales (en, ko, zh = Simplified Chinese), read through `t()` | `node .github/scripts/check-i18n-parity.mjs` |
 | Server copy (`packages/api`) | Tables keyed by `SHIPPED_LANGUAGES` (`packages/api/src/shipped-languages.ts`): en, ko, zh | `pnpm --filter @klorn/api typecheck` |
 | Mobile (`apps/mobile`) | `apps/mobile/src/i18n/locales/*.ts` | `cd apps/mobile && npm test` |
-| macOS (`apps/desktop-mac`) | `Sources/KlornMac/Resources/*.lproj/Localizable.strings`, read through `L()` | `swift run KlornMac --self-check` |
+| macOS (`apps/desktop-mac`) | `Sources/KlornMac/Resources/{en,ko,zh}.lproj/Localizable.strings` (+ `Resources/InfoPlist/{en,ko,zh}.lproj`), read through `L()` | `swift run KlornMac --self-check` |
 | Website (`website/`) | One HTML file per language | `bash .github/scripts/check-website-lockstep.sh` |
 
 - Klorn ships English, Korean and Simplified Chinese. Japanese, Spanish,

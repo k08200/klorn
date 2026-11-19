@@ -13,7 +13,7 @@ func previewFixtureSelfChecks(sourceDir: URL) -> [(String, Bool)] {
     check("fixture locale: ko resolves to the Korean set",
           PreviewFixtureLocale.resolve(code: "ko") == .korean)
     check("fixture locale: every other language keeps the English set",
-          ["en", "ja", "zh", "es", "fr", "de"].allSatisfy { PreviewFixtureLocale.resolve(code: $0) == .english })
+          L10n.shipped.filter { $0 != "ko" }.allSatisfy { PreviewFixtureLocale.resolve(code: $0) == .english })
 
     let en = decodeFirewall(PreviewRender.navFirewallJSONEn)
     let ko = decodeFirewall(PreviewRender.navFirewallJSONKo)
