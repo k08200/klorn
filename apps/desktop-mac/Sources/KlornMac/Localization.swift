@@ -10,11 +10,7 @@ enum AppLanguage: String, CaseIterable, Sendable {
     case system
     case english = "en"
     case korean = "ko"
-    case japanese = "ja"
     case chinese = "zh"
-    case spanish = "es"
-    case french = "fr"
-    case german = "de"
 
     /// Shown in its own language — a language picker the user can't read is
     /// useless. "System" is the exception: it names a behaviour, not a language.
@@ -23,12 +19,23 @@ enum AppLanguage: String, CaseIterable, Sendable {
         case .system: return L10n.t("lang.system")
         case .english: return "English"
         case .korean: return "한국어"
-        case .japanese: return "日本語"
         case .chinese: return "中文（简体）"
-        case .spanish: return "Español"
-        case .french: return "Français"
-        case .german: return "Deutsch"
         }
+    }
+
+    /// The override a stored value stands for. Nothing stored means "follow
+    /// macOS". A value that names no shipped language — ja/es/fr/de, picked
+    /// before those were retired on 2026-11-17 — reads as English: the user
+    /// chose a language explicitly, and the web app folds the same codes to
+    /// English. A regional or script tag ("zh-Hans", "ko_KR") folds onto its
+    /// base first, as the server's toShippedLanguage does. The stored value is
+    /// left as is; only the read folds.
+    init(stored: String?) {
+        guard let stored, !stored.isEmpty else { self = .system; return }
+        if let exact = AppLanguage(rawValue: stored) { self = exact; return }
+        let base = stored.lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" }).first
+            .map(String.init) ?? ""
+        self = base == AppLanguage.system.rawValue ? .english : AppLanguage(rawValue: base) ?? .english
     }
 }
 
@@ -49,6 +56,14 @@ enum L10n {
     /// the user's Preferred Languages and what Klorn ships. Falls back to
     /// English — an unshipped language must degrade to a real translation, not
     /// to raw keys on screen.
+    ///
+    /// A macOS set to Japanese, Spanish, French or German skips to the next
+    /// Preferred Language Klorn ships, else English. Traditional Chinese
+    /// ("zh-Hant-TW") matches on its base "zh" and gets Simplified Chinese: a
+    /// Chinese reader reads it more easily than English. That is the in-app
+    /// UI only: text macOS itself picks from the main bundle (the calendar
+    /// permission prompt, standard menu items) follows macOS's own matching,
+    /// which does not treat zh.lproj as Traditional Chinese.
     static func resolvedCode(
         override: AppLanguage,
         preferred: [String] = Locale.preferredLanguages,
@@ -67,7 +82,7 @@ enum L10n {
     /// lookup on a background render path doesn't need the main actor.
     static var override: AppLanguage {
         get {
-            AppLanguage(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .system
+            AppLanguage(stored: UserDefaults.standard.string(forKey: storageKey))
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: storageKey)
@@ -130,9 +145,11 @@ extension L10n {
         return text == key ? nil : text
     }
 
-    /// Languages Klorn ships. The picker and the drift check read this, so
-    /// adding a translation is one .lproj folder plus one case.
-    static let shipped = ["en", "ko", "ja", "zh", "es", "fr", "de"]
+    /// Languages Klorn ships: English, Korean and Simplified Chinese (founder
+    /// decision 2026-11-17). The picker and the drift check read this, and the
+    /// self-check fails on any other .lproj folder, so adding a translation is
+    /// one .lproj folder plus one case plus this list.
+    static let shipped = ["en", "ko", "zh"]
 }
 
 /// Shorthand so a view reads `L("prefs.done")` rather than `L10n.t("prefs.done")`.
