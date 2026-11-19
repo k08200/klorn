@@ -79,6 +79,8 @@ export class FakeImapServer {
   midFetchHook: (() => Promise<void>) | null = null;
   /** Runs once inside the next MOVE, after the messages moved and before the answer. */
   midMoveHook: (() => void) | null = null;
+  /** When set, every LOGIN is refused with this error (after it is counted). */
+  loginError: unknown = null;
   /** Every command the fake served, in order ("UID MOVE 101 Trash", "EXPUNGE", ...). */
   commands: string[] = [];
   logins = 0;
@@ -104,6 +106,7 @@ export class FakeImapServer {
     this.searchHidesUids = new Set();
     this.midFetchHook = null;
     this.midMoveHook = null;
+    this.loginError = null;
     this.commands = [];
     this.logins = 0;
     this.logouts = 0;
@@ -213,6 +216,7 @@ export class FakeImapFlow {
   connect = async () => {
     fakeServer.logins += 1;
     fakeServer.commands.push("LOGIN");
+    if (fakeServer.loginError) throw fakeServer.loginError;
   };
 
   logout = async () => {

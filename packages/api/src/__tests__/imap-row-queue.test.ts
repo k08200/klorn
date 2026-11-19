@@ -182,6 +182,28 @@ describe("runAccountTask", () => {
     });
   });
 
+  it.each([
+    "UNAVAILABLE",
+    "LIMIT",
+    "INUSE",
+    "SERVERBUG",
+  ])("a login refused with [%s] is retryable: no password copy, the next task runs", async (code) => {
+    // imapflow marks every refused LOGIN authenticationFailed; the poll reads these
+    // RFC 5530 codes as "throttled", never as a rejected password (sync-error-code.ts).
+    const refused = await runAccountTask(provider, account, async () => {
+      throw Object.assign(new Error("Command failed"), {
+        authenticationFailed: true,
+        responseStatus: "NO",
+        serverResponseCode: code,
+      });
+    });
+    expect(refused).toEqual({ error: "Could not reach Naver. Try again shortly." });
+
+    const task = vi.fn(async () => "ran");
+    expect(await runAccountTask(provider, account, task)).toBe("ran");
+    expect(task).toHaveBeenCalledTimes(1);
+  });
+
   it("re-checks the cooldown on its turn: a rejection seen by the task ahead stops the next", async () => {
     const second = vi.fn(async () => "ran");
     const first = runAccountTask(provider, account, async () => {

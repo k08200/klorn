@@ -166,6 +166,65 @@ describe("archive", () => {
   });
 });
 
+describe("a login refused for the moment (RFC 5530) on a move", () => {
+  // imapflow 1.x marks every refused LOGIN authenticationFailed; the poll reads
+  // these codes as "throttled" (sync-error-code.ts), so the moves must too.
+  const refusedFor = (code: string) =>
+    Object.assign(new Error("Command failed"), {
+      authenticationFailed: true,
+      responseStatus: "NO",
+      serverResponseCode: code,
+    });
+
+  it.each([
+    "UNAVAILABLE",
+    "LIMIT",
+    "INUSE",
+    "SERVERBUG",
+  ])("archive refused with [%s]: retryable, no password copy, the next archive logs in", async (code) => {
+    const id = deliver(db, NAVER, 101);
+    fakeServer.loginError = refusedFor(code);
+
+    const refused = await naver.archive(USER, id, NAVER.rowId);
+
+    expect(errorOf(refused)).toBe("Could not reach Naver. Try again shortly.");
+    expect(moveCommands()).toEqual([]);
+
+    fakeServer.loginError = null;
+    const retried = await naver.archive(USER, id, NAVER.rowId);
+
+    expect(retried).toEqual({ success: true });
+    expect(fakeServer.logins).toBe(2);
+    expect(fakeServer.uidsIn("Archive")).toEqual([1]);
+  });
+
+  it("an undo refused with [UNAVAILABLE] keeps the record and can be retried", async () => {
+    const id = deliver(db, NAVER, 101);
+    await naver.trash(USER, id, NAVER.rowId);
+    fakeServer.loginError = refusedFor("UNAVAILABLE");
+
+    const refused = await naver.untrash(USER, id, NAVER.rowId);
+
+    expect(errorOf(refused)).toBe("Could not reach Naver. Try again shortly.");
+    fakeServer.loginError = null;
+    const retried = await naver.untrash(USER, id, NAVER.rowId);
+    expect(retried).toEqual({ success: true, restoredMessageId: idOf(NAVER, 102) });
+  });
+
+  it("archive refused with [AUTHENTICATIONFAILED] still asks for a reconnect and pauses the mailbox", async () => {
+    const id = deliver(db, NAVER, 101);
+    fakeServer.loginError = refusedFor("AUTHENTICATIONFAILED");
+
+    const refused = await naver.archive(USER, id, NAVER.rowId);
+    fakeServer.loginError = null;
+    const paused = await naver.archive(USER, id, NAVER.rowId);
+
+    expect(errorOf(refused)).toMatch(/rejected the saved app password/);
+    expect(errorOf(paused)).toMatch(/rejected the saved app password/);
+    expect(fakeServer.logins).toBe(1);
+  });
+});
+
 describe("never a permanent delete", () => {
   it("answers unsupported when the server has no MOVE, instead of letting imapflow COPY + EXPUNGE", async () => {
     const id = deliver(db, NAVER, 101);

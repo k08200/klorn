@@ -189,6 +189,25 @@ function isAuthFailure(err: unknown): boolean {
 /** The same test for the generic poller (imap-accounts.ts): one definition of "login rejected". */
 export const isImapAuthFailure = isAuthFailure;
 
+/**
+ * RFC 5530 response codes a server attaches to a refused LOGIN that is about the
+ * moment, not the password (busy, rate limit, its own bug). imapflow marks every
+ * refused LOGIN `authenticationFailed`, so these must not read as "revoked".
+ */
+const TRANSIENT_LOGIN_REFUSALS = new Set(["UNAVAILABLE", "LIMIT", "INUSE", "SERVERBUG"]);
+
+/**
+ * A refused login that is about the credentials: only the user can fix it. The
+ * one test the poll (sync-error-code.ts `isCredentialRefusal`) and the actions
+ * share, so a busy server neither pauses the actions for the credential cooldown
+ * nor tells the user the password was refused.
+ */
+export function isImapCredentialRefusal(err: unknown): boolean {
+  if (!isAuthFailure(err)) return false;
+  const code = (err as { serverResponseCode?: unknown } | null)?.serverResponseCode;
+  return !(typeof code === "string" && TRANSIENT_LOGIN_REFUSALS.has(code.toUpperCase()));
+}
+
 /** Is this credential (row id plus stored cipher) paused after a rejected login? Shared with the poller. */
 export function isCredentialCoolingDown(credentialKey: string): boolean {
   const until = authCooldownUntil.get(credentialKey);
@@ -300,13 +319,22 @@ function softFailure(
   return fail(`Could not reach ${provider.label}. Try again shortly.`);
 }
 
-/** One failure for the whole session: log (and capture) once, not per caller. */
+/**
+ * One failure for the whole session: log (and capture) once, not per caller. A
+ * login refused for the moment (RFC 5530 UNAVAILABLE, LIMIT, INUSE, SERVERBUG) is
+ * a soft failure, as the poll reads it: no credential cooldown, no password copy.
+ * Not even a short pause: these codes carry no retry time, and an action logs in
+ * only when the user (or the outbox, whose retries back off) asks again, once
+ * per burst.
+ */
 function sessionFailure(
   err: unknown,
   provider: ImapProviderConfig,
   account: SessionAccount,
 ): MailActionFailure {
-  return isAuthFailure(err) ? rejectLogin(provider, account) : softFailure(err, provider, account);
+  return isImapCredentialRefusal(err)
+    ? rejectLogin(provider, account)
+    : softFailure(err, provider, account);
 }
 
 /**
@@ -561,13 +589,16 @@ const timeoutFailure = (provider: ImapProviderConfig): MailActionFailure =>
     `${provider.label} did not answer in time. The action may or may not have completed; check your mailbox before trying again.`,
   );
 
-/** The answer for an error a task threw: a rejected login (IMAP or SMTP), or a soft failure. */
+/**
+ * The answer for an error a task threw: a rejected login (IMAP or SMTP), or a
+ * soft failure (an IMAP login refused for the moment among them, as in `sessionFailure`).
+ */
 function failureFor(
   err: unknown,
   provider: ImapProviderConfig,
   account: SessionAccount,
 ): MailActionFailure {
-  return isAuthFailure(err) || isSmtpAuthRejection(err)
+  return isImapCredentialRefusal(err) || isSmtpAuthRejection(err)
     ? rejectLogin(provider, account)
     : softFailure(err, provider, account);
 }

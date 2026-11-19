@@ -469,6 +469,71 @@ describe("auth-failure cooldown", () => {
   });
 });
 
+describe("a login refused for the moment (RFC 5530), as the poll reads it", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-30T12:00:00Z"));
+  });
+
+  // imapflow 1.x marks every refused LOGIN authenticationFailed, a busy server's
+  // too (imap-login-refusal-wire.test.ts pins it over real TLS). The poll reads
+  // these codes as "throttled", not "auth" (sync-error-code.ts).
+  const refusedFor = (code: string) =>
+    Object.assign(new Error("Command failed"), {
+      authenticationFailed: true,
+      responseStatus: "NO",
+      serverResponseCode: code,
+    });
+
+  it.each([
+    "UNAVAILABLE",
+    "LIMIT",
+    "INUSE",
+    "SERVERBUG",
+    "unavailable",
+  ])("[%s]: a retryable answer, no password copy, no cooldown", async (code) => {
+    armServer([1]);
+    h.connect.mockRejectedValueOnce(refusedFor(code));
+
+    const burst = await Promise.all(
+      [1, 1, 1].map((uid) => actions.markAsRead("u1", msg("a", uid), "a")),
+    );
+    for (const result of burst) {
+      expect(result).toEqual({ error: "Could not reach Naver. Try again shortly." });
+    }
+    expect(h.connect).toHaveBeenCalledTimes(1);
+    expect(warnedText()).not.toMatch(/login rejected|pausing/i);
+
+    // The next action logs in again at once: nothing about the password was learned.
+    const next = await actions.markAsRead("u1", msg("a", 1), "a");
+    expect(next).toEqual({ success: true });
+    expect(h.connect).toHaveBeenCalledTimes(2);
+  });
+
+  it("is reported like any session failure: once per account per interval", async () => {
+    armServer([1]);
+    h.connect.mockRejectedValue(refusedFor("UNAVAILABLE"));
+
+    await actions.markAsRead("u1", msg("a", 1), "a");
+    await actions.markAsRead("u1", msg("a", 1), "a");
+
+    expect(h.connect).toHaveBeenCalledTimes(2);
+    expect(h.captureError).toHaveBeenCalledTimes(1);
+  });
+
+  it("an AUTHENTICATIONFAILED refusal still starts the cooldown", async () => {
+    armServer([1]);
+    h.connect.mockRejectedValueOnce(refusedFor("AUTHENTICATIONFAILED"));
+
+    const refused = await actions.markAsRead("u1", msg("a", 1), "a");
+    const blocked = await actions.markAsRead("u1", msg("a", 1), "a");
+
+    expect(refused).toMatchObject({ error: expect.stringMatching(/reconnect/i) });
+    expect(blocked).toMatchObject({ error: expect.stringMatching(/reconnect/i) });
+    expect(h.connect).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("transport-failure reporting", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });
