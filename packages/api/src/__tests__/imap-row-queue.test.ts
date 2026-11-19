@@ -44,9 +44,8 @@ vi.mock("../sentry.js", async () => {
 });
 
 const { IMAP_PROVIDERS } = await import("../mail/imap-providers.js");
-const { resetImapSessionState, runAccountTask, TASK_TOTAL_TIMEOUT_MS } = await import(
-  "../mail/providers/imap-session.js"
-);
+const { IMAP_TRANSIENT_PAUSE_MS, resetImapSessionState, runAccountTask, TASK_TOTAL_TIMEOUT_MS } =
+  await import("../mail/providers/imap-session.js");
 const { describeFailure, sanitizedError } = await import("../mail/providers/action-failure.js");
 const { imapMailActions } = await import("../mail/providers/imap.js");
 
@@ -180,6 +179,34 @@ describe("runAccountTask", () => {
     expect(result).toEqual({
       error: "Naver rejected the saved app password. Reconnect your Naver mailbox in Settings.",
     });
+  });
+
+  it.each([
+    "UNAVAILABLE",
+    "LIMIT",
+    "INUSE",
+    "SERVERBUG",
+  ])("a login refused with [%s] is retryable: no password copy, a short pause only", async (code) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-18T12:00:00Z"));
+    // imapflow marks every refused LOGIN authenticationFailed; the poll reads these
+    // RFC 5530 codes as "throttled", never as a rejected password (sync-error-code.ts).
+    const refused = await runAccountTask(provider, account, async () => {
+      throw Object.assign(new Error("Command failed"), {
+        authenticationFailed: true,
+        responseStatus: "NO",
+        serverResponseCode: code,
+      });
+    });
+    expect(refused).toEqual({ error: "Could not reach Naver. Try again shortly." });
+
+    // A short pause, with the same retryable answer, not the credential cooldown.
+    const task = vi.fn(async () => "ran");
+    expect(await runAccountTask(provider, account, task)).toEqual(refused);
+    expect(task).not.toHaveBeenCalled();
+    vi.setSystemTime(Date.now() + IMAP_TRANSIENT_PAUSE_MS);
+    expect(await runAccountTask(provider, account, task)).toBe("ran");
+    expect(task).toHaveBeenCalledTimes(1);
   });
 
   it("re-checks the cooldown on its turn: a rejection seen by the task ahead stops the next", async () => {
