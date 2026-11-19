@@ -43,6 +43,7 @@ import {
 import { createImapClient, endImapSession } from "./imap-connection.js";
 import {
   capStored,
+  envelopeDate,
   envelopeMessageId,
   envelopeSubject,
   MAX_STORED_CC_LENGTH,
@@ -137,7 +138,8 @@ interface ImapEnvelope {
   to?: ImapEnvelopeAddress[] | null;
   cc?: ImapEnvelopeAddress[] | null;
   subject?: string | null;
-  date?: Date | null;
+  /** imapflow keeps the raw header text when the Date header does not parse. */
+  date?: Date | string | null;
   messageId?: string | null;
 }
 interface ImapFetchMessage {
@@ -188,7 +190,10 @@ function toPersistCall(
     capStored((env.cc ?? []).map(formatAddress).filter(Boolean).join(", "), MAX_STORED_CC_LENGTH) ||
     null;
   const subject = envelopeSubject(env.subject);
-  const receivedAt = env.date ?? new Date();
+  // An unparseable Date header is stored as the time the poll saw the message,
+  // like a missing one: the raw text made the database write fail, so the
+  // message was dropped on every poll.
+  const receivedAt = envelopeDate(env.date) ?? new Date();
   const snippet = snippetFromBody(bodyText);
   const stableId = formatImapMessageId(args.provider.idPrefix, args.email, msg.uid);
 

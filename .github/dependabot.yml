@@ -41,6 +41,16 @@ updates:
       # this entry when the migration lands.
       - dependency-name: "next"
         update-types: ["version-update:semver-major"]
+      # imapflow 2 closes the connection as soon as it reads an untagged BYE,
+      # so a server that sends `* BYE` and then the tagged
+      # `NO [AUTHENTICATIONFAILED]` in a later read loses the refusal: the IMAP
+      # login backoff (#1785) and the reconnect alert never start (#1814).
+      # Staying on 1.x; minor/patch updates within 1.x still flow. Before
+      # removing this entry, run
+      # packages/api/src/__tests__/imap-login-refusal-wire.test.ts against the
+      # new major; its BYE-then-NO case must still read as a refusal.
+      - dependency-name: "imapflow"
+        update-types: ["version-update:semver-major"]
     # One PR per batch of routine bumps — review load stays flat. Security
     # updates are never grouped by Dependabot and still arrive individually.
     groups:

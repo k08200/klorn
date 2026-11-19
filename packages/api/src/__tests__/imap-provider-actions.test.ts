@@ -590,6 +590,29 @@ describe("failure contract", () => {
     expect(h.close).toHaveBeenCalled();
   });
 
+  it("answers a throttled login as a transport error, not a rejected password", async () => {
+    armServer();
+    // imapflow 1.x marks a throttled LOGIN (Microsoft 365) authenticationFailed too.
+    h.connect.mockRejectedValue(
+      Object.assign(new Error("Command failed"), {
+        authenticationFailed: true,
+        responseStatus: "BAD",
+        code: "ETHROTTLE",
+      }),
+    );
+    const result = await actions().markAsRead("u1", NAVER_MSG, "row-1");
+
+    expect(result).toMatchObject({ error: expect.stringMatching(/try again shortly/i) });
+    expect(result).not.toMatchObject({ error: expect.stringMatching(/reconnect/i) });
+    expect(h.messageFlagsAdd).not.toHaveBeenCalled();
+
+    // No credential cooldown: the next action logs in again (imapflow already
+    // waited out the server's suggested backoff before it rejected).
+    await flush();
+    await actions().markAsRead("u1", NAVER_MSG, "row-1");
+    expect(h.connect).toHaveBeenCalledTimes(2);
+  });
+
   it("answers a soft error (never throws) on a transport failure", async () => {
     armServer();
     h.connect.mockRejectedValue(
