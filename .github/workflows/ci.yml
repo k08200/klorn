@@ -287,6 +287,14 @@ jobs:
         run: node --test packages/web/scripts/cloudflare-pages.test.mjs
       - name: Build all packages
         run: pnpm -r build
+      # Node links (and loads) every module the API entry imports from the
+      # built dist/, without running index itself (no port, no database). A
+      # dependency that drops an export the code imports fails here instead of
+      # at boot on Render: tsc and vitest both passed web-push 4's missing
+      # default export (#1819). src/__tests__/esm-import-smoke.test.ts runs the
+      # same script on the sources.
+      - name: API dist loads under Node's ESM loader
+        run: cd packages/api && NODE_ENV=test node scripts/esm-import-smoke.mjs dist
       # D5c: built without the switch, the web bundle holds no Google Picker
       # (google-drive-connect.tsx imports it behind the literal switch, which
       # next.config.ts always defines, so the bundler drops the import).
