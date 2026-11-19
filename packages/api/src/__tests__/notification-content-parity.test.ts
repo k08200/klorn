@@ -75,6 +75,8 @@ const CONTENT = mailPushContent({
     quoteIn: "body",
   },
   language: "en",
+  // The quote rides the push only under NOTIFY_PUSH_QUOTE (config.ts pushQuoteOpenTo).
+  allowQuote: true,
 });
 
 async function loadPush() {

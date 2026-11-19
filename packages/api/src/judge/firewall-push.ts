@@ -11,6 +11,7 @@
 
 import type { NotificationReason } from "@klorn/contract";
 import { HIDDEN_CLAIM_TYPE } from "../agentcore/auto-reply-ledger-keys.js";
+import { pushQuoteOpenTo } from "../config.js";
 import { prisma } from "../db.js";
 import { escapeLikePattern } from "../db-like.js";
 import { findReingestedHistory } from "../mail/imap-history.js";
@@ -19,6 +20,7 @@ import { mailOpenPath } from "../notify/mail-path.js";
 import {
   type MailPushLane,
   mailPushContent,
+  mailPushPresentation,
   senderDisplayName,
 } from "../notify/mail-push-content.js";
 import {
@@ -248,6 +250,24 @@ export function firewallBellRow(email: JudgeableEmailRow, language: Notification
 }
 
 /**
+ * The mail's provider thread id (NT0 `threadId`): from the row when the caller
+ * selected it, else one read by id. Best-effort: a failed read rings without it.
+ */
+async function mailThreadId(userId: string, email: JudgeableEmailRow): Promise<string | null> {
+  if (email.threadId !== undefined) return email.threadId;
+  try {
+    const row = await prisma.emailMessage.findFirst({
+      where: { id: email.id, userId },
+      select: { threadId: true },
+    });
+    return row?.threadId ?? null;
+  } catch (err) {
+    logDbFailure("[FIREWALL-PUSH] thread id read failed", err, { ids: { userId } });
+    return null;
+  }
+}
+
+/**
  * Ring for a bell row already written: the open clients, then device push.
  * When the push gets past every hold gate, the mail's ledger row records the
  * ring (DecisionLabel.rangAt, the IP24 denominator).
@@ -269,11 +289,19 @@ export async function deliverFirewallPush(
   // Decision N1: sender-only title, subject + the judge's reason, opens the
   // mail, and the lane + language pick the action set on every channel.
   const item = await findOpenMailItem(userId, email, lang);
-  const content = mailPushContent({
+  const input = {
     from: email.from,
     subject: email.subject,
     reason: item?.reason,
     language: lang,
+    allowQuote: pushQuoteOpenTo(userId),
+  };
+  const content = mailPushContent(input);
+  // NT0: the same mail as structured fields, for every channel that reads them.
+  const presentation = mailPushPresentation({
+    ...input,
+    lane: item?.lane ?? "PUSH",
+    threadId: await mailThreadId(userId, email),
   });
 
   pushNotification(userId, {
@@ -288,6 +316,7 @@ export async function deliverFirewallPush(
     // with the same N1 content and a click that opens the mail.
     ...(await desktopAlertTag(userId, "push")),
     mail: { emailId: email.id, ...content },
+    ...presentation,
   });
 
   const summary = await sendPushNotification(
@@ -304,6 +333,7 @@ export async function deliverFirewallPush(
       emailId: email.id,
       // Web push tags its OS notification with the bell row, as the tab does.
       bellNotificationId: notification.id,
+      presentation,
     },
     "email_urgent",
     // The firewall's PUSH / MEETING decision: one of the four interrupt

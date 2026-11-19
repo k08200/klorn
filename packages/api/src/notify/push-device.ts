@@ -19,7 +19,7 @@
  *   exactly like missing VAPID keys skips Web Push.
  */
 
-import type { NativePushMailFields } from "@klorn/contract";
+import type { NativePushMailFields, NotificationPresentation } from "@klorn/contract";
 import { type App, cert, getApps, initializeApp } from "firebase-admin/app";
 import { type BatchResponse, getMessaging, type Message } from "firebase-admin/messaging";
 import { androidDataPushEnabled } from "../config.js";
@@ -27,6 +27,7 @@ import { prisma } from "../db.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import type { NotifCategory } from "./notification-prefs.js";
+import { fcmPresentationData, fitWithinBudget } from "./push-presentation.js";
 
 const FIREBASE_SERVICE_ACCOUNT = process.env.FIREBASE_SERVICE_ACCOUNT || "";
 
@@ -56,6 +57,11 @@ export interface DevicePushPayload {
   pendingActionId?: string;
   /** The mail's firewall lane (decision N1); only travels with `emailId`. */
   lane?: "PUSH" | "MEETING";
+  /**
+   * NT0 structured fields, already cut to what native channels may carry for
+   * this user (push-presentation.ts presentationForChannels).
+   */
+  presentation?: NotificationPresentation;
 }
 
 /** Opaque ids and an in-app route — nothing the notification text does not already show. */
@@ -157,25 +163,40 @@ export function buildFcmMessage(
 ): Message {
   const mail = mailPushTarget(payload);
   if (opts.dataOnly && mail) {
+    const data = {
+      ...buildDataPayload(payload),
+      category,
+      ...mail,
+      title: payload.title,
+      body: payload.body,
+      sentAt: String(opts.now ?? Date.now()),
+    };
     return {
       token,
-      data: {
-        ...buildDataPayload(payload),
-        category,
-        ...mail,
-        title: payload.title,
-        body: payload.body,
-        sentAt: String(opts.now ?? Date.now()),
-      },
+      data: { ...data, ...fittedPresentationData(payload, data) },
       android: { priority: "high" },
     };
   }
+  const notification = { title: payload.title, body: payload.body };
+  const data = { ...buildDataPayload(payload), category, ...(mail ?? {}) };
   return {
     token,
-    notification: { title: payload.title, body: payload.body },
-    data: { ...buildDataPayload(payload), category, ...(mail ?? {}) },
+    notification,
+    data: { ...data, ...fittedPresentationData(payload, data, notification) },
     android: { priority: "high" },
   };
+}
+
+/** The NT0 data keys that fit beside the rest of the message (push-presentation.ts budget). */
+function fittedPresentationData(
+  payload: DevicePushPayload,
+  data: Record<string, string>,
+  notification?: { title: string; body: string },
+): Record<string, string> {
+  const fitted = fitWithinBudget(fcmPresentationData(payload.presentation), (keys) =>
+    Buffer.byteLength(JSON.stringify({ notification, data: { ...data, ...keys } }), "utf8"),
+  );
+  return fitted as Record<string, string>;
 }
 
 function skipped(reason: string): DevicePushSummary {
