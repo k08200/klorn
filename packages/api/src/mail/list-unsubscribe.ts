@@ -157,6 +157,37 @@ function httpsPost(
 export type OneClickResult = { ok: true } | { ok: false; reason: string };
 
 /**
+ * Every reason executeOneClickUnsubscribe returns. A log or a client sees one of
+ * these codes and nothing else: a transport error's own text can quote the
+ * unsubscribe URL (a per-recipient token) or the host.
+ */
+const KNOWN_ONE_CLICK_FAILURE = /^(?:unsafe-endpoint|request-error|http-\d{3})$/;
+
+export function isKnownOneClickFailure(reason: string): boolean {
+  return KNOWN_ONE_CLICK_FAILURE.test(reason);
+}
+
+/**
+ * Some list endpoints refuse a POST that names no client. A product name only:
+ * nothing about the user.
+ */
+const ONE_CLICK_USER_AGENT = "Klorn/1.0 (RFC 8058 one-click unsubscribe)";
+
+/**
+ * The SSRF check of a one-click target, plus the port: 443 only (URL drops an
+ * explicit :443, so the port reads empty). A sender-controlled URL must not reach
+ * a public host's other services (SMTP, an admin port) through Klorn's egress.
+ */
+function isSafeOneClickEndpoint(url: string): boolean {
+  if (!isSafePushEndpoint(url)) return false;
+  try {
+    return new URL(url).port === "";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Perform the RFC 8058 POST. Never throws — an unsubscribe failure is a
  * user-facing "try the link instead", not a 500. 2xx/3xx count as done
  * (some list providers 302 to a confirmation page after honoring the POST).
@@ -165,10 +196,11 @@ export async function executeOneClickUnsubscribe(
   url: string,
   post: PostFn = httpsPost,
 ): Promise<OneClickResult> {
-  if (!isSafePushEndpoint(url)) return { ok: false, reason: "unsafe-endpoint" };
+  if (!isSafeOneClickEndpoint(url)) return { ok: false, reason: "unsafe-endpoint" };
   try {
     const res = await post(url, "List-Unsubscribe=One-Click", {
       "content-type": "application/x-www-form-urlencoded",
+      "user-agent": ONE_CLICK_USER_AGENT,
     });
     if (res.statusCode >= 200 && res.statusCode < 400) return { ok: true };
     return { ok: false, reason: `http-${res.statusCode}` };

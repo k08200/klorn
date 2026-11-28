@@ -24,6 +24,7 @@ import { useT } from "../../../lib/i18n";
 import { captureClientError } from "../../../lib/sentry";
 import { useKeyboardTriage } from "../../../lib/use-hotkeys";
 import { useDisplayTimeZone } from "../../../lib/use-time-zone";
+import { readUndoAccount, undoRequest } from "../mail-undo";
 import { UNDO_NOTICE_SECONDS } from "../use-lane-move";
 import { TRIAGE_ROW_ATTR, useListTriage } from "../use-list-triage";
 import { MailHeader } from "./mail-header";
@@ -56,6 +57,8 @@ function listScroller(root: HTMLElement | null): HTMLElement | null {
 interface ReaderUndo {
   action: "archive" | "delete";
   gmailId: string;
+  /** The mail's own account (null = primary): its undo restores there. */
+  linkedInboxAccountId: string | null;
   subject: string | null;
 }
 
@@ -64,7 +67,12 @@ function readerUndoFrom(params: ReturnType<typeof useSearchParams>): ReaderUndo 
   const action = params?.get("undoAction");
   const gmailId = params?.get("undoGmailId")?.trim();
   if ((action !== "archive" && action !== "delete") || !gmailId) return null;
-  return { action, gmailId, subject: params?.get("undoSubject") || null };
+  return {
+    action,
+    gmailId,
+    linkedInboxAccountId: readUndoAccount(params),
+    subject: params?.get("undoSubject") || null,
+  };
 }
 
 interface MailPane {
@@ -171,10 +179,11 @@ export function MailV2({ pane }: { pane?: MailPane } = {}) {
     setReaderUndoBusy(true);
     actions.setError(null);
     try {
-      const data = await apiFetch<EmailUndoActionResponse>(
-        `/api/email/${encodeURIComponent(readerUndo.gmailId)}/${readerUndo.action}/undo`,
-        { method: "POST", body: JSON.stringify({ gmailId: readerUndo.gmailId }) },
-      );
+      const request = undoRequest(readerUndo);
+      const data = await apiFetch<EmailUndoActionResponse>(request.path, {
+        method: "POST",
+        body: JSON.stringify(request.body),
+      });
       toast(t("mailV2.undo.restored"), "success");
       router.replace(`/email/${data.emailId}?markRead=false`);
     } catch (err) {

@@ -24,7 +24,11 @@ import { classifyNeedsReplyFromSignals, classifyPriority } from "../mail/email-p
 import { coercePlainBody } from "../mail/email-text.js";
 import type { GmailRawEmail } from "../mail/gmail-fetch.js";
 import { applyLaneLabel } from "../mail/gmail-labels.js";
-import { autoUnsubscribeEnabled, executeOneClickUnsubscribe } from "../mail/list-unsubscribe.js";
+import {
+  autoUnsubscribeEnabled,
+  executeOneClickUnsubscribe,
+  isKnownOneClickFailure,
+} from "../mail/list-unsubscribe.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { reserveAutoUnsubscribe } from "../mail/unsubscribe-quota.js";
 import { notifyConversationsUpdated } from "../notify/conversations-updated.js";
@@ -387,14 +391,12 @@ async function autoUnsubscribePromotional(userId: string, url: string): Promise<
 }
 
 /**
- * The code-defined reasons executeOneClickUnsubscribe returns. Any other
- * reason is a transport error's message, which can quote the unsubscribe URL
- * (a per-recipient token) or the host, so only its presence is logged.
+ * Only a code-defined reason (list-unsubscribe.ts) is logged. Anything else
+ * would be a transport error's message, which can quote the unsubscribe URL (a
+ * per-recipient token) or the host, so only its presence is logged.
  */
-const KNOWN_UNSUBSCRIBE_REASON = /^(?:unsafe-endpoint|request-failed|http-\d{3})$/;
-
 function unsubscribeFailureReason(reason: string): string {
-  return KNOWN_UNSUBSCRIBE_REASON.test(reason) ? reason : "request-error";
+  return isKnownOneClickFailure(reason) ? reason : "request-error";
 }
 
 /** A judgeable row as SELECTed from the DB (re-judge paths): the stored

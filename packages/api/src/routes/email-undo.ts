@@ -1,21 +1,30 @@
 /**
- * The undo half of trash and archive for IMAP mailboxes (step B2 of
- * docs/providers/unified-platform-plan.md), kept out of email-mutations.ts.
+ * The undo half of trash and archive for every provider, kept out of
+ * email-mutations.ts (IMAP: step B2 of docs/providers/unified-platform-plan.md;
+ * Outlook and the account rule: docs/design/mail-cleanup-actions.md, PR1).
  *
- * Two things differ from Gmail:
- *   - Undo arrives after the local row was deleted, and web clients do not send the
- *     linked account id, so for an IMAP message id the mailbox is found from the
- *     move Klorn recorded. Only while IMAP_MOVE_ACTIONS_ENABLED is on; with it off
- *     nothing here runs and the routes behave as before.
- *   - A MOVE back into INBOX gives the message a NEW UID, so it returns under a new
- *     id. The provider answers it as `restoredMessageId`; the row is re-synced
- *     under that id here, which is the id the next poll will also use, so the poll
- *     finds the row already there and creates no second one.
+ * Which account: undo arrives after the local row was deleted, so the client that
+ * did the action names the account (`linkedInboxAccountId`). When it does not (an
+ * older client), the account is found from what is known without the row: the
+ * move Klorn recorded for an IMAP id (only while IMAP_MOVE_ACTIONS_ENABLED is on),
+ * or the mailbox address an Outlook id embeds. A provider-prefixed id whose
+ * account cannot be found is refused, never handed to the primary Gmail; only a
+ * plain Gmail id with nothing else to go on is the primary, as before.
+ *
+ * Bringing the row back:
+ *   - Gmail re-fetches the same id.
+ *   - Outlook keeps an immutable id across folder moves, so the message is fetched
+ *     once by that id through Graph and persisted like the delta poll does.
+ *   - An IMAP MOVE back into INBOX gives the message a NEW UID, so it returns under
+ *     a new id. The provider answers it as `restoredMessageId`; the row is
+ *     re-synced under that id here, which is the id the next poll will also use, so
+ *     the poll finds the row already there and creates no second one.
  */
 
 import type { EmailUndoActionResponse } from "@klorn/contract";
 
 import { imapMoveActionsEnabled } from "../config.js";
+import { prisma } from "../db.js";
 import { syncEmailByGmailId } from "../mail/email-sync.js";
 import { IMAP_PROVIDERS, type ImapProviderKey } from "../mail/imap-providers.js";
 import { findMovedAccountId, type MoveRoleName } from "../mail/providers/imap-moved.js";
@@ -48,6 +57,60 @@ export async function findParkedInbox(
   }
 }
 
+const OUTLOOK_ID_PREFIX = "outlook:";
+
+/** The mailbox address an Outlook id embeds (`outlook:<mailbox>:<graph id>`), or null. */
+export function outlookMailboxOf(gmailId: string): string | null {
+  if (!gmailId.startsWith(OUTLOOK_ID_PREFIX)) return null;
+  const rest = gmailId.slice(OUTLOOK_ID_PREFIX.length);
+  const end = rest.indexOf(":");
+  if (end <= 0 || end === rest.length - 1) return null;
+  return rest.slice(0, end);
+}
+
+/** True for an id that names a mailbox other than a Gmail one (Outlook, every IMAP preset). */
+function isProviderPrefixedId(gmailId: string): boolean {
+  return gmailId.startsWith(OUTLOOK_ID_PREFIX) || looksLikeImapId(gmailId);
+}
+
+/** The caller's linked Outlook account for the mailbox an Outlook id names, or null. */
+async function findOutlookInbox(userId: string, gmailId: string): Promise<string | null> {
+  const mailbox = outlookMailboxOf(gmailId);
+  if (!mailbox) return null;
+  try {
+    const row = await prisma.linkedInboxAccount.findFirst({
+      where: { userId, provider: "OUTLOOK", email: mailbox },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  } catch (err) {
+    logDbFailure("[EMAIL] could not look up the Outlook account for an undo", err, {
+      ids: { userId },
+    });
+    return null;
+  }
+}
+
+export type UndoInbox = { linkedInboxAccountId: string | null } | { unknown: true };
+
+/**
+ * The account an undo restores in (header comment): the one the client named,
+ * else the recorded IMAP move, else the Outlook mailbox in the id. `unknown` for a
+ * provider-prefixed id whose account cannot be found.
+ */
+export async function resolveUndoInbox(
+  userId: string,
+  gmailId: string,
+  named: string | null,
+  role: MoveRoleName,
+): Promise<UndoInbox> {
+  if (named) return { linkedInboxAccountId: named };
+  const found =
+    (await findParkedInbox(userId, gmailId, role)) ?? (await findOutlookInbox(userId, gmailId));
+  if (found) return { linkedInboxAccountId: found };
+  return isProviderPrefixedId(gmailId) ? { unknown: true } : { linkedInboxAccountId: null };
+}
+
 export type UndoCompletion = { payload: EmailUndoActionResponse } | { failure: string };
 
 function isRestoredSuccess(
@@ -69,6 +132,9 @@ export async function completeUndo(
   linkedInboxAccountId: string | null,
   result: SimpleMailActionResult,
 ): Promise<UndoCompletion> {
+  if (actions.provider === "OUTLOOK") {
+    return completeOutlookUndo(userId, gmailId, linkedInboxAccountId);
+  }
   const restoredId = isRestoredSuccess(result) ? result.restoredMessageId : undefined;
   if (!restoredId) {
     const synced = await syncEmailByGmailId(userId, gmailId, linkedInboxAccountId);
@@ -93,5 +159,34 @@ export async function completeUndo(
   } catch (err) {
     logDbFailure("[EMAIL] re-sync after an IMAP undo failed", err, { ids: { userId } });
     return late;
+  }
+}
+
+const OUTLOOK_LATE: UndoCompletion = {
+  failure:
+    "Restored on Outlook, but Klorn could not refresh its copy. It will reappear after the next sync.",
+};
+
+/**
+ * The Outlook message is back in its inbox under the same immutable id: fetch it
+ * once through Graph and persist it. A failure is reported as what it is — the
+ * message is restored, only Klorn's copy is late (the next delta delivers it).
+ */
+async function completeOutlookUndo(
+  userId: string,
+  gmailId: string,
+  linkedInboxAccountId: string | null,
+): Promise<UndoCompletion> {
+  if (!linkedInboxAccountId) return OUTLOOK_LATE;
+  try {
+    // Loaded here, like the IMAP chain below: the Outlook ingestion chain (persist,
+    // judge) is only needed on this path.
+    const { syncOutlookMessageForUser } = await import("../mail/outlook-accounts.js");
+    const synced = await syncOutlookMessageForUser(userId, linkedInboxAccountId, gmailId);
+    if (!synced) return OUTLOOK_LATE;
+    return { payload: { success: true, gmailId, emailId: synced.emailId } };
+  } catch (err) {
+    logDbFailure("[EMAIL] re-sync after an Outlook undo failed", err, { ids: { userId } });
+    return OUTLOOK_LATE;
   }
 }

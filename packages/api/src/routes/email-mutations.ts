@@ -15,6 +15,7 @@ import { requireEntitled } from "../billing/entitlement-guard.js";
 import { prisma } from "../db.js";
 import { noteEmailOutcome } from "../judge/user-outcome.js";
 import { recordContactEngagement } from "../learning/contact-engagement.js";
+import { closeLeftInboxAttention, removeLeftInboxRow } from "../mail/left-inbox.js";
 import { mailActionsFor } from "../mail/providers/dispatch.js";
 import { isImapFamily } from "../mail/providers/error-semantics.js";
 import { logProviderSoftFailure } from "../mail/providers/log-soft-failure.js";
@@ -36,7 +37,7 @@ import { noteEmailBellRowsRead } from "../notify/email-bell.js";
 import { type PublicFailure, publicFailure } from "../public-failure.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { safeAttachmentFilename } from "./email.js";
-import { completeUndo, findParkedInbox } from "./email-undo.js";
+import { completeUndo, resolveUndoInbox } from "./email-undo.js";
 
 // Gmail caps a single message (body + all attachments, base64-encoded) at 25 MB.
 // We enforce the raw-byte total below that so the encoded payload stays under
@@ -124,8 +125,9 @@ function resolveUndoGmailId(pathId: string, body: unknown): string {
 
 // Undo happens AFTER the local row was deleted (archive/trash), so we can't look
 // up the account — the client that did the action passes it back for the undo so
-// the restore hits the right inbox. Absent = primary (multi-account off / linked
-// UI not yet wired).
+// the restore hits the right inbox. Absent: resolveUndoInbox (email-undo.ts) finds
+// it from what the id itself or a recorded move says, and only a plain Gmail id
+// with nothing else to go on is the primary.
 function resolveUndoLinkedInbox(body: unknown): string | null {
   const parsedBody = (body || {}) as EmailUndoBody;
   return typeof parsedBody.linkedInboxAccountId === "string" &&
@@ -143,6 +145,9 @@ function providerActionFailure(verb: "Delete" | "Archive" | "Undo", err: unknown
   const failure = publicFailure(err, "mail");
   return { error: `${verb} failed. ${failure.error}`, code: failure.code };
 }
+
+const UNDO_ACCOUNT_UNKNOWN =
+  "Could not find the account this mail belongs to. Reconnect it in Settings, then try again.";
 
 const SEND_OUTCOME_UNKNOWN_MESSAGE =
   "The message may already have been sent. Check Sent Items before retrying.";
@@ -642,6 +647,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         if (isImapFamily(actions.provider)) return reply.code(502).send({ error: result.error });
         // Gmail not connected — just remove from DB
         await prisma.emailMessage.deleteMany({ where: { id: email.id } });
+        await closeLeftInboxAttention(uid, email.id);
         noteEmailOutcome(uid, email.id, "ARCHIVED");
         return { success: true, warning: "Gmail not connected, removed locally only" };
       }
@@ -653,9 +659,12 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       return reply.code(502).send(providerActionFailure("Delete", err));
     }
 
-    // Gmail succeeded — DB already cleaned by trashEmail(). The ledger keys on
-    // the id string, not the row, so it still takes the stamp. Trash counts as
-    // ARCHIVED: either way the mail left the inbox.
+    // The trash reached the mailbox. Gmail and IMAP dropped the row already;
+    // Outlook did not (left-inbox.ts). The ledger keys on the id string, not the
+    // row, so it still takes the stamp. Trash counts as ARCHIVED: either way the
+    // mail left the inbox.
+    await removeLeftInboxRow(uid, email.id);
+    await closeLeftInboxAttention(uid, email.id);
     noteEmailOutcome(uid, email.id, "ARCHIVED");
     return { success: true };
   });
@@ -665,8 +674,14 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
     const gmailId = resolveUndoGmailId(id, request.body);
-    const linkedInboxAccountId =
-      resolveUndoLinkedInbox(request.body) ?? (await findParkedInbox(uid, gmailId, "TRASH"));
+    const inbox = await resolveUndoInbox(
+      uid,
+      gmailId,
+      resolveUndoLinkedInbox(request.body),
+      "TRASH",
+    );
+    if ("unknown" in inbox) return reply.code(409).send({ error: UNDO_ACCOUNT_UNKNOWN });
+    const { linkedInboxAccountId } = inbox;
 
     try {
       const actions = await mailActionsFor(uid, linkedInboxAccountId);
@@ -710,6 +725,7 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         // missing account, and the row stays.
         if (isImapFamily(actions.provider)) return reply.code(502).send({ error: result.error });
         await prisma.emailMessage.deleteMany({ where: { id: email.id } });
+        await closeLeftInboxAttention(uid, email.id);
         void recordEvent(uid, "queue_action", { action: "archive" });
         noteEmailOutcome(uid, email.id, "ARCHIVED");
         return { success: true, warning: "Gmail not connected, removed locally only" };
@@ -722,6 +738,9 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       return reply.code(502).send(providerActionFailure("Archive", err));
     }
 
+    // Same as DELETE above: the row leaves whatever the provider.
+    await removeLeftInboxRow(uid, email.id);
+    await closeLeftInboxAttention(uid, email.id);
     // Retention analytics: archiving is the core "I handled this card" signal.
     void recordEvent(uid, "queue_action", { action: "archive" });
     noteEmailOutcome(uid, email.id, "ARCHIVED");
@@ -733,8 +752,14 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const uid = getUserId(request);
     const gmailId = resolveUndoGmailId(id, request.body);
-    const linkedInboxAccountId =
-      resolveUndoLinkedInbox(request.body) ?? (await findParkedInbox(uid, gmailId, "ARCHIVE"));
+    const inbox = await resolveUndoInbox(
+      uid,
+      gmailId,
+      resolveUndoLinkedInbox(request.body),
+      "ARCHIVE",
+    );
+    if ("unknown" in inbox) return reply.code(409).send({ error: UNDO_ACCOUNT_UNKNOWN });
+    const { linkedInboxAccountId } = inbox;
 
     try {
       const actions = await mailActionsFor(uid, linkedInboxAccountId);
