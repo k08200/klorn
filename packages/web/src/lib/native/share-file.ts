@@ -16,8 +16,12 @@ export async function shareFileNatively(blob: Blob, filename: string): Promise<b
   try {
     await nav.share({ files: [file], title: filename });
   } catch (err) {
+    const name = (err as { name?: string })?.name;
     // The person closed the sheet: done, not a failure to report.
-    if ((err as { name?: string })?.name !== "AbortError") throw err;
+    if (name === "AbortError") return true;
+    // The tap's user activation expired during the download: download instead.
+    if (name === "NotAllowedError") return false;
+    throw err;
   }
   return true;
 }

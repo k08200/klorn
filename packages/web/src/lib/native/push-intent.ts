@@ -29,7 +29,17 @@ function safeWebPath(value: unknown): string | null {
   const path = q === -1 ? value : value.slice(0, q);
   const search = q === -1 ? "" : value.slice(q);
   if (!SAFE_PATH.test(path) || !SAFE_SEARCH.test(search)) return null;
-  if (path.split("/").includes("..")) return null;
+  // Decoded, no segment may step out of its place (`..`, `%2e%2e`) or smuggle
+  // a separator (`%2F`, `%5C`) — the router would resolve either elsewhere.
+  for (const segment of path.split("/").slice(1)) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
+      return null;
+    }
+    if (decoded === ".." || decoded === "." || /[/\\]/.test(decoded)) return null;
+  }
   return path + search;
 }
 

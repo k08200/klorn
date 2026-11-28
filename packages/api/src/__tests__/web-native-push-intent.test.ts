@@ -41,6 +41,11 @@ describe("webPathFromPush", () => {
     expect(webPathFromPush({ url: "//evil.example/x" })).toBe("/");
     expect(webPathFromPush({ url: "/\\evil.example" })).toBe("/");
     expect(webPathFromPush({ url: "javascript:alert(1)" })).toBe("/");
+    expect(webPathFromPush({ url: "/email/../login" })).toBe("/");
+    expect(webPathFromPush({ url: "/email/%2e%2e/login" })).toBe("/");
+    expect(webPathFromPush({ url: "/email/%2E%2e%2Flogin" })).toBe("/");
+    expect(webPathFromPush({ url: "/%2F%2Fevil.example" })).toBe("/");
+    expect(webPathFromPush({ url: "/email/%zz" })).toBe("/");
     expect(webPathFromPush({ emailId: "../../etc" })).toBe("/");
     expect(webPathFromPush({ emailId: 42 })).toBe("/");
   });

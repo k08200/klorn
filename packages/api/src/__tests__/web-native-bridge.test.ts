@@ -48,38 +48,44 @@ describe("decideBack", () => {
 });
 
 describe("planTokenLoad", () => {
-  it("keeps the Keychain token (the old mobile app's item) and drops a stale copy", () => {
-    expect(planTokenLoad({ secure: "jwt-secure", local: "jwt-old" })).toEqual({
+  const none = { token: null, writeSecure: false, clearSecure: false, clearLocal: false };
+
+  it("keeps the Keychain token — the old mobile app's item — so an upgrade stays signed in", () => {
+    expect(planTokenLoad({ secure: "jwt-secure", local: null, cleared: false })).toEqual({
+      ...none,
       token: "jwt-secure",
-      writeSecure: false,
-      clearLocal: true,
-    });
-    expect(planTokenLoad({ secure: "jwt-secure", local: null })).toEqual({
-      token: "jwt-secure",
-      writeSecure: false,
-      clearLocal: false,
     });
   });
 
   it("moves a localStorage token into the Keychain once", () => {
-    expect(planTokenLoad({ secure: null, local: "jwt-local" })).toEqual({
+    expect(planTokenLoad({ secure: null, local: "jwt-local", cleared: false })).toEqual({
       token: "jwt-local",
       writeSecure: true,
+      clearSecure: false,
       clearLocal: true,
     });
   });
 
+  it("prefers the localStorage token over an older Keychain one (a failed Keychain write)", () => {
+    expect(planTokenLoad({ secure: "jwt-old", local: "jwt-new", cleared: false })).toEqual({
+      token: "jwt-new",
+      writeSecure: true,
+      clearSecure: false,
+      clearLocal: true,
+    });
+  });
+
+  it("a sign-out whose Keychain clear failed stays signed out and clears the item", () => {
+    expect(planTokenLoad({ secure: "jwt-old", local: null, cleared: true })).toEqual({
+      ...none,
+      clearSecure: true,
+    });
+    expect(planTokenLoad({ secure: null, local: null, cleared: true })).toEqual(none);
+  });
+
   it("is signed out when neither has one", () => {
-    expect(planTokenLoad({ secure: null, local: null })).toEqual({
-      token: null,
-      writeSecure: false,
-      clearLocal: false,
-    });
-    expect(planTokenLoad({ secure: "", local: "" })).toEqual({
-      token: null,
-      writeSecure: false,
-      clearLocal: false,
-    });
+    expect(planTokenLoad({ secure: null, local: null, cleared: false })).toEqual(none);
+    expect(planTokenLoad({ secure: "", local: "", cleared: false })).toEqual(none);
   });
 });
 

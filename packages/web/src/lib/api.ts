@@ -1,6 +1,7 @@
 // Auth-shaped flows must ask isNativeShell(), never isNativePlatform() — the
 // Capacitor-only test answers "no" inside the Tauri wrapper. capacitor.ts is
-// deliberately NOT imported here so that mistake cannot be made in this file.
+// deliberately NOT called here (./native/deep-links uses it internally only
+// for its default argument, which this file never relies on).
 import { linkRelayQuery, NATIVE_OAUTH_SCHEME } from "./native/deep-links";
 import { isNativeShell, openExternal, shellKind } from "./native/shell";
 import { safeHttpsUrl } from "./safe-path";
@@ -28,12 +29,28 @@ const LEGACY_AUTH_TOKEN_KEY = `${LEGACY_KEY_PREFIX}-token`;
 // ─── Native token storage (Capacitor shell) ─────────────────────────────────
 // Inside the Capacitor shell the token lives in the Keychain/Keystore
 // (native/secure-token.ts), mirrored here in memory because every reader below
-// is synchronous. `undefined` = not in that mode (the plain web, the Tauri
-// shell, or secure storage unusable): localStorage stays the store, exactly as
-// before. Readers that run at launch await authTokenReady() first.
+// is synchronous. Outside that shell (the plain web, the Tauri shell) or when
+// secure storage cannot load, localStorage stays the store, exactly as before.
+// Readers that run at launch await authTokenReady() first.
+//
+// Failure handling, so a session never comes back after sign-out and a newer
+// session is never replaced by an older one:
+//   - a failed Keychain WRITE keeps the new token in localStorage, which wins
+//     on the next launch (native/token-migration.ts) and moves back in;
+//   - a failed Keychain CLEAR leaves a marker; the next launch removes the
+//     Keychain item before reading anything.
 let nativeToken: string | null | undefined;
 let nativeTokenLoad: Promise<void> | null = null;
+let nativeTokenLoaded = false;
+/** A set/clear ran before the Keychain load settled: it wins over the loaded value. */
+let writtenBeforeLoad = false;
+let secureStorageFailed = false;
 let nativeTokenWrite: Promise<void> = Promise.resolve();
+const TOKEN_CLEARED_KEY = "klorn-token-cleared";
+
+function inSecureTokenMode(): boolean {
+  return typeof window !== "undefined" && shellKind() === "capacitor" && !secureStorageFailed;
+}
 
 function readLocalAuthToken(): string | null {
   return localStorage.getItem(AUTH_TOKEN_KEY) ?? localStorage.getItem(LEGACY_AUTH_TOKEN_KEY);
@@ -50,31 +67,49 @@ function clearLocalAuthToken(): void {
  * Never rejects: if secure storage fails the localStorage behaviour stays.
  */
 export function authTokenReady(): Promise<void> {
-  if (typeof window === "undefined" || shellKind() !== "capacitor") return Promise.resolve();
+  if (!inSecureTokenMode() && !nativeTokenLoad) return Promise.resolve();
   nativeTokenLoad ??= import("./native/secure-token")
-    .then((m) => m.loadSecureToken(readLocalAuthToken(), clearLocalAuthToken))
+    .then((m) =>
+      m.loadSecureToken({
+        local: readLocalAuthToken(),
+        cleared: localStorage.getItem(TOKEN_CLEARED_KEY) !== null,
+        clearLocal: clearLocalAuthToken,
+        clearMarker: () => localStorage.removeItem(TOKEN_CLEARED_KEY),
+      }),
+    )
     .then((token) => {
-      nativeToken = token;
+      if (!writtenBeforeLoad) nativeToken = token;
     })
     .catch((err) => {
       console.error("[AUTH] Secure token storage unavailable; using localStorage:", err);
+      secureStorageFailed = true;
+      // A sign-in made meanwhile lives only in memory: hand it to localStorage.
+      if (writtenBeforeLoad && nativeToken) localStorage.setItem(AUTH_TOKEN_KEY, nativeToken);
+      nativeToken = undefined;
+    })
+    .finally(() => {
+      nativeTokenLoaded = true;
     });
   return nativeTokenLoad;
 }
 
-/** Resolves once the last token write reached secure storage (before a hard navigation). */
+/** Resolves once every token write reached secure storage (before a hard navigation). */
 export function authTokenPersisted(): Promise<void> {
   return nativeTokenWrite;
 }
 
 function persistNativeToken(token: string | null): void {
   nativeToken = token;
-  nativeTokenWrite = import("./native/secure-token")
+  if (!nativeTokenLoaded) writtenBeforeLoad = true;
+  // Chained, so writes land in call order and authTokenPersisted covers all.
+  nativeTokenWrite = nativeTokenWrite
+    .then(() => import("./native/secure-token"))
     .then((m) => (token ? m.writeSecureToken(token) : m.clearSecureToken()))
+    .then(() => localStorage.removeItem(TOKEN_CLEARED_KEY))
     .catch((err) => {
       console.error("[AUTH] Secure token write failed:", err);
-      // Keep the session across a relaunch rather than losing it.
       if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
+      else localStorage.setItem(TOKEN_CLEARED_KEY, "1");
     });
 }
 
@@ -92,7 +127,7 @@ export function getStoredAuthToken(): string | null {
 }
 
 export function setStoredAuthToken(token: string): void {
-  if (nativeToken !== undefined) {
+  if (inSecureTokenMode()) {
     clearLocalAuthToken();
     persistNativeToken(token);
   } else {
@@ -107,7 +142,7 @@ export function setStoredAuthToken(token: string): void {
 
 export function clearStoredAuthToken(): void {
   clearLocalAuthToken();
-  if (nativeToken !== undefined) persistNativeToken(null);
+  if (inSecureTokenMode()) persistNativeToken(null);
 }
 
 // 401 on these endpoints means bad credentials, not session expiry — don't redirect.
@@ -137,7 +172,15 @@ function handleSessionExpired(): void {
   clearStoredAuthToken();
   const next = `${window.location.pathname}${window.location.search}`;
   const nextParam = next && next !== "/login" ? `&next=${encodeURIComponent(next)}` : "";
-  window.location.href = `/login?error=session_expired${nextParam}`;
+  const target = `/login?error=session_expired${nextParam}`;
+  // The Capacitor shell: the Keychain clear must land before the reload.
+  if (inSecureTokenMode()) {
+    void authTokenPersisted().then(() => {
+      window.location.href = target;
+    });
+    return;
+  }
+  window.location.href = target;
 }
 
 export async function apiFetch<T>(

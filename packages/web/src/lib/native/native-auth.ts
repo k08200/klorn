@@ -28,6 +28,8 @@ import { closeExternal, openExternal, shellKind } from "./shell";
 const POLL_INTERVAL_MS = 1500;
 const MAX_POLLS = 120; // 3 min, well within the server's 10-min nonce window
 const RELAY_TIMEOUT_MS = 3 * 60_000; // match the poll window
+/** After the system browser closes, how long a late deep link may still arrive. */
+const BROWSER_CLOSE_GRACE_MS = 2500;
 
 // Re-entrancy guard: a double-tap must not start two flows (and, on the relay
 // path, register two appUrlOpen listeners racing for the same code).
@@ -101,23 +103,34 @@ async function startRelayLogin(scheme: string, provider: "google" | "apple"): Pr
     resolveCode = resolve;
     rejectCode = reject;
   });
+  // Settled by the deep link, the timeout, or the person closing the browser;
+  // a rejection with nobody awaiting yet must not surface as unhandled.
+  codePromise.catch(() => {});
   const timer = setTimeout(
-    () => rejectCode(new Error("Timed out waiting for Google sign-in")),
+    () => rejectCode(new Error("Timed out waiting for sign-in")),
     RELAY_TIMEOUT_MS,
   );
+  let closeTimer: ReturnType<typeof setTimeout> | undefined;
   const handle = await App.addListener("appUrlOpen", (event) => {
     // Only `<scheme>://oauth-callback?code=…`; a link-complete deep link
     // arriving meanwhile is not a sign-in code.
     const code = parseOAuthCallback(event.url, scheme);
     if (code) resolveCode(code);
   });
+  // Closed before finishing: end the attempt (a late deep link gets a short grace).
+  const closed = await Browser.addListener("browserFinished", () => {
+    closeTimer = setTimeout(
+      () => rejectCode(new Error("Browser closed before sign-in finished")),
+      BROWSER_CLOSE_GRACE_MS,
+    );
+  });
 
   const loginUrl =
     `${API_BASE}/api/auth/${provider}/login?source=desktop` +
     `&nonce=${encodeURIComponent(nonce)}&appScheme=${encodeURIComponent(scheme)}`;
-  await Browser.open({ url: loginUrl });
 
   try {
+    await Browser.open({ url: loginUrl });
     const code = await codePromise;
     const token = await exchangeCode(code);
     setStoredAuthToken(token);
@@ -127,7 +140,9 @@ async function startRelayLogin(scheme: string, provider: "google" | "apple"): Pr
     window.location.href = landingHome();
   } finally {
     clearTimeout(timer);
+    clearTimeout(closeTimer);
     await handle.remove().catch(() => {});
+    await closed.remove().catch(() => {});
     await Browser.close().catch((err) => {
       console.warn("[AUTH] Browser.close() failed (harmless):", err);
     });

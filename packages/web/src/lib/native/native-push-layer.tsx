@@ -58,21 +58,28 @@ function PushPriming({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const enable = async () => {
     setBusy(true);
-    const result = await enableNativePush({ prompt: true });
-    await markPrimed(result === "granted" ? "enabled" : "later");
-    setBusy(false);
-    if (result === "denied") toast(t("nativePush.denied"), "info");
-    onDone();
+    try {
+      const result = await enableNativePush({ prompt: true });
+      await markPrimed(result === "granted" ? "enabled" : "later");
+      if (result === "denied") toast(t("nativePush.denied"), "info");
+    } finally {
+      setBusy(false);
+      onDone();
+    }
   };
   const later = async () => {
     await markPrimed("later");
     onDone();
   };
   return (
+    // Escape — and so Android back (native-bridge.tsx) — means "Not now".
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="native-push-priming-title"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") void later();
+      }}
       className="fixed inset-0 z-[110] flex flex-col justify-between overflow-y-auto bg-surface-panel px-6 pb-safe pt-safe text-ink"
     >
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 py-8">
@@ -174,7 +181,9 @@ export default function NativePushLayer() {
   const closeBanner = useCallback(() => setBanner(null), []);
   // The latest router/t/toast for listeners installed once.
   const live = useRef({ router, t, toast });
-  live.current = { router, t, toast };
+  useEffect(() => {
+    live.current = { router, t, toast };
+  });
 
   // Ask once: only on a device that has not answered (never by itself on launch).
   useEffect(() => {

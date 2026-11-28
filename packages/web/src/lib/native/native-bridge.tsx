@@ -59,7 +59,9 @@ export default function NativeBridge() {
   const router = useRouter();
   const pathname = usePathname();
   const live = useRef({ router, pathname });
-  live.current = { router, pathname };
+  useEffect(() => {
+    live.current = { router, pathname };
+  });
 
   // Splash: the web app has rendered.
   useEffect(() => {

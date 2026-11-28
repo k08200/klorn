@@ -25,20 +25,30 @@ function storage(): Promise<SecureStorageModule["SecureStorage"]> {
 }
 
 /**
- * The token to start with. `local` is what localStorage holds (a shell build
- * from before this module); `clearLocal` removes it once it is safe in the
- * Keychain. Rejects when secure storage is unusable — the caller then keeps
- * the localStorage behaviour rather than signing anyone out.
+ * The token to start with (see ./token-migration.ts). `local` is what
+ * localStorage holds; `clearLocal` removes it once it is safe in the Keychain;
+ * `cleared` / `clearMarker` are the failed-sign-out marker. Rejects when secure
+ * storage is unusable — the caller then keeps the localStorage behaviour
+ * rather than signing anyone out.
  */
-export async function loadSecureToken(
-  local: string | null,
-  clearLocal: () => void,
-): Promise<string | null> {
+export async function loadSecureToken(input: {
+  local: string | null;
+  cleared: boolean;
+  clearLocal: () => void;
+  clearMarker: () => void;
+}): Promise<string | null> {
   const secureStorage = await storage();
   const raw = await secureStorage.getItem(TOKEN_KEY);
-  const plan = planTokenLoad({ secure: typeof raw === "string" ? raw : null, local });
+  const plan = planTokenLoad({
+    secure: typeof raw === "string" && raw ? raw : null,
+    local: input.local,
+    cleared: input.cleared,
+  });
+  if (plan.clearSecure) await secureStorage.removeItem(TOKEN_KEY);
   if (plan.writeSecure && plan.token) await secureStorage.setItem(TOKEN_KEY, plan.token);
-  if (plan.clearLocal) clearLocal();
+  if (plan.clearLocal) input.clearLocal();
+  // The Keychain now matches the plan: no failed sign-out is pending.
+  if (input.cleared) input.clearMarker();
   return plan.token;
 }
 

@@ -78,16 +78,30 @@ export async function enableNativePush({ prompt }: { prompt: boolean }): Promise
     let state = (await push.checkPermissions()).receive;
     if (state !== "granted" && prompt) state = (await push.requestPermissions()).receive;
     if (state !== "granted") return state === "denied" ? "denied" : "prompt";
-    const registration = await push.addListener("registration", (token) => {
-      void prefs.set(TOKEN_KEY, token.value).catch(() => {});
-      void sendTokenToServer(token.value, platform);
-      void registration.remove();
-    });
-    const failure = await push.addListener("registrationError", (err) => {
-      console.error("[PUSH-DEVICE] Native push registration error:", err);
-      void failure.remove();
-    });
-    await push.register();
+    // One-shot listeners, both removed whichever way registration ends.
+    const handles: Array<{ remove: () => Promise<void> }> = [];
+    const done = () => {
+      for (const h of handles.splice(0)) void h.remove();
+    };
+    handles.push(
+      await push.addListener("registration", (token) => {
+        done();
+        void prefs
+          .set(TOKEN_KEY, token.value)
+          .catch((err) => console.warn("[PUSH-DEVICE] token not saved:", err));
+        void sendTokenToServer(token.value, platform);
+      }),
+      await push.addListener("registrationError", (err) => {
+        done();
+        console.error("[PUSH-DEVICE] Native push registration error:", err);
+      }),
+    );
+    try {
+      await push.register();
+    } catch (err) {
+      done();
+      throw err;
+    }
     return "granted";
   } catch (err) {
     // requestPermissions()/register() can throw on some OS versions; the
@@ -101,15 +115,16 @@ export async function enableNativePush({ prompt }: { prompt: boolean }): Promise
 export async function forgetNativePushToken(sessionToken: string | null): Promise<void> {
   try {
     const token = await prefs.get(TOKEN_KEY);
-    if (!token) return;
-    if (sessionToken) {
-      await fetch(`${API_BASE}/api/notifications/push/device-token`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
-        body: JSON.stringify({ token }),
-        keepalive: true,
-      }).catch((err) => console.warn("[PUSH-DEVICE] unregister failed:", err));
-    }
+    if (!token || !sessionToken) return;
+    const res = await fetch(`${API_BASE}/api/notifications/push/device-token`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({ token }),
+      keepalive: true,
+    });
+    // Kept on a failure: the next sign-out tries again, and the next sign-in
+    // re-registers the device to whoever signs in.
+    if (!res.ok) throw new Error(`unregister failed: ${res.status}`);
     await prefs.remove(TOKEN_KEY);
   } catch (err) {
     console.warn("[PUSH-DEVICE] forgetNativePushToken failed:", err);
