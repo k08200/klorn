@@ -58,6 +58,8 @@ dependencies {
     // push/KlornMessagingService.java extends the push plugin's FirebaseMessagingService.
     implementation "com.google.firebase:firebase-messaging:$firebaseMessagingVersion"
     testImplementation "junit:junit:$junitVersion"
+    // shell/ShellRouteResolverTest parses JSON; android.jar's org.json is a stub in unit tests.
+    testImplementation "org.json:json:20240303"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
