@@ -18,11 +18,8 @@ import { listReplyTonePolicies, normalizeReplyTone } from "../learning/reply-ton
 import { COST_CAP_HTTP_STATUS, costCapRefusal } from "../llm/cost-cap-refusal.js";
 import { createCompletion, DRAFT_MODEL } from "../llm/openai.js";
 import { captureLlmFailure, logLlmFailure } from "../llm/report-llm-failure.js";
-import {
-  NOTIFICATION_LANGUAGES,
-  resolveNotificationLanguage,
-  URGENT_EMAIL_TITLES,
-} from "../notify/notification-strings.js";
+import { URGENT_EMAIL_TITLES } from "../notify/notification-strings.js";
+import { SHIPPED_LANGUAGES, toShippedLanguage } from "../shipped-languages.js";
 import { normalizeTimeZone, normalizeTimeZoneMode, parseTimeZoneInput } from "../time-zone.js";
 
 // MEDIUM-risk tools that users may pre-approve for AUTO mode.
@@ -101,10 +98,8 @@ export async function automationRoutes(app: FastifyInstance) {
       preApprovableTools: Array.from(PRE_APPROVABLE_TOOLS),
       replyTone: normalizeReplyTone(configAny.replyTone),
       replyTones: listReplyTonePolicies(),
-      notificationLanguage: resolveNotificationLanguage(
-        configAny.notificationLanguage as string | null,
-      ),
-      notificationLanguages: Array.from(NOTIFICATION_LANGUAGES),
+      notificationLanguage: toShippedLanguage(configAny.notificationLanguage),
+      notificationLanguages: Array.from(SHIPPED_LANGUAGES),
       notifyEmailUrgent: configAny.notifyEmailUrgent ?? true,
       notifyMeeting: configAny.notifyMeeting ?? true,
       notifyTaskDue: configAny.notifyTaskDue ?? true,
@@ -190,12 +185,11 @@ export async function automationRoutes(app: FastifyInstance) {
       data.replyTone = normalizeReplyTone(data.replyTone);
     }
 
-    // Validate notificationLanguage — an unshipped language would be persisted
-    // and then silently fall back to English on every notification.
+    // Validate notificationLanguage — an unshipped language (including the
+    // retired ja/es/fr/de) would be persisted and then silently fall back to
+    // English on every notification. Fold it to a shipped one: en, ko, zh.
     if ("notificationLanguage" in data) {
-      data.notificationLanguage = resolveNotificationLanguage(
-        data.notificationLanguage as string | null,
-      );
+      data.notificationLanguage = toShippedLanguage(data.notificationLanguage);
     }
 
     // Client-supplied zone: reject anything Intl does not know (400) rather
@@ -256,10 +250,8 @@ export async function automationRoutes(app: FastifyInstance) {
       preApprovableTools: Array.from(PRE_APPROVABLE_TOOLS),
       replyTone: normalizeReplyTone(configAny.replyTone),
       replyTones: listReplyTonePolicies(),
-      notificationLanguage: resolveNotificationLanguage(
-        configAny.notificationLanguage as string | null,
-      ),
-      notificationLanguages: Array.from(NOTIFICATION_LANGUAGES),
+      notificationLanguage: toShippedLanguage(configAny.notificationLanguage),
+      notificationLanguages: Array.from(SHIPPED_LANGUAGES),
       notifyEmailUrgent: configAny.notifyEmailUrgent ?? true,
       notifyMeeting: configAny.notifyMeeting ?? true,
       notifyTaskDue: configAny.notifyTaskDue ?? true,

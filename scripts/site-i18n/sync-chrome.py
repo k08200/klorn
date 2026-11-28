@@ -6,11 +6,15 @@ Translating the copy is per-page work, but the chrome that ties the copies
 together must be identical everywhere and is mechanical, so it lives here:
 
   - <html lang>, canonical, og:url, og:locale
-  - the hreflang set (7 languages + x-default)
-  - the nav language menu (all 7, pointing at this page's counterparts)
+  - the hreflang set (en / ko / zh + x-default)
+  - the nav language menu (all three, pointing at this page's counterparts)
   - the static nav links (mirrors site-nav.js)
   - internal links to localized pages point at the page's own locale
   - Korean pages load Pretendard (the only CJK webfont the site ships)
+
+The site ships exactly three languages (founder decision, 2026-11-17): English
+at the root, Korean and Simplified Chinese. The old /ja/, /de/, /es/ and /fr/
+trees are redirect stubs to the English pages; this script never touches them.
 
 Idempotent. Run from the repo root:  python3 scripts/site-i18n/sync-chrome.py
 The guard that enforces the result is .github/scripts/check-website-lockstep.sh.
@@ -22,23 +26,14 @@ from pathlib import Path
 
 ROOT = Path("website")
 ORIGIN = "https://klorn.ai"
-LANGS = ["en", "ko", "ja", "zh", "es", "fr", "de"]
-NATIVE = {
-    "en": "English", "ko": "한국어", "ja": "日本語", "zh": "中文",
-    "es": "Español", "fr": "Français", "de": "Deutsch",
-}
-OG_LOCALE = {
-    "en": "en_US", "ko": "ko_KR", "ja": "ja_JP", "zh": "zh_CN",
-    "es": "es_ES", "fr": "fr_FR", "de": "de_DE",
-}
+# Keep in lockstep with SHIPPED_LANGS in check-website-lockstep.sh.
+LANGS = ["en", "ko", "zh"]
+NATIVE = {"en": "English", "ko": "한국어", "zh": "中文"}
+OG_LOCALE = {"en": "en_US", "ko": "ko_KR", "zh": "zh_CN"}
 NAV_LABELS = {
     "en": ["Accounts", "Lanes", "Pricing", "Security", "Blog"],
     "ko": ["계정", "레인", "요금", "보안", "블로그"],
-    "ja": ["アカウント", "レーン", "料金", "セキュリティ", "ブログ"],
     "zh": ["账户", "分类", "定价", "安全", "博客"],
-    "es": ["Cuentas", "Carriles", "Precios", "Seguridad", "Blog"],
-    "fr": ["Comptes", "Files", "Tarifs", "Sécurité", "Blog"],
-    "de": ["Konten", "Spuren", "Preise", "Sicherheit", "Blog"],
 }
 # Keep in lockstep with LOCALIZED_SUBPAGES in check-website-lockstep.sh.
 SUBPAGES = [
@@ -49,8 +44,9 @@ SUBPAGES = [
 PRETENDARD = '<link rel="stylesheet" href="/fonts/pretendard/pretendard.css">'
 
 SUB_RE = "|".join(re.escape(p) for p in sorted(SUBPAGES, key=len, reverse=True))
-LINK_RE = re.compile(r'href="/(?:(?:en|ko|ja|zh|es|fr|de)/)?(' + SUB_RE + r')/(#[^"]*)?"')
-HOME_RE = re.compile(r'href="/(?:(?:ko|ja|zh|es|fr|de)/)?(#[^"]*)?"')
+LANG_RE = "|".join(LANGS)
+LINK_RE = re.compile(r'href="/(?:(?:' + LANG_RE + r')/)?(' + SUB_RE + r')/(#[^"]*)?"')
+HOME_RE = re.compile(r'href="/(?:(?:' + "|".join(l for l in LANGS if l != "en") + r')/)?(#[^"]*)?"')
 
 
 def prefix(lang):

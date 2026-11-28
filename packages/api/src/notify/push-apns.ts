@@ -20,10 +20,17 @@
 import http2 from "node:http2";
 import type { ApnsMailCategory } from "@klorn/contract";
 import jwt from "jsonwebtoken";
+import { pushPresentationOpenTo } from "../config.js";
 import { prisma } from "../db.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import type { NotifCategory } from "./notification-prefs.js";
 import { type DevicePushPayload, type DevicePushSummary, mailPushTarget } from "./push-device.js";
+import {
+  apnsCustomKeys,
+  apnsPresentation,
+  fitWithinBudget,
+  isPassiveKind,
+} from "./push-presentation.js";
 
 const APNS_KEY_P8 = (process.env.APNS_KEY_P8 || "").replace(/\\n/g, "\n");
 const APNS_KEY_ID = process.env.APNS_KEY_ID || "";
@@ -75,6 +82,7 @@ function sendOne(
   providerJwt: string,
   deviceToken: string,
   body: string,
+  priority: ApnsPriority,
 ): Promise<ApnsResult> {
   return new Promise((resolve) => {
     // Idempotent settle so the promise can NEVER hang: whichever of end/error/
@@ -92,7 +100,7 @@ function sendOne(
       authorization: `bearer ${providerJwt}`,
       "apns-topic": APNS_BUNDLE_ID,
       "apns-push-type": "alert",
-      "apns-priority": "10",
+      "apns-priority": priority,
       // Give APNs a 24h retry window if the device is offline (default 0 = drop
       // immediately). This is an urgency product — don't silently lose it.
       "apns-expiration": String(Math.floor(Date.now() / 1000) + 86400),
@@ -147,20 +155,39 @@ function apnsCategoryOf(mail: { pendingActionId?: string; lane?: string }): Apns
   return mail.lane === "MEETING" ? APNS_MEETING_CATEGORY : APNS_MAIL_CATEGORY;
 }
 
+/** `apns-priority`: 10 sends now; 5 lets iOS batch it for power (a passive kind). */
+export type ApnsPriority = "10" | "5";
+
+/** The request's priority: 5 only for a passive kind under NOTIFY_PUSH_PRESENTATION. */
+export function apnsPriorityFor(payload: DevicePushPayload, presentation: boolean): ApnsPriority {
+  return presentation && isPassiveKind(payload.presentation?.kind) ? "5" : "10";
+}
+
 /**
  * The APNs JSON body. The keys a push always carried come first and unchanged
  * (top-level `category` is the Klorn NotifCategory, not the APNs one). A mail
  * push then adds, inside `aps`, the action category (the draft one when a reply
  * draft / approval exists) and `mutable-content: 1` (lets a notification service
  * extension enrich it; without one iOS shows it as is), and at the top level the
- * deep link: emailId, attentionItemId, pendingActionId, route. No `thread-id`:
- * the mail's thread id is not at the call sites and is not worth a query on the
- * push path; iOS groups by app meanwhile.
+ * deep link: emailId, attentionItemId, pendingActionId, route. Then the NT0
+ * structured fields as top-level custom keys (contract NotificationPresentation).
+ * With `presentation` (NOTIFY_PUSH_PRESENTATION open to the user) the alert is
+ * laid out title / subtitle / request and `aps` carries thread-id,
+ * interruption-level and relevance-score (push-presentation.ts).
  */
-export function buildApnsBody(payload: DevicePushPayload, category: NotifCategory): string {
+export function buildApnsBody(
+  payload: DevicePushPayload,
+  category: NotifCategory,
+  opts: { presentation?: boolean } = {},
+): string {
   const mail = mailPushTarget(payload);
+  const alert = { title: payload.title, body: payload.body };
+  const laidOut =
+    opts.presentation && payload.presentation
+      ? apnsPresentation(payload.presentation, alert)
+      : null;
   const aps = {
-    alert: { title: payload.title, body: payload.body },
+    alert: laidOut?.alert ?? alert,
     sound: "default",
     ...(mail
       ? {
@@ -168,14 +195,19 @@ export function buildApnsBody(payload: DevicePushPayload, category: NotifCategor
           "mutable-content": 1,
         }
       : {}),
+    ...(laidOut?.aps ?? {}),
   };
-  return JSON.stringify({
+  const base = {
     aps,
     ...(payload.url ? { url: payload.url } : {}),
     ...(payload.notificationId ? { notificationId: payload.notificationId } : {}),
     category,
     ...(mail ?? {}),
-  });
+  };
+  const custom = fitWithinBudget(apnsCustomKeys(payload.presentation), (keys) =>
+    Buffer.byteLength(JSON.stringify({ ...base, ...keys }), "utf8"),
+  );
+  return JSON.stringify({ ...base, ...custom });
 }
 
 /**
@@ -213,7 +245,9 @@ export async function sendApnsPush(
     return skipped("apns_jwt_error");
   }
 
-  const body = buildApnsBody(payload, category);
+  const presentation = pushPresentationOpenTo(userId);
+  const body = buildApnsBody(payload, category, { presentation });
+  const priority = apnsPriorityFor(payload, presentation);
 
   let client: http2.ClientHttp2Session;
   try {
@@ -234,7 +268,7 @@ export async function sendApnsPush(
   try {
     await Promise.all(
       rows.map((row) =>
-        sendOne(client, jwtToken, row.token, body).then((r) => {
+        sendOne(client, jwtToken, row.token, body, priority).then((r) => {
           if (r.ok) accepted++;
           else {
             failed++;

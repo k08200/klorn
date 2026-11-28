@@ -23,10 +23,16 @@
  *   2. no `noindex` page appears in the sitemap
  *   3. every <loc> resolves to a page that exists
  *   4. each entry's hreflang set is exactly the one its page declares
+ *   5. every hreflang alternate resolves to an indexable page
  *
  * (4) holds for all 17 entries today. It is cheap to keep true and silent to
  * break: a sitemap that advertises a translation the page does not claim back
  * is a non-reciprocal annotation, which Google drops without reporting.
+ *
+ * (5) is for the 2026-11-17 language retirement: /ja/, /de/, /es/ and /fr/
+ * became noindex redirect stubs to the English pages. An alternate that still
+ * names one — in the sitemap and the page alike, so (4) is satisfied — points
+ * search engines at a translation that no longer exists.
  *
  * A page opts out by carrying `noindex`, which is the same signal robots read —
  * so the sitemap and the pages cannot disagree about intent.
@@ -104,6 +110,13 @@ for (const { path, alternates } of entries) {
       /<link rel="alternate" hreflang="([^"]+)" href="([^"]+)"/g,
     )].map((m) => `${m[1]} ${m[2]}`),
   );
+  for (const a of alternates) {
+    const target = found.get(strip(a.slice(a.indexOf(" ") + 1)));
+    if (!target) problems.push(`${path}: sitemap alternate "${a}" has no index.html`);
+    else if (target.noindex) {
+      problems.push(`${path}: sitemap alternate "${a}" is a noindex page (${target.file})`);
+    }
+  }
   const onlySitemap = [...alternates].filter((a) => !declared.has(a));
   const onlyPage = [...declared].filter((a) => !alternates.has(a));
   for (const a of onlySitemap) {

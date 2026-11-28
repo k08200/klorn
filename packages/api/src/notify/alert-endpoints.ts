@@ -211,14 +211,7 @@ export function buildAlertEndpoints(input: {
 const ALERT_TEST_COPY: Record<NotificationLanguage, { title: string; body: string }> = {
   en: { title: "Klorn test alert", body: "Alerts reach this device." },
   ko: { title: "Klorn 테스트 알림", body: "이 기기로 알림이 도착합니다." },
-  ja: { title: "Klorn テスト通知", body: "このデバイスに通知が届きます。" },
   zh: { title: "Klorn 测试提醒", body: "提醒可以送达此设备。" },
-  es: { title: "Alerta de prueba de Klorn", body: "Las alertas llegan a este dispositivo." },
-  fr: { title: "Alerte d’essai Klorn", body: "Les alertes arrivent sur cet appareil." },
-  de: {
-    title: "Klorn-Testbenachrichtigung",
-    body: "Benachrichtigungen kommen auf diesem Gerät an.",
-  },
 };
 
 export function alertTestCopy(

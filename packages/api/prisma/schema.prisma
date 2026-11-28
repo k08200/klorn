@@ -115,6 +115,8 @@ model User {
   // Stamped the first time the founder welcome email is sent to this user, so
   // they receive it exactly once across the email-verify and Google sign-in
   // paths. Null = not sent yet (the atomic claim in welcome-email.ts flips it).
+  // Also stamped when Resend refuses the address for good, so sign-ins stop
+  // re-sending: it means "welcome settled".
   welcomeEmailSentAt         DateTime?
   conversations              Conversation[]
   tokens                     UserToken[]
@@ -971,6 +973,12 @@ model CalendarEvent {
   endTime           DateTime
   location          String?
   meetingLink       String?
+  // NT0: how many people the invite lists — resources (rooms, equipment) and
+  // attendees who declined left out; the user and the organizer counted when
+  // listed. NULL = the provider listed none (a solo event), omitted the list
+  // (a large meeting), or does not report attendees (only Google sync sets it).
+  // A count only: attendee identities are never stored (context/meeting-prep-attendees.ts).
+  attendeeCount     Int?
   color             String?
   allDay            Boolean                @default(false)
   // Legacy Google key. Still what every read and sync lookup uses; it is
@@ -1343,7 +1351,7 @@ model AutomationConfig {
   // no browser or Mac to read a locale from — the clients' own language
   // settings only ever governed their own UI chrome. NOT the reply language:
   // a reply follows the mail it answers (mail/email-reply.ts).
-  notificationLanguage   String   @default("en") // "en" | "ko"
+  notificationLanguage   String   @default("en") // "en" | "ko" | "zh" (shipped-languages.ts)
   // Gmail read-state opt-in: when true, Eve marks the original email as read
   // after AUTO-replying to it. Default off so Gmail's "unread" remains a user signal.
   autoMarkReadEnabled    Boolean  @default(false)

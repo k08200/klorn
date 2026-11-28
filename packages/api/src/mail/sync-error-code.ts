@@ -8,7 +8,8 @@
 import { prisma } from "../db.js";
 import { logDbFailure } from "../report-db-failure.js";
 import { pollFailureKind } from "./imap-poll-failures.js";
-import { isImapAuthFailure } from "./providers/imap-session.js";
+import { IMAP_THROTTLED_CODE } from "./imap-throttled.js";
+import { isImapAuthFailure, isImapCredentialRefusal } from "./providers/imap-session.js";
 
 export type SyncErrorCode = "auth" | "unreachable" | "throttled" | "error";
 
@@ -39,18 +40,16 @@ const UNREACHABLE_KINDS = new Set([
   "blocked-address",
 ]);
 
-/**
- * RFC 5530 response codes a server attaches to a refused LOGIN that is about the
- * moment, not the password (busy, rate limit, its own bug). imapflow marks every
- * refused LOGIN `authenticationFailed`, so these must not read as "revoked".
- */
-const TRANSIENT_LOGIN_REFUSALS = new Set(["UNAVAILABLE", "LIMIT", "INUSE", "SERVERBUG"]);
+/** A throttled command (Microsoft 365), at login or later: not a refusal, not unreachable. */
+const THROTTLED_KINDS = new Set([IMAP_THROTTLED_CODE]);
 
-/** A refused login that is about the credentials: only the user can fix it. */
+/**
+ * A refused login that is about the credentials: only the user can fix it. The
+ * actions answer with the same test (providers/imap-session.ts), so a busy server
+ * reads the same on both paths.
+ */
 export function isCredentialRefusal(err: unknown): boolean {
-  if (!isImapAuthFailure(err)) return false;
-  const code = (err as { serverResponseCode?: unknown } | null)?.serverResponseCode;
-  return !(typeof code === "string" && TRANSIENT_LOGIN_REFUSALS.has(code.toUpperCase()));
+  return isImapCredentialRefusal(err);
 }
 
 /** The code for a failed IMAP poll (pollFailureKind: "auth", a library code, or "error"). */
@@ -58,6 +57,7 @@ export function imapSyncErrorCode(err: unknown): SyncErrorCode {
   if (isImapAuthFailure(err)) return isCredentialRefusal(err) ? "auth" : "throttled";
   const kind = pollFailureKind(err);
   if (UNREACHABLE_KINDS.has(kind)) return "unreachable";
+  if (THROTTLED_KINDS.has(kind)) return "throttled";
   return "error";
 }
 

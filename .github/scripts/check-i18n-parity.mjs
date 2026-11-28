@@ -8,8 +8,11 @@
  * locales that was survivable; the moment a third exists, silent drift is
  * guaranteed, and a missing key renders as the raw key string in the product.
  *
- * This is the CI teeth, deliberately generic over N locales: it reads every
- * file in the locales directory, so adding a language needs no edit here.
+ * This is the CI teeth. The shipped set is pinned: exactly en, ko and zh
+ * (Simplified Chinese) — founder decision 2026-11-17, which retired ja, es,
+ * fr and de. A locale file outside that set, or one of the three missing,
+ * fails here; adding a language is a deliberate edit to SHIPPED_LOCALES (and
+ * to UI_LOCALES / SHIPPED_LANGUAGES, which the API tests hold in lockstep).
  *
  * Parsing note: the tables are FLAT `Record<string, string>` literals, so
  * brace-matching the block and taking depth-1 quoted keys is exact. If the
@@ -19,6 +22,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 
 const DIR = "packages/web/src/lib/locales";
+/** The UI locales Klorn ships. Mirrors UI_LOCALES in packages/web/src/lib/ui-locale.ts. */
+const SHIPPED_LOCALES = ["en", "ko", "zh"];
 const TABLE_RE = /const\s+(\w+)\s*:\s*Record<string,\s*string>\s*=\s*\{/;
 
 function fail(message) {
@@ -116,9 +121,15 @@ for (const file of files) {
   bodies.set(locale, body);
 }
 
-if (tables.size < 2) {
-  fail(`expected at least 2 locale files in ${DIR}, found ${tables.size}`);
+const found = [...tables.keys()].sort();
+const unexpected = found.filter((locale) => !SHIPPED_LOCALES.includes(locale));
+const absent = SHIPPED_LOCALES.filter((locale) => !tables.has(locale));
+if (unexpected.length > 0) {
+  fail(
+    `${DIR} has locale files outside the shipped set (${SHIPPED_LOCALES.join(", ")}): ${unexpected.join(", ")}`,
+  );
 }
+if (absent.length > 0) fail(`${DIR} is missing shipped locale files: ${absent.join(", ")}`);
 
 // English is the source of truth for keys, not whichever file sorts first.
 if (!tables.has("en")) fail(`${DIR} has no en.ts — English is the key source of truth`);
@@ -233,22 +244,7 @@ const COPY_GUARD_PREFIXES = [
 
 /** Words that are genuinely the same in another language: key -> locales. Keep this tiny. */
 const SAME_AS_ENGLISH = {
-  "settings.apiKeys.activity.outcome.error": ["es"],
-  // Product names Apple and Naver do not translate in these locales.
-  "imap.icloud.title": ["es", "fr", "de"],
-  "imap.naver.title": ["es", "fr", "de"],
-  "telegram.deepLink.after": ["ko", "es", "fr", "de"],
-  "telegram.codeLabel": ["de"],
-  "newEvent.date": ["fr"],
-  "newEvent.optional": ["de"],
-  "compose.message": ["fr"],
-  // German UI already calls lanes "Lanes" (keys.group.lane); French "Urgent" is the word.
-  "inboxLegacy.segment.lanes": ["de"],
-  "todayActions.row.urgent": ["fr"],
-  // "Contact" is the French word too.
-  "graph.legend.contact": ["fr"],
-  "imap.beta": ["es", "de"],
-  "graph.stats.contacts": ["fr"],
+  "telegram.deepLink.after": ["ko"],
 };
 
 function escapeRegExp(text) {
@@ -357,9 +353,6 @@ const PROSE_ALLOWLIST = new Set([
   "Telegram",
   "Google Gemini",
   "English",
-  "Español",
-  "Français",
-  "Deutsch",
   "/start",
   "403: disallowed_useragent",
   "xxxx-xxxx-xxxx-xxxx",
@@ -439,7 +432,7 @@ for (const path of PROSE_GUARD_SKIP.keys()) {
 }
 
 if (proseProblems > 0) {
-  console.error("\nPass the string through t() and add its key to all seven locale tables.");
+  console.error("\nPass the string through t() and add its key to all three locale tables (en, ko, zh).");
   process.exit(1);
 }
 

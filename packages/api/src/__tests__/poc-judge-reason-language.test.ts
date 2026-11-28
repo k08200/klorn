@@ -73,6 +73,13 @@ describe("judgeEmail — reason language", () => {
     expect(prompt).toMatch(/Korean/i);
   });
 
+  it("tells the model to write the reason in Simplified Chinese for zh", async () => {
+    await judgeEmail(EMAIL, "u1", EMPTY_CONTEXT, undefined, undefined, undefined, "zh");
+    const prompt = userPrompts()[0];
+    expect(prompt).toContain("Write the reason in Simplified Chinese");
+    expect(prompt).not.toMatch(/Korean/i);
+  });
+
   it("keeps the prompt unchanged for English, so the default judge is untouched", async () => {
     await judgeEmail(EMAIL, "u1", EMPTY_CONTEXT, undefined, undefined, undefined, "en");
     const withEnglish = userPrompts()[0];

@@ -9,7 +9,7 @@
  */
 
 import type { IncomingMessage, Server } from "node:http";
-import type { DesktopAlertKind, DesktopMailToast } from "@klorn/contract";
+import type { DesktopAlertKind, DesktopMailToast, NotificationPresentation } from "@klorn/contract";
 import { WebSocket, WebSocketServer } from "ws";
 import {
   checkSessionActive,
@@ -344,7 +344,7 @@ export function pushNotification(
     alert?: DesktopAlertKind;
     /** The desktop shell's toast for a one-mail interrupt (decision N1). */
     mail?: DesktopMailToast;
-  },
+  } & NotificationPresentation, // NT0 structured fields, flat and optional
 ) {
   broadcastToUser(userId, {
     type: "notification",

@@ -11,7 +11,11 @@
  */
 
 import crypto from "node:crypto";
-import webPush from "web-push";
+import type { NotificationPresentation } from "@klorn/contract";
+// Namespace import: web-push 4 is ESM-only with named exports and no default.
+// A default import still type-checks (@types/web-push is CJS-shaped) and passes
+// vitest, but Node refuses to link it at boot — esm-import-smoke.test.ts.
+import * as webPush from "web-push";
 import { recordEvent } from "../analytics.js";
 import { pushZombieEvictionEnabled } from "../config.js";
 import { prisma } from "../db.js";
@@ -38,6 +42,7 @@ import {
 import { sendDevicePush } from "./push-device.js";
 import { mintPushLaterToken } from "./push-later-token.js";
 import { isAllowedPushOrigin } from "./push-origin-allowlist.js";
+import { presentationForChannels } from "./push-presentation.js";
 import { recordPushAttempt } from "./push-rate-limit.js";
 import { evaluateZombieSubscription } from "./push-zombie.js";
 import { ssrfSafeHttpsAgent } from "./ssrf-safe-agent.js";
@@ -208,6 +213,16 @@ export async function sendPushNotification(
     // chose to be reminded of, so the inbound-mail noise heuristic must not
     // veto it. Every other gate still applies. Never sent to a channel.
     userSet?: boolean;
+    // NT0 structured fields (contract NotificationPresentation), carried flat
+    // by web push, APNs and FCM as push-presentation.ts allows for this user.
+    // Never sent to Telegram.
+    presentation?: NotificationPresentation;
+    // The push's pre-NT0 text, when title / body are NT0 copy
+    // (NOTIFY_PUSH_PRESENTATION, notify/kind-push-copy.ts): the inbound-mail
+    // noise policy judges this text instead, so flipping the copy flag never
+    // changes whether a push rings (an address with "deal" in an acct title,
+    // a sender named "Daily Digest" in an agent title). Never sent to a channel.
+    policyText?: { title: string; body: string };
   },
   category: NotifCategory = "system",
   options: PushSendOptions = {},
@@ -219,18 +234,23 @@ export async function sendPushNotification(
     lane,
     language,
     userSet,
+    presentation,
+    policyText,
     ...channelPayload
   } = payload;
+  const shown = presentationForChannels(userId, presentation, category, options.bucket);
   const nativePayload = {
     ...channelPayload,
     ...(emailId ? { emailId } : {}),
     ...(pendingActionId ? { pendingActionId } : {}),
     ...(emailId && lane ? { lane } : {}),
+    ...(shown.native ? { presentation: shown.native } : {}),
   };
   const webPayload = {
     ...channelPayload,
     ...(bellNotificationId ? { bellNotificationId } : {}),
     ...webMailActionFields(userId, emailId, lane, language),
+    ...(shown.web ?? {}),
   };
   // First line of defense: drop housekeeping + noise pushes BEFORE any
   // other check. Six other modules call this function (briefing,
@@ -242,8 +262,8 @@ export async function sendPushNotification(
   // ("[Klorn] Action complete — mark read finished") from the LOW-risk
   // auto-exec path that PR #456's notify_user-tool guard did not cover.
   const suppression = notificationSuppressionReason({
-    title: payload.title,
-    message: payload.body,
+    title: policyText?.title ?? payload.title,
+    message: policyText?.body ?? payload.body,
     // category is a routing/preference dimension; we co-opt it as the
     // adjudicated-surface hint so content the system already decided to
     // interrupt on bypasses the inbound-mail noise heuristic.

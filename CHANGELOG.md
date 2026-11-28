@@ -68,6 +68,19 @@ calendar time.
     `docs/design/attention-engine-v3.md` §3(5), "Policy v3.2".
 
 ### Changed
+- Klorn now ships three languages: English, Korean and Simplified Chinese.
+  The Japanese, Spanish, French and German web locales are removed; a
+  browser or saved profile in one of them shows English, Settings saves a
+  notification language outside en/ko/zh as English, and a migration rewrites
+  a stored ja/es/fr/de notification language to English. Daily
+  digest mail, the judge's PUSH reason and the on-demand summary, sender
+  dossier and thread brief now also come in Simplified Chinese.
+- The Mac app ships the same three languages. Its Japanese, Spanish, French
+  and German catalogues are removed; a saved in-app language from that set
+  reads as English, and a macOS in one of them shows the next Preferred
+  Language Klorn ships, else English. A Traditional Chinese macOS shows the
+  app in Simplified Chinese; prompts macOS itself shows (calendar access)
+  follow macOS's own language matching.
 - **Quiet hours hold urgent mail instead of dropping it.** A PUSH-lane mail
   that rang no web push, Telegram, Android or iOS push because of quiet hours
   now rings once after they end, as the Mac and Windows apps already do. One
@@ -87,8 +100,22 @@ calendar time.
   kept, the month-long meeting fingerprint, retention, and use in
   classification. The `calendar.events` and `calendar.readonly` scope entries
   say so too (#1607).
+- **klorn.ai ships in English, Korean and Simplified Chinese only.** The
+  Japanese, German, Spanish and French pages are gone from the language
+  menus, hreflang sets and sitemap; their old URLs (`/ja/`, `/de/`, `/es/`,
+  `/fr/` and every page under them) are noindex stubs that redirect to the
+  matching English page.
 
 ### Fixed
+- **Password reset mail is limited per address.** Forgot-password had only a
+  per-IP limit, so requests spread over many sources could flood one inbox
+  with reset mail and keep killing the previous link. An address now gets at
+  most 5 requests an hour; past that the answer is the same 200 and no mail
+  goes out. A request within 5 minutes of the last mailed link keeps that link
+  instead of mailing a new one, and a reset mail that fails to send puts the
+  previous link back.
+- The Teams seat editor explains `SEATS_CHANGE_IN_FLIGHT` (an earlier seat
+  change still settling) instead of showing the generic error.
 - **Only PUSH mail rings from the urgent sweep.** The urgent-priority sweep
   rang "Urgent email" for any unread mail its keywords marked urgent, even when
   the judge had put it in QUEUE, MEETING or SILENT. It now rings only mail

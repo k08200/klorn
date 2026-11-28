@@ -33,7 +33,9 @@ async function sendInvite(): Promise<{ subject: string; html: string }> {
   process.env.RESEND_API_KEY = "re_test_key";
   vi.resetModules();
   const { sendBetaInviteEmail } = await import("../mail/email.js");
-  await expect(sendBetaInviteEmail("applicant@example.com", "Applicant")).resolves.toBe(true);
+  await expect(sendBetaInviteEmail("applicant@example.com", "Applicant")).resolves.toEqual({
+    sent: true,
+  });
   expect(sent).toHaveLength(1);
   return sent[0];
 }

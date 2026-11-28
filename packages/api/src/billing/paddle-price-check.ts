@@ -35,10 +35,10 @@ const FETCH_TIMEOUT_MS = 10_000;
 /**
  * Dollars in an advertised price string.
  *
- * Accepts both "$30" and the German/French "30 $", because those two landings
- * write prices with a trailing sign and a decimal comma. A dollar-first parser
- * skips them in silence — which is how de and fr came to disagree with their
- * own price card before 2026-10-14.
+ * Accepts both "$30" and the European "30 $" (trailing sign, decimal comma).
+ * A dollar-first parser skips the latter in silence — which is how the de and
+ * fr landings (retired 2026-11-17) came to disagree with their own price card
+ * before 2026-10-14.
  */
 export function parseAdvertisedAmount(price: string): number {
   const digits = String(price ?? "")

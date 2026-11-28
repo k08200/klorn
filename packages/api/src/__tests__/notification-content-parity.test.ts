@@ -57,7 +57,6 @@ vi.mock("../notify/push-apns.js", async (importOriginal) => ({
   sendApnsPush: mocks.apns,
 }));
 vi.mock("web-push", () => ({
-  default: { setVapidDetails: vi.fn(), sendNotification: mocks.webPushSend },
   setVapidDetails: vi.fn(),
   sendNotification: mocks.webPushSend,
 }));
@@ -75,6 +74,8 @@ const CONTENT = mailPushContent({
     quoteIn: "body",
   },
   language: "en",
+  // The quote rides the push only under NOTIFY_PUSH_QUOTE (config.ts pushQuoteOpenTo).
+  allowQuote: true,
 });
 
 async function loadPush() {

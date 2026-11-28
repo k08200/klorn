@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import formbody from "@fastify/formbody";
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifySchemaValidationError } from "fastify";
 import {
   beginDesktopConfirmation,
   desktopConfirmExpiredPage,
@@ -79,7 +79,11 @@ import {
   markGoogleTokenForReconnect,
 } from "../mail/gmail.js";
 import { maybeSendWelcomeEmail } from "../notify/welcome-email.js";
-import { hashOneTimeToken, mintOneTimeToken } from "../one-time-token.js";
+import {
+  EMAIL_VERIFY_TOKEN_TTL_MS,
+  hashOneTimeToken,
+  mintOneTimeToken,
+} from "../one-time-token.js";
 import {
   effectiveTier,
   normalizeTier,
@@ -97,6 +101,12 @@ import {
   loginThrottleRemainingMs,
   recordLoginAttempt,
 } from "../security/login-throttle.js";
+import {
+  PASSWORD_RESET_TOKEN_TTL_MS,
+  passwordResetThrottleRemainingMs,
+  recordPasswordResetRequest,
+  resetLinkIsFresh,
+} from "../security/password-reset-throttle.js";
 import {
   recordRegisterAttempt,
   registerThrottleRemainingMs,
@@ -147,12 +157,44 @@ export function isDemoUser(userId: string): boolean {
   return userId === DEMO_USER_ID;
 }
 
+/**
+ * The email field of an auth body. Fastify's default ajv runs with
+ * coerceTypes: "array", so `type: "string"` alone turns `123` or `true` into
+ * "123" / "true" and the route ran on it (register created an account named
+ * "12345"). The pattern is what refuses a coerced scalar: one "@" between
+ * runs of non-space characters. Surrounding whitespace is allowed because the
+ * handlers trim (normalizeEmail), and a dotless domain because a self-hosted
+ * deployment may use one. Linear: the classes on each side of every
+ * quantifier are disjoint.
+ */
+const authEmailSchema = {
+  type: "string",
+  minLength: 3,
+  maxLength: 320,
+  pattern: "^\\s*[^\\s@]+@[^\\s@]+\\s*$",
+} as const;
+
+/** The 400 a malformed email field answers, in place of ajv's pattern text. */
+const INVALID_EMAIL_MESSAGE = "Enter a valid email address";
+
+/**
+ * Route schemaErrorFormatter for the bodies that carry authEmailSchema. An
+ * error on the email field reads as a sentence a client can show (the mobile
+ * app shows a register 400's text as is) rather than "must match pattern"
+ * with the regex. Any other error keeps Fastify's default text
+ * (`body must have required property 'email'`).
+ */
+function authBodyErrorFormatter(errors: FastifySchemaValidationError[], dataVar: string): Error {
+  if (errors.some((e) => e.instancePath === "/email")) return new Error(INVALID_EMAIL_MESSAGE);
+  return new Error(errors.map((e) => `${dataVar}${e.instancePath} ${e.message}`).join(", "));
+}
+
 const registerBodySchema = {
   type: "object",
   additionalProperties: false,
   required: ["email", "password"],
   properties: {
-    email: { type: "string", minLength: 3, maxLength: 320 },
+    email: authEmailSchema,
     password: { type: "string", minLength: 1, maxLength: 200 },
     name: { type: "string", minLength: 1, maxLength: 120 },
     // First-touch inflow attribution the login surface captured. 300 mirrors
@@ -167,7 +209,7 @@ const loginBodySchema = {
   additionalProperties: false,
   required: ["email", "password"],
   properties: {
-    email: { type: "string", minLength: 3, maxLength: 320 },
+    email: authEmailSchema,
     password: { type: "string", minLength: 1, maxLength: 200 },
   },
 } as const;
@@ -249,7 +291,7 @@ const forgotPasswordBodySchema = {
   additionalProperties: false,
   required: ["email"],
   properties: {
-    email: { type: "string", minLength: 3, maxLength: 320 },
+    email: authEmailSchema,
   },
 } as const;
 
@@ -348,6 +390,36 @@ export async function effectiveTierOrOwnPlan(userId: string, plan: string): Prom
 }
 
 /**
+ * Replace the user's reset link with a new one and mail it. Only the hash is
+ * stored (one-time-token.ts); the raw token exists only in the mail.
+ *
+ * The swap is compare-and-swap on the link the caller read, so of two
+ * concurrent requests (a double submit) only one replaces it and mails. When
+ * the mail does not go out, nobody holds the new token: the previous link is
+ * put back (only while the new one is still the stored one), so a failed send
+ * neither kills a link already mailed nor holds off a retry as "fresh".
+ */
+async function issueResetLink(
+  user: { id: string; resetToken: string | null; resetTokenExp: Date | null },
+  normalizedEmail: string,
+): Promise<void> {
+  const { token: rawResetToken, tokenHash: resetTokenHash } = mintOneTimeToken();
+  const resetTokenExp = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
+  const claimed = await prisma.user.updateMany({
+    where: { id: user.id, resetToken: user.resetToken },
+    data: { resetToken: resetTokenHash, resetTokenExp },
+  });
+  if (claimed.count === 0) return;
+
+  const sent = await sendPasswordResetEmail(normalizedEmail, rawResetToken);
+  if (sent) return;
+  await prisma.user.updateMany({
+    where: { id: user.id, resetToken: resetTokenHash },
+    data: { resetToken: user.resetToken, resetTokenExp: user.resetTokenExp },
+  });
+}
+
+/**
  * The 429 for a per-account lock (login-throttle.ts, register-throttle.ts):
  * the `{ error: "Rate limit exceeded, retry in …" }` shape the central error
  * handler renders for the per-IP limiter (the time here is whole minutes, and
@@ -395,6 +467,7 @@ export function authRoutes(app: FastifyInstance) {
     "/register",
     {
       schema: { body: registerBodySchema },
+      schemaErrorFormatter: authBodyErrorFormatter,
       config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
     },
     async (request, reply) => {
@@ -457,7 +530,7 @@ export function authRoutes(app: FastifyInstance) {
       // Only the hash is stored (one-time-token.ts); the raw token exists
       // only in the verification email.
       const { token: rawVerifyToken, tokenHash: verifyTokenHash } = mintOneTimeToken();
-      const verifyTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      const verifyTokenExp = new Date(Date.now() + EMAIL_VERIFY_TOKEN_TTL_MS);
 
       const user = await prisma.user.create({
         data: {
@@ -538,6 +611,7 @@ export function authRoutes(app: FastifyInstance) {
     "/login",
     {
       schema: { body: loginBodySchema },
+      schemaErrorFormatter: authBodyErrorFormatter,
       config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
     },
     async (request, reply) => {
@@ -1704,6 +1778,7 @@ export function authRoutes(app: FastifyInstance) {
     "/forgot-password",
     {
       schema: { body: forgotPasswordBodySchema },
+      schemaErrorFormatter: authBodyErrorFormatter,
       config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
     },
     async (request, reply) => {
@@ -1712,21 +1787,21 @@ export function authRoutes(app: FastifyInstance) {
       if (!hasMeaningfulText(normalizedEmail))
         return reply.code(400).send({ error: "Email required" });
 
+      // Per-address window on top of the per-IP limit (password-reset-throttle.ts):
+      // counted for every address alike, before the lookup and before any
+      // await. A locked address gets the same answer as any other and no mail.
+      if (passwordResetThrottleRemainingMs(normalizedEmail) > 0) {
+        return reply.send({ success: true });
+      }
+      recordPasswordResetRequest(normalizedEmail);
+
       const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
       // Always return success to prevent email enumeration
       if (!user) return reply.send({ success: true });
 
-      // Only the hash is stored (one-time-token.ts); the raw token exists
-      // only in the reset email.
-      const { token: rawResetToken, tokenHash: resetTokenHash } = mintOneTimeToken();
-      const resetTokenExp = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { resetToken: resetTokenHash, resetTokenExp },
-      });
-
-      await sendPasswordResetEmail(normalizedEmail, rawResetToken);
+      // A link mailed moments ago stays the live one: no second mail that
+      // would retire the first (password-reset-throttle.ts).
+      if (!resetLinkIsFresh(user)) await issueResetLink(user, normalizedEmail);
 
       return reply.send({ success: true });
     },
@@ -1896,15 +1971,29 @@ export function authRoutes(app: FastifyInstance) {
       // Only the hash is stored (one-time-token.ts); the raw token exists
       // only in the verification email.
       const { token: rawVerifyToken, tokenHash: verifyTokenHash } = mintOneTimeToken();
-      const verifyTokenExp = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const verifyTokenExp = new Date(Date.now() + EMAIL_VERIFY_TOKEN_TTL_MS);
 
-      await prisma.user.update({
-        where: { id: user.id },
+      // Compare-and-swap on the link this request read, as issueResetLink
+      // does: of two overlapping requests only one replaces it and mails, so
+      // a failed send's restore below cannot kill a link the other mailed.
+      const claimed = await prisma.user.updateMany({
+        where: { id: user.id, verifyToken: user.verifyToken },
         data: { verifyToken: verifyTokenHash, verifyTokenExp },
       });
+      if (claimed.count === 0) return reply.send({ success: true });
 
-      await sendVerificationEmail(user.email, rawVerifyToken);
-      return reply.send({ success: true });
+      const sent = await sendVerificationEmail(user.email, rawVerifyToken);
+      if (sent) return reply.send({ success: true });
+      // Nobody holds the new link: put the previous one back while the new
+      // one is still the stored one (issueResetLink does the same), and do
+      // not claim a mail went out.
+      await prisma.user.updateMany({
+        where: { id: user.id, verifyToken: verifyTokenHash },
+        data: { verifyToken: user.verifyToken, verifyTokenExp: user.verifyTokenExp },
+      });
+      return reply
+        .code(502)
+        .send({ error: "The verification email could not be sent. Try again." });
     },
   );
 

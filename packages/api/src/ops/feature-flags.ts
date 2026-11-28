@@ -103,6 +103,13 @@ export function collectFeatureFlags(env: NodeJS.ProcessEnv = process.env): Flags
       // Read per request by config.ts kakaoImportLive/kakaoImportOpenTo
       // (routes/kakao-import.ts, /me user.kakaoImport). True for "true" or "cohort".
       KAKAO_IMPORT_ENABLED: cohortCapableFlag(env, "KAKAO_IMPORT_ENABLED"),
+      // Read per tick by config.ts waitDigestOpenTo (agentcore/proactive-actions.ts):
+      // the merged reply-wait reminder in the morning window. True for "true" or "cohort".
+      NOTIFY_WAIT_DIGEST: cohortCapableFlag(env, "NOTIFY_WAIT_DIGEST"),
+      // Read per push by config.ts pushQuoteOpenTo / pushPresentationOpenTo
+      // (notify/push.ts, push-apns.ts). True for "true" or "cohort".
+      NOTIFY_PUSH_QUOTE: cohortCapableFlag(env, "NOTIFY_PUSH_QUOTE"),
+      NOTIFY_PUSH_PRESENTATION: cohortCapableFlag(env, "NOTIFY_PUSH_PRESENTATION"),
       // Attention engine v3 policy (P3): interrupt budget on PUSH notifications.
       // Founder flip only, after replay + shadow data. Requires JUDGE_V3_SHADOW.
       JUDGE_V3_POLICY: dynamicFlag(env, "JUDGE_V3_POLICY"),

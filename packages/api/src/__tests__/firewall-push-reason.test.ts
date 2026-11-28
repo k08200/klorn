@@ -57,12 +57,29 @@ function seed(evidence: string) {
       threadTurn: null,
     },
   };
-  const db = createFakeDb({ attentionItem: [item], emailMessage: [], decisionLabel: [] });
+  const db = createFakeDb({
+    attentionItem: [item],
+    emailMessage: [
+      {
+        id: "email-1",
+        userId: USER,
+        gmailId: "g-1",
+        threadId: "thread-9",
+        from: email.from,
+        to: "alice@example.com",
+        subject: email.subject,
+        receivedAt: email.receivedAt,
+      },
+    ],
+    decisionLabel: [],
+  });
   dbHolder.current = db;
 }
 
-const payload = () =>
-  (sendPushNotification.mock.calls[0] as unknown as [string, { title: string; body: string }])[1];
+type Sent = { title: string; body: string; presentation?: Record<string, unknown> };
+const payload = () => (sendPushNotification.mock.calls[0] as unknown as [string, Sent])[1];
+const frame = () =>
+  (pushNotification.mock.calls[0] as unknown as [string, Record<string, unknown>])[1];
 const frameMail = () =>
   (
     pushNotification.mock.calls[0] as unknown as [string, { mail: { title: string; body: string } }]
@@ -80,10 +97,39 @@ afterEach(() => {
   vi.useRealTimers();
   delete process.env.JUDGE_V3_POLICY;
   delete process.env.JUDGE_V3_SHADOW;
+  delete process.env.NOTIFY_PUSH_QUOTE;
 });
 
 describe("deliverFirewallPush — reason line", () => {
-  it("policy v3, quote in the mail: push and frame show the quote, identically", async () => {
+  it("policy v3, quote in the mail, NOTIFY_PUSH_QUOTE off (default): the short reason, no quote anywhere", async () => {
+    seed("please sign the contract by 5pm today");
+    await deliverFirewallPush(USER, email, { id: "bell-1", createdAt: NOW }, "en");
+    expect(payload().body).toBe("Contract\nSignature needed today");
+    expect(frameMail().body).toBe(payload().body);
+    expect(JSON.stringify(sendPushNotification.mock.calls)).not.toContain(
+      "please sign the contract",
+    );
+    expect(JSON.stringify(pushNotification.mock.calls)).not.toContain("please sign the contract");
+  });
+
+  it("carries the NT0 fields on the push and the live frame", async () => {
+    process.env.NOTIFY_PUSH_QUOTE = "on";
+    seed("please sign the contract by 5pm today");
+    await deliverFirewallPush(USER, email, { id: "bell-1", createdAt: NOW }, "en");
+    const fields = {
+      kind: "push",
+      senderDisplayName: "Bob Lee",
+      subject: "Contract",
+      quote: "please sign the contract by 5pm today",
+      reasonLine: "Signature needed today",
+      threadId: "thread-9",
+    };
+    expect(payload().presentation).toEqual(fields);
+    expect(frame()).toMatchObject(fields);
+  });
+
+  it("policy v3, quote in the mail, NOTIFY_PUSH_QUOTE on: push and frame show the quote, identically", async () => {
+    process.env.NOTIFY_PUSH_QUOTE = "on";
     seed("please sign the contract by 5pm today");
     await deliverFirewallPush(USER, email, { id: "bell-1", createdAt: NOW }, "en");
     expect(payload().title).toBe("Bob Lee");

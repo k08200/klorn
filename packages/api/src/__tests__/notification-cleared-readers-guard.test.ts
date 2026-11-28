@@ -84,13 +84,14 @@ const SEES_CLEARED: Record<string, { reads: number; why: string }> = {
     reads: 1,
     why: "dedupe: mail an urgent alert already covered",
   },
-  "agentcore/proactive-actions.ts#checkFollowUpSuggestions": { reads: 1, why: "dedupe: daily" },
-  "agentcore/proactive-actions.ts#checkUpcomingMeetings": { reads: 1, why: "dedupe: per meeting" },
   "agentcore/proactive-actions.ts#checkOverdueTasks": { reads: 1, why: "dedupe: daily" },
   "agentcore/proactive-actions.ts#checkWeeklyReview": { reads: 1, why: "dedupe: weekly" },
   "agentcore/proactive-actions.ts#checkEndOfDayReview": { reads: 1, why: "dedupe: daily" },
   "agentcore/proactive-actions.ts#checkDeadlineCountdown": { reads: 1, why: "dedupe: daily" },
-  "agentcore/proactive-actions.ts#checkUnansweredEmails": { reads: 1, why: "dedupe: daily" },
+  "agentcore/proactive-actions.ts#sentReplyWaitToday": {
+    reads: 1,
+    why: "dedupe: one reply-wait reminder a day (unanswered, follow-up, merged)",
+  },
   "agentcore/proactive-actions.ts#checkBackToBackMeetings": { reads: 1, why: "dedupe: daily" },
   "automation-scheduler.ts#hasBriefingBeenSentToday": {
     reads: 1,
@@ -140,6 +141,12 @@ const SEES_CLEARED: Record<string, { reads: number; why: string }> = {
   // The queue join resolves rows its FOLLOWUP items point at; clearing drops
   // those items, so a cleared row has no item left to resolve.
   "pim/inbox-summary.ts#buildInboxSummary": { reads: 1, why: "queue join by item source id" },
+  // The meeting start ring's stored fallback skips a meeting whose T-60 heads-up
+  // already rang; a heads-up row the user cleared still rang.
+  "pim/meeting-stored-fallback.ts#storedStartRingMeetings": {
+    reads: 1,
+    why: "heads-up dedupe look-back",
+  },
   // Every stored row is the user's data, cleared or not.
   "routes/core.ts#registerCoreRoutes": { reads: 1, why: "the user's data export" },
   // The sweep that deletes cleared rows after 30 days reads only cleared rows.

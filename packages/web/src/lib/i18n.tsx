@@ -1,26 +1,22 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import de from "./locales/de";
 import en from "./locales/en";
-import es from "./locales/es";
-import fr from "./locales/fr";
-import ja from "./locales/ja";
 import ko from "./locales/ko";
 import zh from "./locales/zh";
 import { activeUiLocale, LEGACY_PROFILE_KEY, PROFILE_KEY, type UiLocale } from "./ui-locale";
 
 /**
- * Shipped UI locales. Mirrors the server's NOTIFICATION_LANGUAGES so the app
- * a user reads and the notifications they receive can speak the same language
- * (packages/api/src/notify/notification-strings.ts).
+ * Shipped UI locales: en, ko, zh (Simplified). Mirrors the server's
+ * SHIPPED_LANGUAGES so the app a user reads and the notifications they receive
+ * can speak the same language (packages/api/src/shipped-languages.ts).
  */
 export type Locale = UiLocale;
 
 // English is the source of truth for keys; every other locale is a full
 // mirror, enforced in CI by .github/scripts/check-i18n-parity.mjs. Tables
 // live one-per-file under ./locales.
-const translations: Record<Locale, Record<string, string>> = { en, ko, ja, zh, es, fr, de };
+const translations: Record<Locale, Record<string, string>> = { en, ko, zh };
 
 /**
  * Dev-time echo of the CI parity guard. The guard
@@ -51,6 +47,9 @@ function verifyTranslationSymmetry(): void {
 if (process.env.NODE_ENV !== "production") {
   verifyTranslationSymmetry();
 }
+
+/** The BCP-47 tag for <html lang> per UI locale. */
+const HTML_LANG: Record<Locale, string> = { en: "en", ko: "ko", zh: "zh-Hans" };
 
 interface I18nContextType {
   locale: Locale;
@@ -91,9 +90,10 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // <html lang> follows the UI language (WCAG 3.1.1), so screen readers pick
-  // the right voice and :lang(ko) typography applies (globals.css).
+  // the right voice and :lang(ko) typography applies (globals.css). zh is
+  // Simplified Chinese, so it is tagged zh-Hans (still matches :lang(zh)).
   useEffect(() => {
-    document.documentElement.lang = locale;
+    document.documentElement.lang = HTML_LANG[locale];
   }, [locale]);
 
   const setLocale = useCallback((l: Locale) => {

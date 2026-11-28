@@ -7,14 +7,12 @@
   // pill ships these links in its HTML too, so the header works without
   // script; this rebuilds them from the table below so the labels and targets
   // can only come from here. Keep the static copies identical.
+  // The site ships English, Korean and Simplified Chinese only; any other
+  // <html lang> falls back to the English labels and the English home.
   var NAV_LABELS = {
     en: ['Accounts', 'Lanes', 'Pricing', 'Security', 'Blog'],
     ko: ['계정', '레인', '요금', '보안', '블로그'],
-    ja: ['アカウント', 'レーン', '料金', 'セキュリティ', 'ブログ'],
-    zh: ['账户', '分类', '定价', '安全', '博客'],
-    es: ['Cuentas', 'Carriles', 'Precios', 'Seguridad', 'Blog'],
-    fr: ['Comptes', 'Files', 'Tarifs', 'Sécurité', 'Blog'],
-    de: ['Konten', 'Spuren', 'Preise', 'Sicherheit', 'Blog']
+    zh: ['账户', '分类', '定价', '安全', '博客']
   };
   var navMenu = document.querySelector('.nav-links[data-site-nav]');
   if (navMenu) {

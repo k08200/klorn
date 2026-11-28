@@ -170,6 +170,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: scope
     if: needs.scope.outputs.code == 'true'
+    env:
+      # The CLI Postgres suite (packages/cli/src/__tests__/cli-pg.test.ts) shims
+      # psql / pg_dump / pg_restore through `docker exec` into a container it
+      # names, which a service container is not; it gets its own, below.
+      CLI_IT_CONTAINER: klorn-cli-it-pg
+      CLI_IT_PORT: "55433"
     # A real Postgres (production's major version) for the *-pg.test.ts suites:
     # the data-wipe fence's lock ordering and the attachment upserts cannot be
     # proven against a mock.
@@ -188,6 +194,18 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Started first so it boots while dependencies install. Postgres 16, the
+      # self-host compose's major version. Pinned by digest (postgres:16.16,
+      # the multi-arch index) because a tag can move under CI; Dependabot does
+      # not read `docker run` lines, so the digest is bumped by hand. A
+      # throwaway database: durability settings off for speed.
+      - name: Start the CLI suite's Postgres 16
+        run: |
+          docker run -d --name "$CLI_IT_CONTAINER" \
+            -e POSTGRES_PASSWORD=postgres \
+            -p "127.0.0.1:$CLI_IT_PORT:5432" \
+            postgres:16@sha256:dd2bf3ce2dc83a81674cf7f217fcfd8a5009a4b325dda5b843bfee82a06cff6f \
+            -c fsync=off -c synchronous_commit=off -c full_page_writes=off
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -200,8 +218,8 @@ jobs:
       - name: Run tests
         run: cd packages/api && pnpm exec vitest run
       # The CLI unit suites fake child_process and the network. Its Postgres
-      # suite (cli-pg.test.ts) self-skips here: it needs KLORN_CLI_IT_* and a
-      # Postgres container to shim the client tools from (see that file).
+      # suite (cli-pg.test.ts) self-skips here without KLORN_CLI_IT_*; the
+      # last steps of this job run it.
       - name: Run CLI tests
         run: pnpm --filter @klorn/cli test
       - name: Run Postgres integration tests (every migration applied)
@@ -212,6 +230,33 @@ jobs:
           cd packages/api
           pnpm exec prisma migrate deploy
           pnpm exec vitest run pg.test.ts
+      # After the API suites, so a red CLI suite never hides theirs.
+      - name: Run the CLI Postgres suite
+        timeout-minutes: 15
+        env:
+          KLORN_CLI_IT_CONTAINER: ${{ env.CLI_IT_CONTAINER }}
+          KLORN_CLI_IT_BASE_URL: postgresql://postgres:postgres@127.0.0.1:${{ env.CLI_IT_PORT }}
+          NO_COLOR: "1"
+        run: |
+          set -euo pipefail
+          # Over TCP: the image's init-time server listens on the socket only,
+          # so a TCP answer is the server that stays up.
+          for _ in $(seq 1 30); do
+            docker exec "$CLI_IT_CONTAINER" pg_isready -h 127.0.0.1 -U postgres -q && break
+            sleep 2
+          done
+          docker exec "$CLI_IT_CONTAINER" pg_isready -h 127.0.0.1 -U postgres \
+            || { docker logs "$CLI_IT_CONTAINER" || true; exit 1; }
+          log="$RUNNER_TEMP/cli-pg.log"
+          pnpm --filter @klorn/cli exec vitest run cli-pg --reporter=verbose 2>&1 | tee "$log"
+          # A skipped suite exits 0: pass only on vitest's "Tests  N passed (M)"
+          # line, which has no other count only when nothing skipped, failed
+          # or was todo ("Tests  7 passed | 1 skipped (8)" does not match).
+          grep -Eq '^[[:space:]]*Tests[[:space:]]+[0-9]+ passed \([0-9]+\)[[:space:]]*$' "$log" \
+            || { echo "::error::the CLI Postgres suite did not run every test"; exit 1; }
+      - name: Remove the CLI suite's Postgres
+        if: always()
+        run: docker rm -fv "$CLI_IT_CONTAINER" || true
 
   build:
     name: Build
@@ -242,6 +287,14 @@ jobs:
         run: node --test packages/web/scripts/cloudflare-pages.test.mjs
       - name: Build all packages
         run: pnpm -r build
+      # Node links (and loads) every module the API entry imports from the
+      # built dist/, without running index itself (no port, no database). A
+      # dependency that drops an export the code imports fails here instead of
+      # at boot on Render: tsc and vitest both passed web-push 4's missing
+      # default export (#1819). src/__tests__/esm-import-smoke.test.ts runs the
+      # same script on the sources.
+      - name: API dist loads under Node's ESM loader
+        run: cd packages/api && NODE_ENV=test node scripts/esm-import-smoke.mjs dist
       # D5c: built without the switch, the web bundle holds no Google Picker
       # (google-drive-connect.tsx imports it behind the literal switch, which
       # next.config.ts always defines, so the bundler drops the import).

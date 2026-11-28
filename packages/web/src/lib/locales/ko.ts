@@ -3318,6 +3318,8 @@ const ko: Record<string, string> = {
     "팀 요금을 결제하는 이메일 주소 없이 추가할 수 있는 시트 수를 넘었습니다. 결제하는 이메일의 주인은 본인 Klorn 계정에서 더 추가할 수 있습니다(Paddle 영수증 이메일을 받는 사람입니다). 시트 줄이기는 지금도 할 수 있습니다.",
   "settings.org.error.SEATS_CHANGED":
     "저장하는 동안 시트 수가 바뀌었습니다. 현재 시트 수를 확인하고 다시 시도하세요.",
+  "settings.org.error.SEATS_CHANGE_IN_FLIGHT":
+    "이전 시트 변경이 아직 처리 중이어서 이번 요청은 적용되지 않았습니다. 몇 분 뒤에 다시 시도하세요.",
   "settings.org.error.RESUME_PAYER_ONLY":
     "구독을 유지하면 결제하는 사람의 카드로 청구가 다시 시작되므로, 팀 요금을 결제하는 사람이나 Klorn에서 종료를 예약한 소유자만 할 수 있습니다. 결제하는 사람에게 본인 Klorn 계정에서 유지해 달라고 요청하세요(Paddle 영수증 이메일을 받는 사람입니다).",
   "settings.org.error.BILLING_PROVIDER_READ_FAILED":

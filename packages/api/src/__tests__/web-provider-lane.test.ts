@@ -2,11 +2,7 @@
 // Run from the api suite because the web package has no unit-test runner
 // (see web-auth-surfaces.test.ts).
 import { describe, expect, it } from "vitest";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 import { providerLane } from "../../../web/src/lib/provider-lane";
@@ -51,7 +47,7 @@ describe("invite-only notice", () => {
   const REVIEW =
     /Google|security review|보안 심사|セキュリティ審査|安全审核|revisión de seguridad|revue de sécurité|Sicherheitsprüfung/i;
   it.each(
-    Object.entries({ en, ko, ja, zh, es, fr, de }),
+    Object.entries({ en, ko, zh }),
   )("%s no longer blames a pending Google review", (_locale, dict) => {
     const body = (dict as Record<string, string>)["auth.inviteOnlyBody"];
     expect(body).toBeTruthy();

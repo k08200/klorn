@@ -33,7 +33,7 @@ import {
   summarizeMissed,
 } from "../../../web/src/lib/native/desktop-push-catchup";
 import { firewallBellRow } from "../judge/firewall-push.js";
-import { notificationCopy } from "../notify/notification-strings.js";
+import { NOTIFICATION_LANGUAGES, notificationCopy } from "../notify/notification-strings.js";
 
 const NOW = Date.parse("2026-11-08T12:00:00.000Z");
 const MIN = 60_000;
@@ -582,8 +582,8 @@ describe("parseCatchUpResponse — the server's answer is validated", () => {
 });
 
 describe("the summary title exists in every notification language", () => {
-  it("names the count in each of the 7 languages", () => {
-    for (const lang of ["en", "ko", "ja", "zh", "es", "fr", "de"]) {
+  it("names the count in each shipped language", () => {
+    for (const lang of NOTIFICATION_LANGUAGES) {
       const title = notificationCopy(lang).missedWhileClosed(4);
       expect(title, lang).toContain("4");
       expect(title, lang).toContain("Klorn");

@@ -146,6 +146,7 @@ interface ItemWire {
   source: string;
   email?: {
     emailDbId: string;
+    threadId?: string | null;
     source?: SourceWire | null;
     unread?: boolean | null;
     hasAttachment?: boolean | null;
@@ -376,6 +377,21 @@ describe("GET /api/inbox/firewall — account, read state and attachment on the 
     expect(items.get("a2")?.email).toBeUndefined();
     // The item's own `source` stays the string it always was.
     expect(items.get("a2")?.source).toBe("EMAIL");
+  });
+
+  it("carries the mail's provider thread id on both preview kinds (NT0)", async () => {
+    state.attention = [attention("a1", "EMAIL", "m1"), attention("a2", "PENDING_ACTION", "pa-1")];
+    state.pendingActions = [
+      { id: "pa-1", toolName: "archive_email", toolArgs: { email_id: "g-m2" } },
+    ];
+    state.emails = [email("m1", null, {}), email("m2", null, {})];
+    const items = await fetchItems();
+    expect(items.get("a1")?.email?.threadId).toBe("t-m1");
+    expect(items.get("a2")?.email?.threadId).toBe("t-m2");
+    for (const call of emailFindMany.mock.calls) {
+      const args = call[0] as unknown as { select?: Record<string, unknown> };
+      expect(args.select?.threadId).toBe(true);
+    }
   });
 
   it("carries the same facts on a pending action that points at a mail", async () => {

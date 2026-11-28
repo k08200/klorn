@@ -54,7 +54,6 @@ vi.mock("../notify/telegram-notify.js", () => ({ sendTelegramForPush: mocks.send
 vi.mock("../notify/push-device.js", () => ({ sendDevicePush: mocks.sendDevicePush }));
 vi.mock("../notify/push-apns.js", () => ({ sendApnsPush: mocks.sendApnsPush }));
 vi.mock("web-push", () => ({
-  default: { setVapidDetails: vi.fn(), sendNotification: mocks.webPushSend },
   setVapidDetails: vi.fn(),
   sendNotification: mocks.webPushSend,
 }));

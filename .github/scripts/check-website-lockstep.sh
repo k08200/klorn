@@ -5,13 +5,19 @@
 # and posters, CSS class definitions) against English and fails on drift.
 # Copy (translated text) is free to differ; structure is not.
 #
-# Generic over N languages: every website/<code>/index.html is discovered, so
-# adding a language needs no edit here. With two pages this was a nicety; with
-# seven it is the only thing standing between a copy edit and a page that
-# silently loses a section.
+# The site ships exactly three languages (founder decision, 2026-11-17):
+# English at the root, Korean and Simplified Chinese under website/<code>/.
+# Japanese, German, Spanish and French shipped in #1240 (2026-08-26) and were
+# retired on 2026-11-17; their URLs stay alive as redirect stubs to the English
+# pages, which the "Retired languages" section holds in shape. A two-letter
+# landing directory that is in neither list fails, so adding or reviving a
+# language is a deliberate edit here and in scripts/site-i18n/sync-chrome.py
+# (LANGS).
 set -euo pipefail
 
 EN=website/index.html
+SHIPPED_LANGS=(ko zh)
+RETIRED_LANGS=(ja de es fr)
 
 skeleton() {
   {
@@ -38,28 +44,48 @@ skeleton() {
   } | sort
 }
 
+failed=0
+langs=("${SHIPPED_LANGS[@]}")
+for code in "${langs[@]}"; do
+  [ -f "website/${code}/index.html" ] || {
+    echo "::error::website/${code}/index.html is missing — ${code} is a shipped language"; failed=1; }
+done
+[ "$failed" -eq 0 ] || exit 1
+
 # Two-letter directories only. website/ also holds privacy/, terms/, refund/
-# and oauth-native/ — separate pages, not translations of the landing, and
-# comparing them against it would fail on every run.
-langs=()
+# and oauth-native/ — separate pages, not translations of the landing — and
+# vs/, which has no index.html of its own.
 for dir in website/*/; do
   code="$(basename "$dir")"
   [[ "$code" =~ ^[a-z]{2}$ ]] || continue
   [ -f "${dir}index.html" ] || continue
-  langs+=("$code")
+  [[ " ${SHIPPED_LANGS[*]} ${RETIRED_LANGS[*]} " == *" ${code} "* ]] && continue
+  echo "::error::website/${code}/ looks like a landing in a language the site does not ship (en ${SHIPPED_LANGS[*]})"
+  failed=1
 done
+[ "$failed" -eq 0 ] || exit 1
 
-if [ ${#langs[@]} -eq 0 ]; then
-  echo "::error::no website/<code>/index.html found — did the landings move?"
-  exit 1
-fi
+# The first-visit language redirect is inline script, copied into every
+# landing; the skeleton above cannot see script text. Its behaviour is tested
+# in packages/api/src/__tests__/website-language-redirect.test.ts, which runs
+# only when code changes, so a website-only edit to one copy is caught here.
+lang_redirect() {
+  sed -n '/^\/\/ Language: follow the browser preference/,/^})();$/p' "$1"
+}
+[ -n "$(lang_redirect "$EN")" ] || {
+  echo "::error::${EN} has no language redirect block (// Language: follow the browser preference … })();)"
+  failed=1; }
 
-failed=0
 for code in "${langs[@]}"; do
   page="website/${code}/index.html"
   if ! diff <(skeleton "$EN") <(skeleton "$page") > "/tmp/lockstep-${code}.diff"; then
     echo "::error::website EN/${code} structural drift — edit every landing in lockstep (< only in EN, > only in ${code}):"
     cat "/tmp/lockstep-${code}.diff"
+    failed=1
+  fi
+  if ! diff <(lang_redirect "$EN") <(lang_redirect "$page") > "/tmp/lockstep-redirect-${code}.diff"; then
+    echo "::error::website EN/${code} language redirect script differs — keep the copies identical:"
+    cat "/tmp/lockstep-redirect-${code}.diff"
     failed=1
   fi
 done
@@ -103,16 +129,16 @@ done
 # ---------------------------------------------------------------------------
 # Translated subpages.
 #
-# Until 2026-10-31 only the landings were translated: a Japanese reader who
+# Until 2026-10-31 only the landings were translated: a Korean reader who
 # clicked Pricing landed on English, and the language menu on every subpage
-# offered two of the seven languages. Every page below now exists in all seven
-# languages; a missing locale, a page that drifted structurally from English,
-# an incomplete hreflang set or a link that drops the reader back into English
-# fails here. scripts/site-i18n/sync-chrome.py writes the chrome this checks
-# (keep its SUBPAGES list identical to this one).
+# offered two of the languages the landing had. Every page below exists in
+# every shipped language; a missing locale, a page that drifted structurally
+# from English, an incomplete hreflang set or a link that drops the reader back
+# into English fails here. scripts/site-i18n/sync-chrome.py writes the chrome
+# this checks (keep its SUBPAGES list identical to this one).
 LOCALIZED_SUBPAGES=(pricing security download methodology open-source self-host
   status gdpr dpa blog vs/fyxer vs/superhuman vs/sanebox vs/inbox-zero)
-SUB_LANGS=(en ko ja zh es fr de)
+SUB_LANGS=(en "${SHIPPED_LANGS[@]}")
 sub_alt="$(IFS='|'; echo "${LOCALIZED_SUBPAGES[*]}")"
 
 sub_skeleton() {
@@ -185,6 +211,94 @@ done
 [ "$failed" -eq 0 ] || exit 1
 
 # ---------------------------------------------------------------------------
+# Retired languages.
+#
+# /ja/, /de/, /es/ and /fr/ were published and in the sitemap until 2026-11-17.
+# GitHub Pages has no server-side redirects, so every former URL stays as a
+# static stub: noindex, a canonical and a meta refresh to its English twin,
+# and a plain link for anything that does not follow the refresh. Deleting a
+# stub turns a published URL into a 404, and a stub whose target is gone is the
+# same 404 one hop later — both fail here, as does anything else appearing
+# under a retired tree. The stubs carry no script, stylesheet or hreflang: they
+# are not translations, and must never be counted as one.
+#
+# RETIRED_PAGES is frozen: it is the set of pages each retired language had on
+# the day it was retired, not a mirror of LOCALIZED_SUBPAGES — a subpage added
+# later never existed under /ja/ and needs no stub there.
+RETIRED_PAGES=("" pricing security download methodology open-source self-host
+  status gdpr dpa blog vs/fyxer vs/superhuman vs/sanebox vs/inbox-zero)
+stubs=0
+for code in "${RETIRED_LANGS[@]}"; do
+  if [ ! -d "website/${code}" ]; then
+    echo "::error::website/${code}/ is gone — its ${#RETIRED_PAGES[@]} former URLs must stay as redirect stubs to the English pages"
+    failed=1; continue
+  fi
+  expected=""
+  for sp in "${RETIRED_PAGES[@]}"; do
+    [ -n "$sp" ] && rel="${sp}/" || rel=""
+    stub="website/${code}/${rel}index.html"
+    target="/${rel}"
+    expected+="${stub}"$'\n'
+    if [ ! -f "$stub" ]; then
+      echo "::error::${stub} is missing — /${code}/${rel} was a published URL and must stay a redirect stub to ${target}"
+      failed=1; continue
+    fi
+    stubs=$((stubs + 1))
+    [ -f "website/${rel}index.html" ] || {
+      echo "::error::${stub} redirects to ${target}, but website/${rel}index.html does not exist"; failed=1; }
+    for want in '<html lang="en">' '<meta name="robots" content="noindex">' \
+                "<link rel=\"canonical\" href=\"https://klorn.ai${target}\">" \
+                "<meta http-equiv=\"refresh\" content=\"0; url=${target}\">" \
+                "<a href=\"${target}\">"; do
+      grep -qF "$want" "$stub" || {
+        echo "::error::${stub} is not a redirect stub to ${target}: missing ${want}"; failed=1; }
+    done
+    if grep -qE '<script|<link rel="stylesheet"|hreflang=' "$stub"; then
+      echo "::error::${stub} must be a bare redirect stub (no script, stylesheet or hreflang)"
+      failed=1
+    fi
+  done
+  extra="$(comm -13 <(printf '%s' "$expected" | sort) <(find "website/${code}" -type f | sort))"
+  if [ -n "$extra" ]; then
+    echo "::error::website/${code}/ is a retired language — only the redirect stubs may live there, found:"
+    echo "$extra"
+    failed=1
+  fi
+done
+
+# No live page, the sitemap or llms.txt may still offer a retired language:
+# not as an hreflang alternate (the set is exactly en, the shipped languages
+# and x-default), not as a link into a retired tree, not in a language menu.
+# The landing stylesheets may not keep rules for them either.
+retired_alt="$(IFS='|'; echo "${RETIRED_LANGS[*]}")"
+shipped_list="en ${SHIPPED_LANGS[*]}"
+allowed_hreflang=" ${shipped_list} x-default "
+advertised=0
+while IFS= read -r f; do
+  top="${f#website/}"; top="${top%%/*}"
+  [[ " ${RETIRED_LANGS[*]} " == *" ${top} "* ]] && continue
+  advertised=$((advertised + 1))
+  for hl in $(grep -oE 'hreflang="[^"]*"' "$f" | sed 's/hreflang="//; s/"$//' | sort -u || true); do
+    [[ "$allowed_hreflang" == *" ${hl} "* ]] || {
+      echo "::error::${f} declares hreflang=\"${hl}\" — the site ships ${shipped_list} only"; failed=1; }
+  done
+  bad="$(grep -oE "(href=\"|klorn\.ai)/(${retired_alt})/[^\"<)]*|data-lang-pick=\"(${retired_alt})\"" "$f" | sort -u || true)"
+  if [ -n "$bad" ]; then
+    echo "::error::${f} still points into a retired language:"; echo "$bad"
+    failed=1
+  fi
+done < <(find website -type f \( -name '*.html' -o -name '*.xml' -o -name '*.txt' \) | sort)
+
+css_bad="$(grep -nE "lang=(${retired_alt})\]|:lang\((${retired_alt})\)" website/*.css || true)"
+if [ -n "$css_bad" ]; then
+  echo "::error::stylesheet rules for a retired language (dead code — the pages are gone):"
+  echo "$css_bad"
+  failed=1
+fi
+
+[ "$failed" -eq 0 ] || exit 1
+
+# ---------------------------------------------------------------------------
 # Every page, not just the landings.
 #
 # The comparison pages shipped in #1219 for SEO and then sat for weeks with no
@@ -252,6 +366,8 @@ done < <(find website -name index.html | sort)
 [ "$failed" -eq 0 ] || exit 1
 
 echo "EN skeleton matches ${#langs[@]} translated landing(s) [${langs[*]}] ($(skeleton "$EN" | wc -l | tr -d ' ') anchors)."
+echo "language redirect script identical on en + [${langs[*]}] ($(lang_redirect "$EN" | wc -l | tr -d ' ') lines)."
 echo "hreflang + sitemap complete for ${#all[@]} language(s) [${all[*]}]."
 echo "${#LOCALIZED_SUBPAGES[@]} subpage(s) × ${#SUB_LANGS[@]} language(s): ${sub_pages} page(s) present, skeleton + hreflang + language menu + in-locale links verified."
 echo "canonical + sitemap + OG card + attribution verified on ${pages} page(s)."
+echo "retired [${RETIRED_LANGS[*]}]: ${stubs} redirect stub(s) to existing English pages; no hreflang, link or menu entry into them on ${advertised} live file(s)."

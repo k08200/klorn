@@ -27,11 +27,7 @@ import {
   twelveHourLabel,
   withDateTime,
 } from "../../../web/src/components/smart-actions/model";
-import de from "../../../web/src/lib/locales/de";
 import en from "../../../web/src/lib/locales/en";
-import es from "../../../web/src/lib/locales/es";
-import fr from "../../../web/src/lib/locales/fr";
-import ja from "../../../web/src/lib/locales/ja";
 import ko from "../../../web/src/lib/locales/ko";
 import zh from "../../../web/src/lib/locales/zh";
 import { sendEmailPayloadHash } from "../judge/attention-floor.js";
@@ -206,7 +202,7 @@ describe("the calendar confirm card", () => {
 });
 
 describe("smart actions copy", () => {
-  const LOCALES = { en, ko, ja, zh, es, fr, de };
+  const LOCALES = { en, ko, zh };
   const APPROVED =
     "Nothing goes out without your say-so — sends, permanent deletes and forwards wait for your approval, or for an auto-reply rule you set up yourself.";
   const FORBIDDEN = /auto-?send|signed receipt|always asks|always waits|never sends/i;

@@ -194,6 +194,7 @@ describe("Google session — the neutral event shape", () => {
       description: null,
       location: "Room 4",
       meetingLink: "https://hangouts.google.com/x",
+      attendeeCount: null,
       start: "2026-10-02T09:00:00+09:00",
       end: "2026-10-02T10:00:00+09:00",
       allDay: false,

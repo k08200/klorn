@@ -20,16 +20,18 @@ import {
   DEADLINE_WARNING_DAYS,
   EOD_HOUR,
   MEETING_PREP_MINUTES,
+  pushPresentationOpenTo,
+  pushQuoteOpenTo,
   UNANSWERED_THRESHOLD_HOURS,
   WEEKLY_REVIEW_DAY,
+  waitDigestOpenTo,
 } from "../config.js";
 import { prisma } from "../db.js";
-import { escapeLikePattern } from "../db-like.js";
-import { parseAddress } from "../mail/email-address.js";
-import { senderName } from "../notify/notification-format.js";
-import type { NotifCategory } from "../notify/notification-prefs.js";
+import { resolveTierReason } from "../judge/tier-reason-strings.js";
+import { meetPushCopy } from "../notify/kind-push-copy.js";
+import { inMorningWindow } from "../notify/morning-window.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
-import { sendPushNotification } from "../notify/push.js";
+import { meetingPresentation } from "../notify/push-presentation.js";
 import { sendSms } from "../notify/sms.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
 import { countCalendarRows } from "../pim/calendar-read.js";
@@ -42,12 +44,34 @@ import {
   localMinuteOfDay,
   normalizeTimeZone,
 } from "../time-zone.js";
-import { pushNotification } from "../websocket.js";
 import {
   composeEveningReview,
   eveningReviewHasContent,
   gatherEveningReviewInput,
 } from "./evening-review.js";
+import { leftToStartRing, meetingStartRingCovers, ringsAtStart } from "./meeting-start-ring.js";
+import { notify } from "./proactive-notify.js";
+import {
+  FOLLOW_UP_LISTED,
+  FOLLOW_UP_MAX_AGE_DAYS,
+  FOLLOW_UP_MIN_AGE_HOURS,
+  getContactContext,
+  NOT_BULK,
+  oneMailPerThread,
+  REPLY_WAIT_ORDER,
+  REPLY_WAIT_SCAN,
+  REPLY_WAIT_TYPES,
+  UNANSWERED_MAX_AGE_DAYS,
+  WAITING_SELECT,
+} from "./proactive-reply-wait.js";
+import { followUpContent, replyWaitContent, type WaitingMail } from "./reply-wait-content.js";
+
+// The bell/push plumbing lives in proactive-notify.ts and the reply-wait
+// reminders' query shapes in proactive-reply-wait.ts. Every check that reads
+// notifications, attention items or calendar rows stays here: the reader
+// guards (notification-cleared-readers, attention-calendar-visibility,
+// calendar-provider-writers) account for them by this file's path.
+export { getContactContext } from "./proactive-reply-wait.js";
 
 /** The user's configured IANA timezone (defaults to the product default). */
 async function getUserTimeZone(userId: string): Promise<string> {
@@ -58,57 +82,133 @@ async function getUserTimeZone(userId: string): Promise<string> {
   return normalizeTimeZone(config?.timezone);
 }
 
-/** Check for emails that haven't been replied to in 48 hours */
-async function checkUnansweredEmails(userId: string, tz: string): Promise<void> {
-  const threshold = new Date(Date.now() - UNANSWERED_THRESHOLD_HOURS * 60 * 60 * 1000);
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+/**
+ * The heads-up's "starts in" figure is floored to this step: a meeting the
+ * 5-minute window first sees 60–65 minutes out reads "in 1 hr", not a figure
+ * that jitters with the tick ("in 1 hr 4 min").
+ */
+const HEADS_UP_STEP_MINUTES = 5;
+/** Bell-row dedupe key of a meeting heads-up: one per calendar row and start time. */
+const MEETING_PREP_KEY_PREFIX = "meeting-prep:";
+/** The single reminder's reason: its item's short reason, resolved for the reader. */
+async function withReason(
+  userId: string,
+  mails: WaitingMail[],
+  language: string,
+): Promise<WaitingMail[]> {
+  if (mails.length !== 1) return mails;
+  try {
+    const [item] = await prisma.attentionItem.findMany({
+      where: { userId, source: "EMAIL", sourceId: { in: [mails[0].id] } },
+      select: { sourceId: true, tierReason: true },
+      take: 1,
+    });
+    const reason = item ? resolveTierReason(item.tierReason, language) : null;
+    return [{ ...mails[0], reason }];
+  } catch (err) {
+    // The reason is a detail: the reminder goes out without it.
+    logDbFailure("[PROACTIVE] wait reason read failed", err, { ids: { userId } });
+    return mails;
+  }
+}
 
-  const unanswered = await prisma.emailMessage.findMany({
+async function sentReplyWaitToday(userId: string, tz: string, types: string[]): Promise<boolean> {
+  const todayStart = localDayUtcRange(new Date(), tz).gte;
+  const existing = await prisma.notification.findFirst({
+    where: { userId, type: { in: types }, createdAt: { gte: todayStart } },
+  });
+  return existing !== null;
+}
+
+async function notifyReplyWait(userId: string, rows: WaitingMail[]): Promise<void> {
+  const language = await getUserNotificationLanguage(userId);
+  const content = replyWaitContent(await withReason(userId, rows, language), language, new Date());
+  if (!content) return;
+  await notify(userId, "email_followup", content.title, content.message, "/briefing", {
+    presentation: content.presentation,
+  });
+}
+
+/**
+ * Mail the user read and still owes a reply. Flag off: 48h to 7 days old, on
+ * the first tick of the user's local day (as before). NOTIFY_WAIT_DIGEST open
+ * to the user: the merged reminder (checkReplyWait) instead.
+ */
+async function checkUnansweredEmails(userId: string, tz: string): Promise<void> {
+  if (waitDigestOpenTo(userId)) return checkReplyWait(userId, tz);
+  // Dedupe before the (ordered, so sorted) read: same outcome, one cheap read a tick.
+  if (await sentReplyWaitToday(userId, tz, ["email_followup"])) return;
+  const now = Date.now();
+  const rows = await prisma.emailMessage.findMany({
     where: {
       userId,
       isRead: true,
       needsReply: true,
-      receivedAt: { lte: threshold, gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+      receivedAt: {
+        lte: new Date(now - UNANSWERED_THRESHOLD_HOURS * HOUR_MS),
+        gte: new Date(now - UNANSWERED_MAX_AGE_DAYS * DAY_MS),
+      },
     },
-    select: { id: true, from: true, subject: true, receivedAt: true },
-    take: 5,
+    select: WAITING_SELECT,
+    orderBy: REPLY_WAIT_ORDER,
+    take: REPLY_WAIT_SCAN,
   });
+  const mails = oneMailPerThread(rows);
+  if (mails.length === 0) return;
+  await notifyReplyWait(userId, mails);
+}
 
-  if (unanswered.length === 0) return;
-
-  // Dedup: check if we already notified about unanswered emails today
-  const todayStart = localDayUtcRange(new Date(), tz).gte;
-  const existing = await prisma.notification.findFirst({
+/**
+ * The merged reminder (NOTIFY_WAIT_DIGEST): one "wait" notification for every
+ * mail that still needs the user's reply, UNANSWERED_THRESHOLD_HOURS to
+ * FOLLOW_UP_MAX_AGE_DAYS old, bulk mail out, at any priority (needsReply is
+ * the signal). Sent once per local day inside the morning window
+ * (notify/morning-window.ts).
+ */
+async function checkReplyWait(userId: string, tz: string): Promise<void> {
+  const now = new Date();
+  if (!(await inMorningWindow(userId, tz, now))) return;
+  if (await sentReplyWaitToday(userId, tz, REPLY_WAIT_TYPES)) return;
+  const rows = await prisma.emailMessage.findMany({
     where: {
       userId,
-      type: "email_followup",
-      createdAt: { gte: todayStart },
+      isRead: true,
+      needsReply: true,
+      receivedAt: {
+        lte: new Date(now.getTime() - UNANSWERED_THRESHOLD_HOURS * HOUR_MS),
+        gte: new Date(now.getTime() - FOLLOW_UP_MAX_AGE_DAYS * DAY_MS),
+      },
+      OR: NOT_BULK,
     },
+    select: WAITING_SELECT,
+    orderBy: REPLY_WAIT_ORDER,
+    take: REPLY_WAIT_SCAN,
   });
-  if (existing) return;
-
-  const emailList = unanswered
-    .map((e) => `• ${senderName(e.from)} — "${truncate(e.subject || "Untitled", 40)}"`)
-    .join("\n");
-
-  const top = unanswered[0];
-  const title = `${unanswered.length} reply pending`;
-  const message = `Oldest thread: ${senderName(top.from)} — "${truncate(top.subject || "Untitled", 40)}"\n\n${emailList}`;
-
-  await notify(userId, "email_followup", title, message, "/briefing");
+  const mails = oneMailPerThread(rows);
+  if (mails.length === 0) return;
+  await notifyReplyWait(userId, mails);
 }
 
-function truncate(value: string, max: number): string {
-  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
-}
-
-/** Send a notification 1 hour before meetings with a mini-brief */
+/**
+ * A heads-up MEETING_PREP_MINUTES before a meeting, once per meeting (NT0
+ * item 11: one meeting, one notification). A meeting the start ring
+ * (background.ts) will announce — and a linked-calendar copy of it — is left
+ * to it (meeting-start-ring.ts); an invite present in the primary and a linked
+ * calendar (two rows, C2) counts once; and the bell row's
+ * dedupe key (the event row and its start) makes the write the dedupe, so
+ * overlapping ticks cannot both ring and two meetings that share a title
+ * prefix no longer hide each other.
+ */
 async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> {
   const now = new Date();
   const soon = new Date(now.getTime() + MEETING_PREP_MINUTES * 60 * 1000);
   const justAfter = new Date(now.getTime() + (MEETING_PREP_MINUTES + 5) * 60 * 1000);
 
-  // Find meetings starting in ~60 minutes (5 min window to avoid duplicates)
-  const upcoming = await prisma.calendarEvent.findMany({
+  // Find meetings starting in ~60 minutes (5 min window; the dedupe key keeps it to one ring)
+  const rows = await prisma.calendarEvent.findMany({
     where: {
       userId,
       startTime: { gte: soon, lte: justAfter },
@@ -121,21 +221,26 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
       location: true,
       meetingLink: true,
       description: true,
+      provider: true,
+      externalId: true,
+      sourceAccountId: true,
+      attendeeCount: true,
     },
+    orderBy: [{ startTime: "asc" }, { id: "asc" }],
   });
+  const events = dedupeCalendarEvents(rows);
+  if (events.length === 0) return;
+  const covers = events.some(ringsAtStart) && (await meetingStartRingCovers(userId, justAfter));
+  const leftOut = leftToStartRing(events, covers);
+  // The join link is meeting content: on Apple's / Google's push only under NOTIFY_PUSH_QUOTE.
+  const linkInPush = pushQuoteOpenTo(userId);
+  // NT0 meet copy for the device push (the bell row keeps its text).
+  const language = pushPresentationOpenTo(userId)
+    ? await getUserNotificationLanguage(userId)
+    : null;
 
-  for (const event of upcoming) {
-    // Dedup: check if we already sent a prep notification for this event
-    const existing = await prisma.notification.findFirst({
-      where: {
-        userId,
-        type: "calendar",
-        title: { contains: escapeLikePattern(event.title.slice(0, 20)) },
-        createdAt: { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-      },
-    });
-    if (existing) continue;
-
+  for (const event of events) {
+    if (leftOut.has(event)) continue;
     const time = event.startTime.toLocaleTimeString("en-US", {
       timeZone: tz,
       hour: "2-digit",
@@ -145,14 +250,32 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
     const link = event.meetingLink ? `\nJoin: ${event.meetingLink}` : "";
 
     const message = `${event.title} starts at ${time}${location}${link}`;
+    const presentation = meetingPresentation(event.meetingLink, event.attendeeCount);
+    const nt = language
+      ? meetPushCopy({
+          eventTitle: event.title,
+          startsInMinutes: headsUpMinutes(event.startTime, now),
+          joinUrl: presentation.joinUrl,
+          attendeeCount: event.attendeeCount,
+          language,
+        })
+      : null;
+    const pushBody = linkInPush ? message : `${event.title} starts at ${time}${location}`;
 
-    await notify(
+    const rang = await notify(
       userId,
       "calendar",
       `Meeting in 1 hour: ${event.title.slice(0, 30)}`,
       message,
       "/briefing",
+      {
+        pushTitle: nt?.title,
+        pushBody: nt?.body ?? pushBody,
+        dedupeKey: `${MEETING_PREP_KEY_PREFIX}${event.id}:${event.startTime.getTime()}`,
+        presentation,
+      },
     );
+    if (!rang) continue;
 
     // Admin-only SMS escalation for time-sensitive meeting alerts. Gated
     // inside sendSms (admin + phone + daily cap). Best-effort: never throws.
@@ -165,9 +288,28 @@ async function checkUpcomingMeetings(userId: string, tz: string): Promise<void> 
   }
 }
 
+/** Minutes until a heads-up's meeting, floored to HEADS_UP_STEP_MINUTES. */
+function headsUpMinutes(start: Date, now: Date): number {
+  const minutes = (start.getTime() - now.getTime()) / MINUTE_MS;
+  return Math.floor(minutes / HEADS_UP_STEP_MINUTES) * HEADS_UP_STEP_MINUTES;
+}
+
+/**
+ * Whether a once-a-day task reminder (overdue, deadline) may go out now. Flag
+ * off: on any tick — the day's dedupe makes it the first tick of the local
+ * day, as before. NOTIFY_WAIT_DIGEST open to the user: inside the morning
+ * window, like the reply-wait reminder, so it no longer rings just after local
+ * midnight.
+ */
+async function dailyTaskReminderDue(userId: string, tz: string, now: Date): Promise<boolean> {
+  if (!waitDigestOpenTo(userId)) return true;
+  return inMorningWindow(userId, tz, now);
+}
+
 /** Alert on tasks that are past their due date */
 async function checkOverdueTasks(userId: string, tz: string): Promise<void> {
   const now = new Date();
+  if (!(await dailyTaskReminderDue(userId, tz, now))) return;
 
   const overdue = await prisma.task.findMany({
     where: {
@@ -263,7 +405,9 @@ async function checkEndOfDayReview(userId: string, tz: string): Promise<void> {
   const review = composeEveningReview(input, await getUserNotificationLanguage(userId), tz);
   if (!review) return;
 
-  await notify(userId, "eod_review", review.title, review.message, "/briefing", review.pushBody);
+  await notify(userId, "eod_review", review.title, review.message, "/briefing", {
+    pushBody: review.pushBody,
+  });
 }
 
 // ─── NEW: Deadline countdown (D-3) ─────────────────────────────────────
@@ -271,6 +415,7 @@ async function checkEndOfDayReview(userId: string, tz: string): Promise<void> {
 /** Warn about tasks with deadlines approaching in 3 days */
 async function checkDeadlineCountdown(userId: string, tz: string): Promise<void> {
   const now = new Date();
+  if (!(await dailyTaskReminderDue(userId, tz, now))) return;
   const warningDate = new Date(now.getTime() + DEADLINE_WARNING_DAYS * 24 * 60 * 60 * 1000);
 
   const approaching = await prisma.task.findMany({
@@ -310,69 +455,50 @@ async function checkDeadlineCountdown(userId: string, tz: string): Promise<void>
   );
 }
 
-// ─── NEW: Contact context on emails ────────────────────────────────────
-
-/**
- * Enrich unanswered email notifications with contact history. The sender is
- * matched on the whole address: the From header is the sender's to write, so a
- * part of it (`ceo@` of ceo@evil.com, or an empty one) must not pick a contact.
- */
-export async function getContactContext(userId: string, fromEmail: string): Promise<string> {
-  const email = parseAddress(fromEmail);
-  const contact = await prisma.contact.findFirst({
-    where: { userId, email: { equals: email.trim(), mode: "insensitive" } },
-    select: { name: true, company: true, role: true, tags: true },
-  });
-  if (!contact) return "";
-  const parts: string[] = [];
-  if (contact.company) parts.push(contact.company);
-  if (contact.role) parts.push(contact.role);
-  if (contact.tags) parts.push(contact.tags);
-  return parts.length > 0 ? ` (${parts.join(", ")})` : "";
-}
-
 // ─── NEW: Follow-up draft suggestion ───────────────────────────────────
 
-/** For 48h+ unanswered emails, suggest sending a follow-up */
+/**
+ * Mail that still needs a reply after FOLLOW_UP_MIN_AGE_HOURS: suggest a
+ * follow-up. Skipped while NOTIFY_WAIT_DIGEST is open to the user: the merged
+ * reminder covers this mail.
+ */
 async function checkFollowUpSuggestions(userId: string, tz: string): Promise<void> {
-  const threshold = new Date(Date.now() - 72 * 60 * 60 * 1000); // 72 hours (older than 48h check)
-
-  const stale = await prisma.emailMessage.findMany({
+  if (waitDigestOpenTo(userId)) return;
+  const now = Date.now();
+  const rows = await prisma.emailMessage.findMany({
     where: {
       userId,
       isRead: true,
+      needsReply: true,
       priority: { in: ["URGENT", "NORMAL"] },
-      receivedAt: { lte: threshold, gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
-      category: { notIn: ["automated", "newsletter"] },
+      receivedAt: {
+        lte: new Date(now - FOLLOW_UP_MIN_AGE_HOURS * HOUR_MS),
+        gte: new Date(now - FOLLOW_UP_MAX_AGE_DAYS * DAY_MS),
+      },
+      OR: NOT_BULK,
     },
-    select: { from: true, subject: true },
-    take: 3,
+    select: WAITING_SELECT,
+    orderBy: REPLY_WAIT_ORDER,
+    take: REPLY_WAIT_SCAN,
   });
-
+  const stale = oneMailPerThread(rows);
   if (stale.length === 0) return;
+  if (await sentReplyWaitToday(userId, tz, ["followup"])) return;
 
-  // Dedup
-  const todayStart = localDayUtcRange(new Date(), tz).gte;
-  const existing = await prisma.notification.findFirst({
-    where: { userId, type: "followup", createdAt: { gte: todayStart } },
-  });
-  if (existing) return;
-
-  const suggestions = await Promise.all(
-    stale.map(async (e) => {
-      const from = e.from.replace(/[<>]/g, "").trim().slice(0, 25);
-      const ctx = await getContactContext(userId, e.from);
-      return `- ${from}${ctx}: "${(e.subject || "No subject").slice(0, 35)}"`;
-    }),
+  const withContext = await Promise.all(
+    stale.map(async (e, i) => ({
+      from: e.from,
+      subject: e.subject,
+      context: i < FOLLOW_UP_LISTED ? await getContactContext(userId, e.from) : "",
+    })),
   );
-
-  await notify(
-    userId,
-    "followup",
-    `${stale.length} email(s) may need a follow-up`,
-    `These emails haven't been replied to in 3+ days. Want Klorn to draft a follow-up?\n${suggestions.join("\n")}`,
-    "/chat",
+  const language = await getUserNotificationLanguage(userId);
+  const { title, message } = followUpContent(
+    withContext,
+    language,
+    Math.floor(FOLLOW_UP_MIN_AGE_HOURS / 24),
   );
+  await notify(userId, "followup", title, message, "/chat");
 }
 
 // ─── NEW: Back-to-back meeting warning ─────────────────────────────────
@@ -431,69 +557,6 @@ async function checkBackToBackMeetings(userId: string, tz: string): Promise<void
     `You have ${events.length} meetings today with ${backToBackCount} gap(s) under 15 minutes. Consider blocking focus time.`,
     "/briefing",
   );
-}
-
-/**
- * Create DB notification + WebSocket push + browser push. `pushBody` is the
- * device push's text when it should differ from the bell row's message.
- */
-async function notify(
-  userId: string,
-  type: string,
-  title: string,
-  message: string,
-  url: string,
-  pushBody?: string,
-): Promise<void> {
-  const notification = await prisma.notification.create({
-    data: { userId, type, title, message, link: url },
-  });
-
-  pushNotification(userId, {
-    id: notification.id,
-    type,
-    title,
-    message,
-    link: url,
-    createdAt: notification.createdAt.toISOString(),
-  });
-
-  // Unawaited (best-effort) but guarded — an unhandled rejection from the push
-  // internals would otherwise crash the single dyno.
-  sendPushNotification(
-    userId,
-    { title, body: (pushBody ?? message).slice(0, 200), url },
-    categoryForType(type),
-    // Heuristic-decided: ambient even for a "meeting" category (a back-to-back
-    // warning is not a meeting starting), so it cannot use up the interrupt
-    // room real meeting alerts and urgent mail need (push-bucket.ts).
-    { bucket: "ambient" },
-  ).catch((err) => {
-    logDbFailure("[PROACTIVE] push failed", err, { ids: { userId } });
-    captureDbFailure("[PROACTIVE] push failed", err, {
-      tags: { scope: "proactive.push", userId },
-    });
-  });
-}
-
-/** Preferences, quiet hours and label only; the push rings ambient regardless. */
-function categoryForType(type: string): NotifCategory {
-  switch (type) {
-    case "calendar":
-    case "schedule_warning":
-      return "meeting";
-    case "task":
-    case "deadline":
-      return "task_due";
-    case "email_followup":
-    case "followup":
-      return "agent_proposal";
-    case "review":
-    case "eod_review":
-      return "daily_briefing";
-    default:
-      return "system";
-  }
 }
 
 /**

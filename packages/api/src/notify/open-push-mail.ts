@@ -14,14 +14,19 @@
  * not caught up after quiet hours or by the Windows shell (as before #1687).
  */
 
-import type { NotificationReason } from "@klorn/contract";
+import type { NotificationPresentation, NotificationReason } from "@klorn/contract";
+import { pushQuoteOpenTo } from "../config.js";
 import { prisma } from "../db.js";
 import { NOT_AGENT_SET } from "../judge/agent-tier.js";
 import { isAutomatedSender } from "../judge/keyword-policy.js";
 import type { PocJudgement } from "../judge/poc-judge.js";
 import { isJudgeV3PolicyEnabled } from "../judge/v3/flags.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
-import { type MailPushContent, mailPushContent } from "./mail-push-content.js";
+import {
+  type MailPushContent,
+  mailPushContent,
+  mailPushPresentation,
+} from "./mail-push-content.js";
 import {
   type MailForReason,
   REASON_ITEM_SELECT,
@@ -117,6 +122,7 @@ export async function openPushMail(
       subject: email.subject,
       reason: reasons.get(emailId) ?? null,
       language,
+      allowQuote: pushQuoteOpenTo(userId),
     });
     mail.push({
       bellId: row.id,
@@ -285,11 +291,27 @@ async function reasonsOrNone(
   }
 }
 
-export async function urgentLeadPushContent(
+export interface UrgentLeadPush {
+  /** Decision N1 text: the sender, the subject and the reason line. */
+  content: MailPushContent;
+  /**
+   * The same mail as NT0 structured fields (sender display name, subject,
+   * quote / reason line, thread), as the firewall push carries them.
+   */
+  presentation: NotificationPresentation;
+}
+
+/**
+ * What the urgent sweep's push about ONE mail says (decision N1 + NC1 reason
+ * line) and carries (NT0 fields): the same formatter and fields as the
+ * firewall push (judge/firewall-push.ts), lane PUSH — the sweep rings only
+ * interrupts.
+ */
+export async function urgentLeadPush(
   userId: string,
-  lead: { id: string; from: string | null; subject: string | null },
+  lead: { id: string; from: string | null; subject: string | null; threadId?: string | null },
   language: string,
-): Promise<MailPushContent> {
+): Promise<UrgentLeadPush> {
   let items: Array<{ sourceId: string } & ReasonItemRow> = [];
   try {
     items = await prisma.attentionItem.findMany({
@@ -311,6 +333,15 @@ export async function urgentLeadPushContent(
     new Map(items.map((item) => [item.sourceId, item])),
     language,
   );
-  const reason = reasons.get(lead.id) ?? null;
-  return mailPushContent({ from: lead.from ?? "", subject: lead.subject, reason, language });
+  const input = {
+    from: lead.from ?? "",
+    subject: lead.subject,
+    reason: reasons.get(lead.id) ?? null,
+    language,
+    allowQuote: pushQuoteOpenTo(userId),
+  };
+  return {
+    content: mailPushContent(input),
+    presentation: mailPushPresentation({ ...input, lane: "PUSH", threadId: lead.threadId }),
+  };
 }

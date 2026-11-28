@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   MAIL_PUSH_REASON_MAX,
   mailPushContent,
+  mailPushPresentation,
   mailPushReplyPath,
   mailPushWebActions,
 } from "../notify/mail-push-content.js";
@@ -173,6 +174,7 @@ describe("mailPushContent — reason line (NC1)", () => {
         quoteIn: "body",
       },
       language: "en",
+      allowQuote: true,
     });
     expect(content.body).toBe("Contract\n“Please sign by 5pm today”");
   });
@@ -183,6 +185,7 @@ describe("mailPushContent — reason line (NC1)", () => {
       subject: "s",
       reason: { text: "t", verified: true, quote: '"Please sign by 5pm"' },
       language: "en",
+      allowQuote: true,
     });
     expect(content.body.split("\n")[1]).toBe("“Please sign by 5pm”");
   });
@@ -207,12 +210,65 @@ describe("mailPushContent — reason line (NC1)", () => {
     expect(content.body).toBe("s\nLooks urgent");
   });
 
+  it("NOTIFY_PUSH_QUOTE off (the default): a verified reason shows its short text, never the quote", () => {
+    const content = mailPushContent({
+      from: "a@b.c",
+      subject: "Contract",
+      reason: { text: "Signature needed today", verified: true, quote: "Please sign by 5pm today" },
+      language: "en",
+    });
+    expect(content.body).toBe("Contract\nSignature needed today");
+  });
+
+  it("NOTIFY_PUSH_QUOTE off: no line 2 when the reason's text is only the quote", () => {
+    const content = mailPushContent({
+      from: "a@b.c",
+      subject: "Contract",
+      reason: {
+        text: "Please sign by 5pm today",
+        verified: true,
+        quote: "Please sign by 5pm today",
+      },
+      language: "en",
+    });
+    expect(content.body).toBe("Contract");
+  });
+
+  it("the same mail as NT0 fields: display name only, subject, quote only when allowed", () => {
+    const reason = { text: "Signature needed today", verified: true, quote: "Please sign by 5pm" };
+    const base = { subject: "Contract", reason, language: "en", lane: "PUSH" as const };
+    expect(
+      mailPushPresentation({ ...base, from: "Terry Smith <t@acme.com>", threadId: "t-1" }),
+    ).toEqual({
+      kind: "push",
+      senderDisplayName: "Terry Smith",
+      subject: "Contract",
+      reasonLine: "Signature needed today",
+      threadId: "t-1",
+    });
+    const allowed = mailPushPresentation({ ...base, from: "t@acme.com", allowQuote: true });
+    expect(allowed).toEqual({
+      kind: "push",
+      subject: "Contract",
+      quote: "Please sign by 5pm",
+      reasonLine: "Signature needed today",
+    });
+    expect(
+      mailPushPresentation({ ...base, from: '"t@acme.com" <t@acme.com>', lane: "MEETING" }),
+    ).toEqual({
+      kind: "meet",
+      subject: "Contract",
+      reasonLine: "Signature needed today",
+    });
+  });
+
   it("caps a long quote, marks included", () => {
     const content = mailPushContent({
       from: "a@b.c",
       subject: "s",
       reason: { text: "t", verified: true, quote: "y".repeat(400) },
       language: "en",
+      allowQuote: true,
     });
     const line = content.body.split("\n")[1] ?? "";
     expect(line.length).toBeLessThanOrEqual(MAIL_PUSH_REASON_MAX);

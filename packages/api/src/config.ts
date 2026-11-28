@@ -793,6 +793,48 @@ export function slackOpenTo(userId: string): boolean {
   return featureOpenTo(userId, SLACK_FLAGS);
 }
 
+// NT0 reply-wait reminder (notification redesign, decided 2026-11-17): the
+// unanswered (48h) and follow-up (72h) reminders of agentcore/proactive-actions.ts
+// become ONE "wait" reminder, read most-important-first, sent in the user-local
+// morning window and never during their quiet hours. The overdue-task and
+// deadline (D-3) reminders move to the same window (notify/morning-window.ts):
+// one timing decision for every once-a-day reminder, so none rings just after
+// local midnight. OFF by default (repo doctrine): all of them then keep their
+// old timing (the first tick of the user's local day). `cohort` opens it only
+// to ROLLOUT_COHORT_USER_IDS. Read per tick: a flip needs no redeploy.
+export const WAIT_DIGEST_FLAG = "NOTIFY_WAIT_DIGEST";
+export function waitDigestOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [WAIT_DIGEST_FLAG]);
+}
+
+// NT0 push content (decided 2026-11-17): a mail's verified quote (NC1,
+// notify/notification-reason.ts) in a push body, and a meeting's join link in
+// the APNs / FCM payload and the proactive meeting heads-up's push body. Both
+// are mail or meeting content travelling through Apple's and Google's push
+// services; a mail push otherwise carries the sender, the subject and the
+// judge's short reason. OFF by default (repo doctrine): the push body's second
+// line is that short reason. Every channel follows it, so all surfaces read the
+// same (decision N1). `cohort` opens it only to ROLLOUT_COHORT_USER_IDS.
+export const PUSH_QUOTE_FLAG = "NOTIFY_PUSH_QUOTE";
+export function pushQuoteOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [PUSH_QUOTE_FLAG]);
+}
+
+// NT0 push presentation (decided 2026-11-17): APNs `thread-id`, `subtitle`
+// (the subject, so the body is the one-line request only),
+// `interruption-level` (time-sensitive for push / meet, passive for wait,
+// digest and brief), `relevance-score`, and `apns-priority` 5 for a passive
+// kind; and the NT0 copy of the meet, brief, agent and acct device pushes on
+// every channel (notify/kind-push-copy.ts), so every presentation change flips
+// together. OFF by default: the APNs alert stays { title, body } at priority 10
+// and those pushes keep their old text.
+// The structured custom keys (contract NotificationPresentation) ship either
+// way; a client that does not read them is unaffected.
+export const PUSH_PRESENTATION_FLAG = "NOTIFY_PUSH_PRESENTATION";
+export function pushPresentationOpenTo(userId: string): boolean {
+  return featureOpenTo(userId, [PUSH_PRESENTATION_FLAG]);
+}
+
 // KakaoTalk chat-export import v1 (docs/providers/kakaotalk-import.md): the
 // user uploads one exported chat; Klorn suggests commitments from its recent
 // window. OFF by default (repo doctrine). `cohort` opens the routes, the

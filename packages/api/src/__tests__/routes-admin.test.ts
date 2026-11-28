@@ -2,7 +2,18 @@ import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken } from "../auth.js";
 
-const sendBetaInviteEmailSpy = vi.fn(async () => true);
+const sendBetaInviteEmailSpy = vi.fn(
+  async (): Promise<{ sent: true } | { sent: false; code: string }> => ({ sent: true }),
+);
+// GET /email-config builds its own Resend client; the SDK answers a refusal
+// with `{ data: null, error }`, not a throw.
+const resendOutcome = vi.hoisted(() => ({ next: null as unknown }));
+vi.mock("resend", async (importActual) => ({
+  ...(await importActual<typeof import("resend")>()),
+  Resend: class {
+    emails = { send: vi.fn(async () => resendOutcome.next) };
+  },
+}));
 vi.mock("../mail/email.js", () => ({
   sendVerificationEmail: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
@@ -901,9 +912,42 @@ describe("PATCH /api/admin/waitlist/:id", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    // Invite email is fire-and-forget — let the microtask queue flush.
-    await new Promise((resolve) => setImmediate(resolve));
     expect(sendBetaInviteEmailSpy).toHaveBeenCalledWith("applicant@example.com", "Applicant");
+    expect(res.json()).toMatchObject({ status: "APPROVED", inviteEmail: { sent: true } });
+  });
+
+  it("tells the admin when the invite email did not go out, with Resend's code", async () => {
+    seedWaitlistEntry({ id: "w-5", email: "bounce@example.com", name: "Bounce" });
+    sendBetaInviteEmailSpy.mockResolvedValueOnce({ sent: false, code: "VALIDATION_ERROR" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/admin/waitlist/w-5",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload: { status: "APPROVED" },
+    });
+
+    // The approval itself stands; only the mail is reported as not sent.
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      status: "APPROVED",
+      inviteEmail: { sent: false, code: "VALIDATION_ERROR" },
+    });
+    expect(waitlistById.get("w-5")?.status).toBe("APPROVED");
+  });
+
+  it("says nothing about an invite when the change sends none", async () => {
+    seedWaitlistEntry({ id: "w-6", email: "nope@example.com" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/admin/waitlist/w-6",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+      payload: { status: "REJECTED" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).not.toHaveProperty("inviteEmail");
   });
 
   it("does not re-send invite when entry is already APPROVED", async () => {
@@ -1388,5 +1432,59 @@ describe("admin learned-rule approval gate", () => {
     const res = await post("/api/admin/learned-rules/r1/approve", USER_TOKEN);
     expect(res.statusCode).toBe(403);
     expect(ruleById.get("r1")?.status).toBe("OPEN");
+  });
+});
+
+describe("GET /api/admin/email-config", () => {
+  const ORIGINAL = {
+    key: process.env.RESEND_API_KEY,
+    alert: process.env.WAITLIST_ALERT_EMAIL,
+  };
+
+  beforeEach(() => {
+    process.env.RESEND_API_KEY = "re_test_key";
+    process.env.WAITLIST_ALERT_EMAIL = "alerts@e.com";
+  });
+
+  afterEach(() => {
+    resendOutcome.next = null;
+    if (ORIGINAL.key === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = ORIGINAL.key;
+    if (ORIGINAL.alert === undefined) delete process.env.WAITLIST_ALERT_EMAIL;
+    else process.env.WAITLIST_ALERT_EMAIL = ORIGINAL.alert;
+  });
+
+  async function emailConfig() {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/admin/email-config",
+      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    });
+    await app.close();
+    return res;
+  }
+
+  it("reports the id Resend gave an accepted test mail", async () => {
+    resendOutcome.next = { data: { id: "re-mail-1" }, error: null };
+    const res = await emailConfig();
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, resendId: "re-mail-1" });
+  });
+
+  it("reports ok:false with Resend's code and status when Resend refuses the test mail", async () => {
+    resendOutcome.next = {
+      data: null,
+      error: {
+        name: "validation_error",
+        message: "The example.com domain is not verified for alerts@e.com",
+        statusCode: 403,
+      },
+    };
+    const res = await emailConfig();
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ ok: false, code: "VALIDATION_ERROR", status: 403 });
+    expect(JSON.stringify(body)).not.toContain("not verified");
   });
 });

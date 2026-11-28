@@ -86,8 +86,8 @@ trader / individual** can sign up — no company registration needed.
    the per-method country/currency table are in
    `docs/launch/paywall-flip-runbook.md` → "Payment methods at checkout".
 
-Keep three numbers in sync: the landing copy ($29.99, all 7 locales), the Paddle
-price, and `TRIAL_DAYS` (7).
+Keep three numbers in sync: the landing copy ($29.99, all 3 locales: en, ko,
+zh), the Paddle price, and `TRIAL_DAYS` (7).
 
 ## D. Standing config decisions already made
 

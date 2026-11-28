@@ -173,6 +173,7 @@ interface UrgentRow {
   createdAt: Date;
   receivedAt: Date;
   linkedInboxAccountId: string | null;
+  threadId?: string | null;
 }
 
 interface Item {
@@ -570,6 +571,43 @@ describe("the urgent sweep rings only for mail the judge put in the PUSH lane", 
         tags: expect.objectContaining({ scope: "automation.urgent-lane" }),
       }),
     );
+  });
+});
+
+describe("a one-mail sweep push carries the NT0 mail fields, as the firewall push does", () => {
+  it("names the sender, the subject and the thread, read with the sweep's own query", async () => {
+    arrange([{ ...urgent("mail-1", "18abc"), threadId: "thr-1" }], [item("mail-1", "PUSH")]);
+
+    await runOneTick();
+
+    const pushes = urgentPushes();
+    expect(pushes).toHaveLength(1);
+    expect((pushes[0][1] as { presentation?: unknown }).presentation).toMatchObject({
+      kind: "push",
+      senderDisplayName: "Kim",
+      subject: "Subject mail-1",
+      threadId: "thr-1",
+    });
+    // The live frame (open tabs, the Windows shell) carries the same fields.
+    const { pushNotification } = await import("../websocket.js");
+    const frame = (vi.mocked(pushNotification).mock.calls as unknown as Array<[string, object]>)
+      .map(([, f]) => f as Record<string, unknown>)
+      .find((f) => f.title === "Urgent email");
+    expect(frame).toMatchObject({ kind: "push", senderDisplayName: "Kim", threadId: "thr-1" });
+    const urgentRead = argsOf("emailMessage.findMany").find(
+      (a) => (a as { where?: { priority?: string } }).where?.priority === "URGENT",
+    ) as { select: Record<string, boolean> };
+    expect(urgentRead.select.threadId).toBe(true);
+  });
+
+  it("a batch of several mails carries no one mail's fields", async () => {
+    arrange([urgent("a", "18aaa"), urgent("b", "18bbb")], [item("a", "PUSH"), item("b", "PUSH")]);
+
+    await runOneTick();
+
+    const pushes = urgentPushes();
+    expect(pushes).toHaveLength(1);
+    expect((pushes[0][1] as { presentation?: unknown }).presentation).toBeUndefined();
   });
 });
 

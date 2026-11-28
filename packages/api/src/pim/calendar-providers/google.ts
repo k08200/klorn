@@ -86,6 +86,19 @@ export function googleMeetingLinkOf(item: calendar_v3.Schema$Event): string | nu
   return safeMeetingLink(video?.uri) ?? safeMeetingLink(item.hangoutLink);
 }
 
+/**
+ * CalendarEvent.attendeeCount of a Google event: the listed attendees minus
+ * resources and those who declined. Null when the event lists none, or when
+ * Google marks the list as cut (attendeesOmitted). Where guests cannot see each
+ * other Google may list only the user (a count of 1). Never an address.
+ */
+export function googleAttendeeCount(item: calendar_v3.Schema$Event): number | null {
+  if (item.attendeesOmitted === true) return null;
+  const listed = item.attendees ?? [];
+  if (listed.length === 0) return null;
+  return listed.filter((a) => a.resource !== true && a.responseStatus !== "declined").length;
+}
+
 function toProviderEvent(
   item: calendar_v3.Schema$Event,
   timeZone: string | undefined,
@@ -97,6 +110,7 @@ function toProviderEvent(
     description: item.description || null,
     location: item.location || null,
     meetingLink: googleMeetingLinkOf(item),
+    attendeeCount: googleAttendeeCount(item),
     start: item.start?.dateTime || item.start?.date || "",
     end: item.end?.dateTime || item.end?.date || "",
     allDay: !item.start?.dateTime,

@@ -436,6 +436,8 @@ export interface JudgeableEmailRow {
    * in — CLAUDE.md: never assume the primary account for a Gmail action.
    */
   linkedInboxAccountId?: string | null;
+  /** The provider thread id, when the caller selected it (NT0 push `threadId`). */
+  threadId?: string | null;
 }
 
 /**

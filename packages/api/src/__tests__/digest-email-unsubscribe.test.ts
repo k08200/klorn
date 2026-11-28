@@ -48,7 +48,7 @@ beforeEach(() => {
 
 describe("sendDigestEmail opt-out", () => {
   it("carries a List-Unsubscribe header, bracketed as RFC 2369 requires", async () => {
-    await expect(sendDigestEmail("a@example.com", "Subject", "body")).resolves.toBe(true);
+    await expect(sendDigestEmail("a@example.com", "Subject", "body")).resolves.toBe("sent");
     expect(sentPayload().headers).toEqual({ "List-Unsubscribe": `<${UNSUBSCRIBE_URL}>` });
   });
 
@@ -81,6 +81,12 @@ describe("sendDigestEmail opt-out", () => {
     expect(payload.headers).toEqual({ "List-Unsubscribe": `<${UNSUBSCRIBE_URL}>` });
   });
 
+  it("translates the label for zh", async () => {
+    await sendDigestEmail("a@example.com", "Subject", "body", { language: "zh" });
+    expect(sentPayload().text as string).toContain("退订");
+    expect(sentPayload().text as string).not.toContain(LABEL_EN);
+  });
+
   it("falls back to English for a language the digest copy was never written in", async () => {
     await sendDigestEmail("a@example.com", "Subject", "body", { language: "de" });
     expect(sentPayload().text as string).toContain(LABEL_EN);
@@ -101,7 +107,7 @@ describe("sendDigestEmail opt-out", () => {
     // exists to prevent, so a misconfigured WEB_URL costs a skipped digest.
     await expect(
       sendDigestEmail("a@example.com", "Subject", "body", { webUrl: "app.klorn.ai" }),
-    ).resolves.toBe(false);
+    ).resolves.toBe("skipped");
     expect(send).not.toHaveBeenCalled();
   });
 

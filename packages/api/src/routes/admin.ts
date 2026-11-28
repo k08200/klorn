@@ -30,11 +30,11 @@ import { getTraitMetrics } from "../learning/sender-trait-metrics.js";
 import { clearFallbackState, getProviderCooldownInfo } from "../llm/model-fallback.js";
 import { MODEL } from "../llm/openai.js";
 import { sendBetaInviteEmail } from "../mail/email.js";
+import { ResendSendError, requireResendAccepted } from "../mail/resend-send.js";
 import { collectFeatureFlags } from "../ops/feature-flags.js";
 import { getPerfSnapshot } from "../perf-monitor.js";
 import { cohortReadout, pmfSummary } from "../product/cohort.js";
 import { getProviderChain } from "../providers/index.js";
-import { logDbFailure } from "../report-db-failure.js";
 import { captureError } from "../sentry.js";
 import { deleteUserAndAllData } from "../user-deletion.js";
 
@@ -614,9 +614,11 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   // PATCH /api/admin/waitlist/:id — mark approved or rejected. On the
-  // PENDING/REJECTED → APPROVED transition, fire-and-forget an invite email so
-  // the applicant knows they can sign up. Idempotent: re-PATCHing an already-
-  // APPROVED entry does not re-send the email.
+  // PENDING/REJECTED → APPROVED transition, send an invite email so the
+  // applicant knows they can sign up, and answer with what became of it
+  // (`inviteEmail`: sent, or not sent with Resend's code) so the admin sees a
+  // mail that did not go out. The approval stands either way. Idempotent:
+  // re-PATCHing an already-APPROVED entry does not re-send the email.
   app.patch("/waitlist/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
     const { status } = request.body as { status?: string };
@@ -641,9 +643,9 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     if (status === "APPROVED" && previous.status !== "APPROVED") {
-      sendBetaInviteEmail(entry.email, entry.name).catch((err) => {
-        logDbFailure("[ADMIN] Failed to send beta invite email", err, { level: "error" });
-      });
+      // Never throws, and bounded by Resend's send timeout (resend-send.ts).
+      const inviteEmail = await sendBetaInviteEmail(entry.email, entry.name);
+      return { ...entry, inviteEmail };
     }
 
     return entry;
@@ -668,14 +670,30 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const resendClient = new Resend(process.env.RESEND_API_KEY!);
     try {
-      const result = await resendClient.emails.send({
-        from: fromEmail,
-        to: alertTo,
-        subject: "[Klorn] Email config test",
-        html: "<p>Email delivery is working.</p>",
-      });
-      return { ok: true, fromEmail, alertTo, resendId: (result as { id?: string }).id ?? null };
+      const sent = await requireResendAccepted((requestOptions) =>
+        resendClient.emails.send(
+          {
+            from: fromEmail,
+            to: alertTo,
+            subject: "[Klorn] Email config test",
+            html: "<p>Email delivery is working.</p>",
+          },
+          requestOptions,
+        ),
+      );
+      return { ok: true, fromEmail, alertTo, resendId: sent.id };
     } catch (err) {
+      // Resend answered and refused: its code and status, not its message.
+      if (err instanceof ResendSendError) {
+        return {
+          ok: false,
+          reason: "Resend did not accept the test mail",
+          code: err.code,
+          status: err.statusCode,
+          fromEmail,
+          alertTo,
+        };
+      }
       const msg = err instanceof Error ? err.message : String(err);
       return { ok: false, reason: msg, fromEmail, alertTo };
     }

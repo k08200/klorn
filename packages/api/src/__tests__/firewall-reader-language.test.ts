@@ -98,34 +98,45 @@ describe("GET /api/inbox/firewall — reader language", () => {
     expect(prose).toBe("Investor asked for a call");
   });
 
-  it.each(["en", "ko", "ja", "zh", "es", "fr", "de"] as const)("lang=%s", async (lang) => {
+  it.each(["en", "ko", "zh"] as const)("lang=%s", async (lang) => {
     const { keyed } = await reasons(`/api/inbox/firewall/?lang=${lang}`);
     expect(keyed).toBe(COPY[lang]);
   });
 
+  it.each([
+    "ja",
+    "es",
+    "fr",
+    "de",
+  ])("a retired lang=%s is ignored: the stored language answers", async (lang) => {
+    configFindUnique.mockResolvedValue({ notificationLanguage: "zh" });
+    const { keyed } = await reasons(`/api/inbox/firewall/?lang=${lang}`);
+    expect(keyed).toBe(COPY.zh);
+  });
+
   it("an unknown lang is ignored (no 400) and the stored language answers", async () => {
-    configFindUnique.mockResolvedValue({ notificationLanguage: "de" });
+    configFindUnique.mockResolvedValue({ notificationLanguage: "zh" });
     const { keyed } = await reasons("/api/inbox/firewall/?lang=xx");
-    expect(keyed).toBe(COPY.de);
+    expect(keyed).toBe(COPY.zh);
   });
 
   it("Accept-Language is used when lang is absent", async () => {
     const { keyed, res } = await reasons("/api/inbox/firewall/", {
-      "accept-language": "ja-JP,ja;q=0.9,en;q=0.5",
+      "accept-language": "zh-CN,zh;q=0.9,en;q=0.5",
     });
-    expect(keyed).toBe(COPY.ja);
+    expect(keyed).toBe(COPY.zh);
     expect(String(res.headers.vary)).toContain("Accept-Language");
   });
 
   it("lang beats Accept-Language", async () => {
-    const { keyed } = await reasons("/api/inbox/firewall/?lang=fr", { "accept-language": "ko" });
-    expect(keyed).toBe(COPY.fr);
+    const { keyed } = await reasons("/api/inbox/firewall/?lang=zh", { "accept-language": "ko" });
+    expect(keyed).toBe(COPY.zh);
   });
 
   it("with neither, the stored notification language is used", async () => {
-    configFindUnique.mockResolvedValue({ notificationLanguage: "es" });
+    configFindUnique.mockResolvedValue({ notificationLanguage: "ko" });
     const { keyed } = await reasons("/api/inbox/firewall/");
-    expect(keyed).toBe(COPY.es);
+    expect(keyed).toBe(COPY.ko);
   });
 
   it("composes with the inbox scope param", async () => {

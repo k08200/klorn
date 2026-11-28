@@ -29,7 +29,7 @@ beforeEach(() => {
 });
 
 describe("parseSupportedLanguage", () => {
-  it.each(["en", "ko", "ja", "zh", "es", "fr", "de"])("accepts the UI locale %s", (code) => {
+  it.each(["en", "ko", "zh"])("accepts the UI locale %s", (code) => {
     expect(parseSupportedLanguage(code)).toBe(code);
   });
 
@@ -38,7 +38,21 @@ describe("parseSupportedLanguage", () => {
     expect(parseSupportedLanguage("ZH_hans")).toBe("zh");
   });
 
-  it.each([undefined, null, "", "xx", "pt", "klingon", "*", 42, ["ko"]])("ignores %s", (value) => {
+  it.each([
+    undefined,
+    null,
+    "",
+    "xx",
+    "pt",
+    "klingon",
+    "*",
+    42,
+    ["ko"],
+    "ja",
+    "es",
+    "fr",
+    "de",
+  ])("ignores %s", (value) => {
     expect(parseSupportedLanguage(value)).toBeNull();
   });
 });
@@ -54,17 +68,19 @@ describe("bestAcceptLanguage", () => {
   });
 
   it("treats a missing q as 1 and keeps header order on ties", () => {
-    expect(bestAcceptLanguage("ja, de")).toBe("ja");
+    expect(bestAcceptLanguage("zh, ko")).toBe("zh");
     expect(bestAcceptLanguage("ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7")).toBe("ko");
   });
 
   it("skips unsupported tags, wildcards and q=0", () => {
-    expect(bestAcceptLanguage("pt, *, fr;q=0, es;q=0.1")).toBe("es");
+    expect(bestAcceptLanguage("pt, *, ko;q=0, zh;q=0.1")).toBe("zh");
+    // Retired languages are unsupported: the next shipped one wins.
+    expect(bestAcceptLanguage("ja-JP, ja;q=0.9, ko;q=0.5")).toBe("ko");
     expect(bestAcceptLanguage("pt, *")).toBeNull();
   });
 
   it("reads the first value when the header arrives as an array", () => {
-    expect(bestAcceptLanguage(["fr", "de"])).toBe("fr");
+    expect(bestAcceptLanguage(["zh", "ko"])).toBe("zh");
   });
 
   it("does not choke on a hostile header", () => {
@@ -90,20 +106,30 @@ describe("resolveReaderLanguage — precedence", () => {
     const lang = await resolveReaderLanguage({
       userId: "u1",
       lang: "xx",
-      acceptLanguage: "ja-JP,ja;q=0.9",
+      acceptLanguage: "zh-CN,zh;q=0.9",
     });
-    expect(lang).toBe("ja");
+    expect(lang).toBe("zh");
     expect(configFindUnique).not.toHaveBeenCalled();
   });
 
   it("3. without lang or a supported header the stored notification language is used", async () => {
-    configFindUnique.mockResolvedValue({ notificationLanguage: "fr" });
+    configFindUnique.mockResolvedValue({ notificationLanguage: "ko" });
     const lang = await resolveReaderLanguage({
       userId: "u1",
       lang: "xx",
       acceptLanguage: "pt-BR",
     });
-    expect(lang).toBe("fr");
+    expect(lang).toBe("ko");
+  });
+
+  it("a retired ?lang=ja no longer wins: Accept-Language decides, then the stored language", async () => {
+    configFindUnique.mockResolvedValue({ notificationLanguage: "zh" });
+    expect(
+      await resolveReaderLanguage({ userId: "u1", lang: "ja", acceptLanguage: "ko-KR,ko;q=0.9" }),
+    ).toBe("ko");
+    expect(await resolveReaderLanguage({ userId: "u1", lang: "ja" })).toBe("zh");
+    configFindUnique.mockResolvedValue({ notificationLanguage: "fr" });
+    expect(await resolveReaderLanguage({ userId: "u1", lang: "de" })).toBe("en");
   });
 
   it("4. with nothing at all it is English", async () => {

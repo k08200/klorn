@@ -41,7 +41,7 @@ func polishOct23SelfChecks(sourceDir: URL) async -> [(String, Bool)] {
           })
 
     // MARK: 3. the two "Auto" settings read apart, in every catalogue
-    let languages = ["en", "ko", "de", "es", "fr", "ja", "zh"]
+    let languages = L10n.shipped
     for language in languages {
         let url = sourceDir.appendingPathComponent("Resources/\(language).lproj/Localizable.strings")
         let table = NSDictionary(contentsOf: url) as? [String: String] ?? [:]

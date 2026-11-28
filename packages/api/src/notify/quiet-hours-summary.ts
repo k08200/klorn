@@ -153,7 +153,13 @@ async function summarizeHeldMail(config: QuietConfigRow, now: Date): Promise<boo
 
   const language = resolveNotificationLanguage(config.notificationLanguage);
   const held = await heldPushMail(userId, window, language);
-  const slack = await heldSlackPush(userId, window);
+  // Best-effort: a failing Slack read must not cost the user the mail summary
+  // (before Slack was counted it could not). The Slack rows then wait for the
+  // Windows catch-up / Today; the claim below covers the mail.
+  const slack = await heldSlackPush(userId, window).catch((err: unknown) => {
+    logDbFailure("[QUIET] held Slack read failed", err, { ids: { userId } });
+    return [] as HeldSlackRow[];
+  });
   const count = held.length + slack.length;
   if (count === 0) return false;
   if (!(await claimWindow(userId, dedupeKey, count))) return false;

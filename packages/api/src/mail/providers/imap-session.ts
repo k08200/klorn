@@ -23,9 +23,13 @@
  *   3. Auth cooldown. After a rejected login, actions for that credential
  *      answer `{ error }` without connecting until IMAP_AUTH_COOLDOWN_MS has
  *      passed or the user reconnects (a new stored cipher is a new credential).
- *      Logged once per cooldown, not once per call.
- *   4. Reporting. Transport failures reach Sentry at most once per account per
- *      IMAP_TRANSPORT_CAPTURE_INTERVAL_MS; otherwise they are a warn log.
+ *      Logged once per cooldown, not once per call. A login refused for the
+ *      moment (RFC 5530 UNAVAILABLE, LIMIT, INUSE, SERVERBUG) is not a rejected
+ *      password: it pauses the actions only IMAP_TRANSIENT_PAUSE_MS, with the
+ *      retryable answer, and the poll does not read that pause.
+ *   4. Reporting. Transport failures and logins refused for the moment reach
+ *      Sentry at most once per account per IMAP_TRANSPORT_CAPTURE_INTERVAL_MS;
+ *      otherwise they are a warn log.
  *
  * One queue per account, for everything (step B3): the flag actions above and the
  * one-shot tasks below (SMTP sends, draft and Sent-copy APPENDs, reply-header
@@ -52,6 +56,7 @@ import { captureDbFailure, logDbFailure } from "../../report-db-failure.js";
 import { Semaphore } from "../../semaphore.js";
 import { createImapClient, endImapSession } from "../imap-connection.js";
 import type { ImapProviderConfig } from "../imap-providers.js";
+import { IMAP_THROTTLED_CODE } from "../imap-throttled.js";
 import { checkLiveValidity, resetUidValidityLogState } from "../imap-uidvalidity.js";
 import { isSmtpAuthRejection } from "../smtp-transport.js";
 import { fail } from "./action-failure.js";
@@ -76,6 +81,13 @@ export const IMAP_ACTION_SOCKET_TIMEOUT_MS = 15_000;
 export const MAX_CONCURRENT_IMAP_ACTION_SESSIONS = 3;
 export const MAX_OPS_PER_IMAP_SESSION = 200;
 export const IMAP_AUTH_COOLDOWN_MS = 15 * 60_000;
+/**
+ * The pause after a login refused for the moment. Short, because nothing about
+ * the password was learned and the user may retry; not zero, because promo
+ * auto-read and the autonomous agent call markAsRead one mail after another, and
+ * without it each call would be one more refused LOGIN from our egress IP.
+ */
+export const IMAP_TRANSIENT_PAUSE_MS = 60_000;
 export const IMAP_TRANSPORT_CAPTURE_INTERVAL_MS = 10 * 60_000;
 
 // One-shot tasks (step B3). Worst case for a caller: TASK_QUEUE_WAIT_MS waiting
@@ -130,6 +142,8 @@ interface AccountQueue {
 const queues = new Map<string, AccountQueue>();
 /** credentialKey -> epoch ms the cooldown ends. */
 const authCooldownUntil = new Map<string, number>();
+/** credentialKey -> epoch ms the pause after a login refused for the moment ends. Actions only. */
+const transientPauseUntil = new Map<string, number>();
 /** rowId -> epoch ms of the last transport failure sent to Sentry. */
 const lastTransportCapture = new Map<string, number>();
 /** rowId -> the tail of that account's chain. Never rejects. Present while work is queued. */
@@ -144,6 +158,7 @@ export function resetImapSessionState(): void {
   rowChains.clear();
   outstandingTasks.clear();
   authCooldownUntil.clear();
+  transientPauseUntil.clear();
   lastTransportCapture.clear();
   resetUidValidityLogState();
   sessionSlots = new Semaphore(MAX_CONCURRENT_IMAP_ACTION_SESSIONS);
@@ -171,12 +186,44 @@ const authFailure = (label: string): MailActionFailure =>
   fail(`${label} rejected the saved app password. Reconnect your ${label} mailbox in Settings.`);
 
 function isAuthFailure(err: unknown): boolean {
-  const e = err as { authenticationFailed?: unknown; serverResponseCode?: unknown } | null;
-  return e?.authenticationFailed === true || e?.serverResponseCode === "AUTHENTICATIONFAILED";
+  const e = err as {
+    authenticationFailed?: unknown;
+    serverResponseCode?: unknown;
+    code?: unknown;
+  } | null;
+  if (e?.serverResponseCode === "AUTHENTICATIONFAILED") return true;
+  // imapflow 1.x marks every failed LOGIN `authenticationFailed`, a throttled one
+  // too (Microsoft 365's "Request is throttled" BAD, code ETHROTTLE). The server
+  // asked to wait; it did not refuse the password, so it must not count towards
+  // the login backoff (imap-auth-backoff.ts) or ask the user to reconnect.
+  if (e?.code === IMAP_THROTTLED_CODE) return false;
+  return e?.authenticationFailed === true;
 }
 
-/** The same test for the generic poller (imap-accounts.ts): one definition of "login rejected". */
+/**
+ * The same test for the generic poller (imap-accounts.ts): any refused login,
+ * for the credentials or for the moment. Which of the two is `isImapCredentialRefusal`.
+ */
 export const isImapAuthFailure = isAuthFailure;
+
+/**
+ * RFC 5530 response codes a server attaches to a refused LOGIN that is about the
+ * moment, not the password (busy, rate limit, its own bug). imapflow marks every
+ * refused LOGIN `authenticationFailed`, so these must not read as "revoked".
+ */
+const TRANSIENT_LOGIN_REFUSALS = new Set(["UNAVAILABLE", "LIMIT", "INUSE", "SERVERBUG"]);
+
+/**
+ * A refused login that is about the credentials: only the user can fix it. The
+ * one test the poll (sync-error-code.ts `isCredentialRefusal`) and the actions
+ * share, so a busy server neither pauses the actions for the credential cooldown
+ * nor tells the user the password was refused.
+ */
+export function isImapCredentialRefusal(err: unknown): boolean {
+  if (!isAuthFailure(err)) return false;
+  const code = (err as { serverResponseCode?: unknown } | null)?.serverResponseCode;
+  return !(typeof code === "string" && TRANSIENT_LOGIN_REFUSALS.has(code.toUpperCase()));
+}
 
 /** Is this credential (row id plus stored cipher) paused after a rejected login? Shared with the poller. */
 export function isCredentialCoolingDown(credentialKey: string): boolean {
@@ -209,29 +256,46 @@ export function startCredentialCooldown(
   );
 }
 
+/** Is `key` paused in `pauses` now? Forgets an entry that has ended. */
+function isPaused(pauses: Map<string, number>, key: string): boolean {
+  const until = pauses.get(key);
+  if (until === undefined) return false;
+  if (Date.now() >= until) {
+    pauses.delete(key);
+    return false;
+  }
+  return true;
+}
+
+/** Record a pause for `key` until `now + ms`, forgetting entries that have ended. */
+function pauseUntil(pauses: Map<string, number>, key: string, ms: number): void {
+  const now = Date.now();
+  for (const [other, until] of pauses) {
+    if (until <= now) pauses.delete(other);
+  }
+  pauses.set(key, now + ms);
+}
+
+/** The retryable answer: the server could not be reached, or refused the login for the moment. */
+const tryAgainFailure = (label: string): MailActionFailure =>
+  fail(`Could not reach ${label}. Try again shortly.`);
+
 /**
- * The answer for an account whose credential was rejected recently, or null.
- * Flag actions and B3 tasks share it, so a revoked app password stops every path.
+ * The answer for an account whose credential was rejected recently (or whose
+ * login was refused for the moment, a minute ago), or null. Flag actions and B3
+ * tasks share it, so a revoked app password stops every path.
  */
 function cooldownFailure(
   provider: ImapProviderConfig,
   account: SessionAccount,
 ): MailActionFailure | null {
-  const until = authCooldownUntil.get(account.credentialKey);
-  if (until === undefined) return null;
-  if (Date.now() >= until) {
-    authCooldownUntil.delete(account.credentialKey);
-    return null;
-  }
-  return authFailure(provider.label);
+  if (isPaused(authCooldownUntil, account.credentialKey)) return authFailure(provider.label);
+  if (isPaused(transientPauseUntil, account.credentialKey)) return tryAgainFailure(provider.label);
+  return null;
 }
 
 function startCooldown(provider: ImapProviderConfig, account: SessionAccount): void {
-  const now = Date.now();
-  for (const [key, until] of authCooldownUntil) {
-    if (until <= now) authCooldownUntil.delete(key);
-  }
-  authCooldownUntil.set(account.credentialKey, now + IMAP_AUTH_COOLDOWN_MS);
+  pauseUntil(authCooldownUntil, account.credentialKey, IMAP_AUTH_COOLDOWN_MS);
   console.warn(
     `[${provider.logScope}] action refused — login rejected for row ${account.rowId}; pausing actions for this mailbox for ${IMAP_AUTH_COOLDOWN_MS / 60_000} min`,
   );
@@ -286,7 +350,27 @@ function softFailure(
       extra: { userId: account.userId, linkedInboxAccountId: account.rowId },
     });
   }
-  return fail(`Could not reach ${provider.label}. Try again shortly.`);
+  return tryAgainFailure(provider.label);
+}
+
+/**
+ * A login refused for the moment (RFC 5530 UNAVAILABLE, LIMIT, INUSE, SERVERBUG;
+ * the poll reads it as "throttled"): not a rejected password, so no credential
+ * cooldown and no reconnect copy. A soft failure, plus IMAP_TRANSIENT_PAUSE_MS
+ * without connecting, which the poll does not read: these codes carry no retry
+ * time, and the automatic callers (promo auto-read, the autonomous agent) would
+ * otherwise log in once per mail.
+ */
+function refusedForTheMoment(
+  err: unknown,
+  provider: ImapProviderConfig,
+  account: SessionAccount,
+): MailActionFailure {
+  pauseUntil(transientPauseUntil, account.credentialKey, IMAP_TRANSIENT_PAUSE_MS);
+  console.warn(
+    `[${provider.logScope}] login refused for the moment for row ${account.rowId}; pausing actions for this mailbox for ${IMAP_TRANSIENT_PAUSE_MS / 1000} s`,
+  );
+  return softFailure(err, provider, account);
 }
 
 /** One failure for the whole session: log (and capture) once, not per caller. */
@@ -295,7 +379,9 @@ function sessionFailure(
   provider: ImapProviderConfig,
   account: SessionAccount,
 ): MailActionFailure {
-  return isAuthFailure(err) ? rejectLogin(provider, account) : softFailure(err, provider, account);
+  if (isImapCredentialRefusal(err)) return rejectLogin(provider, account);
+  if (isAuthFailure(err)) return refusedForTheMoment(err, provider, account);
+  return softFailure(err, provider, account);
 }
 
 /**
@@ -550,21 +636,27 @@ const timeoutFailure = (provider: ImapProviderConfig): MailActionFailure =>
     `${provider.label} did not answer in time. The action may or may not have completed; check your mailbox before trying again.`,
   );
 
-/** The answer for an error a task threw: a rejected login (IMAP or SMTP), or a soft failure. */
+/**
+ * The answer for an error a task threw: a rejected login (IMAP or SMTP), an IMAP
+ * login refused for the moment (as in `sessionFailure`), or a soft failure.
+ */
 function failureFor(
   err: unknown,
   provider: ImapProviderConfig,
   account: SessionAccount,
 ): MailActionFailure {
-  return isAuthFailure(err) || isSmtpAuthRejection(err)
-    ? rejectLogin(provider, account)
-    : softFailure(err, provider, account);
+  if (isImapCredentialRefusal(err) || isSmtpAuthRejection(err)) {
+    return rejectLogin(provider, account);
+  }
+  if (isAuthFailure(err)) return refusedForTheMoment(err, provider, account);
+  return softFailure(err, provider, account);
 }
 
 /**
  * Record a failure that must not change the caller's result (the Sent copy of a
  * message that already went out): a rejected login still starts the shared
- * cooldown, anything else is logged and reported like any session failure.
+ * cooldown (a login refused for the moment, the short pause), anything else is
+ * logged and reported like any session failure.
  */
 export function noteSideFailure(
   err: unknown,

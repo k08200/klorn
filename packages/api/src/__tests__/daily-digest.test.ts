@@ -36,7 +36,9 @@ vi.mock("../sentry.js", () => ({ captureError: vi.fn() }));
 
 import {
   collectDigest,
+  DIGEST_RETRY_DELAYS_MS,
   dayKeyUtc,
+  digestSubject,
   formatDigest,
   isDailyDigestEnabled,
   sendDailyDigests,
@@ -54,7 +56,7 @@ beforeEach(() => {
   ]);
   labelCount.mockResolvedValue(10);
   noteCreate.mockResolvedValue({ id: "note-1" });
-  sendDigestEmail.mockResolvedValue(true);
+  sendDigestEmail.mockResolvedValue("sent");
   evaluateNotificationGate.mockResolvedValue({ allowed: true });
   getUserNotificationLanguage.mockResolvedValue("en");
   isScreenerEnabled.mockReturnValue(false);
@@ -131,6 +133,17 @@ describe("formatDigest", () => {
     const ko = formatDigest({ filed: 3, senders: [] }, "ko");
     const en = formatDigest({ filed: 3, senders: [] }, "en");
     expect(ko).not.toBe(en);
+    const zh = formatDigest({ filed: 3, senders: [] }, "zh");
+    expect(zh).toContain("3 封邮件");
+    expect(zh).not.toBe(en);
+    expect(digestSubject({ filed: 3, senders: [] }, "zh")).toBe("Klorn 今天整理了 3 封邮件");
+  });
+
+  it("writes a retired language (ja/es/fr/de) in English", () => {
+    const en = formatDigest({ filed: 3, senders: [] }, "en");
+    for (const lang of ["ja", "es", "fr", "de"] as const) {
+      expect(formatDigest({ filed: 3, senders: [] }, lang), lang).toBe(en);
+    }
   });
 
   it("makes no claim it has not measured — no 'time saved'", () => {
@@ -161,6 +174,12 @@ describe("sendDailyDigests", () => {
     );
   });
 
+  it("does not count a digest the mail provider did not accept", async () => {
+    sendDigestEmail.mockResolvedValue("rejected");
+    await expect(sendDailyDigests(NOW)).resolves.toBe(0);
+    expect(sendDigestEmail).toHaveBeenCalledTimes(1);
+  });
+
   it("passes the notification language through, so the opt-out footer is not always English", async () => {
     getUserNotificationLanguage.mockResolvedValue("ko");
     await sendDailyDigests(NOW);
@@ -186,7 +205,7 @@ describe("sendDailyDigests", () => {
     });
     sendDigestEmail.mockImplementation(async () => {
       order.push("email");
-      return true;
+      return "sent";
     });
     await sendDailyDigests(NOW);
     expect(order).toEqual(["note", "email"]);
@@ -262,5 +281,127 @@ describe("pending screener senders in the digest", () => {
     listPendingScreener.mockResolvedValue([{ sender: "new@example.com" }]);
     await expect(sendDailyDigests(NOW)).resolves.toBe(0);
     expect(sendDigestEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe("a digest Resend did not take", () => {
+  const sleeps: number[] = [];
+  const noWait = {
+    sleep: async (ms: number) => {
+      sleeps.push(ms);
+    },
+    clock: () => NOW,
+  };
+
+  beforeEach(() => {
+    sleeps.length = 0;
+  });
+
+  it("is retried within the day after a retryable failure, and counted once it lands", async () => {
+    sendDigestEmail.mockResolvedValueOnce("failed").mockResolvedValueOnce("sent");
+
+    await expect(sendDailyDigests(NOW, noWait)).resolves.toBe(1);
+
+    expect(sendDigestEmail).toHaveBeenCalledTimes(2);
+    expect(sleeps).toEqual([DIGEST_RETRY_DELAYS_MS[0]]);
+    // The same mail both times: same address, subject and body.
+    expect(sendDigestEmail.mock.calls[1]).toEqual(sendDigestEmail.mock.calls[0]);
+  });
+
+  it("stops after a bounded number of attempts and keeps the day claimed", async () => {
+    sendDigestEmail.mockResolvedValue("failed");
+
+    await expect(sendDailyDigests(NOW, noWait)).resolves.toBe(0);
+
+    expect(sendDigestEmail).toHaveBeenCalledTimes(1 + DIGEST_RETRY_DELAYS_MS.length);
+    expect(DIGEST_RETRY_DELAYS_MS.length).toBe(2);
+    expect(sleeps).toEqual([...DIGEST_RETRY_DELAYS_MS]);
+    expect(noteCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("is dropped, not retried, when Resend refused it for good", async () => {
+    sendDigestEmail.mockResolvedValue("rejected");
+
+    await expect(sendDailyDigests(NOW, noWait)).resolves.toBe(0);
+
+    expect(sendDigestEmail).toHaveBeenCalledTimes(1);
+    expect(sleeps).toEqual([]);
+  });
+
+  it("is not retried when it was skipped (no Resend key, no opt-out target)", async () => {
+    sendDigestEmail.mockResolvedValue("skipped");
+
+    await expect(sendDailyDigests(NOW, noWait)).resolves.toBe(0);
+
+    expect(sendDigestEmail).toHaveBeenCalledTimes(1);
+    expect(sleeps).toEqual([]);
+  });
+
+  it("is not retried once the UTC day has turned: that day's digest is over", async () => {
+    sendDigestEmail.mockResolvedValue("failed");
+    const nextDay = new Date("2026-08-24T00:00:30Z");
+
+    await expect(
+      sendDailyDigests(NOW, { sleep: noWait.sleep, clock: () => nextDay }),
+    ).resolves.toBe(0);
+
+    expect(sendDigestEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops between rounds once the UTC day turns, even after a first retry round", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    sendDigestEmail.mockResolvedValue("failed");
+    const clocks = [NOW, new Date("2026-08-24T00:00:05Z")];
+    const clock = () => clocks.shift() ?? new Date("2026-08-24T00:00:05Z");
+
+    await expect(sendDailyDigests(NOW, { sleep: noWait.sleep, clock })).resolves.toBe(0);
+
+    // First attempt + round 1 (still the 23rd); round 2 sees the 24th and stops.
+    expect(sendDigestEmail).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries only the users whose send failed", async () => {
+    userFindMany.mockResolvedValue([
+      { id: "u1", email: "a@example.com" },
+      { id: "u2", email: "b@example.com" },
+    ]);
+    sendDigestEmail
+      .mockResolvedValueOnce("sent")
+      .mockResolvedValueOnce("failed")
+      .mockResolvedValueOnce("sent");
+
+    await expect(sendDailyDigests(NOW, noWait)).resolves.toBe(2);
+
+    expect(sendDigestEmail.mock.calls.map((call) => call[0])).toEqual([
+      "a@example.com",
+      "b@example.com",
+      "b@example.com",
+    ]);
+  });
+
+  it("sends every attempt under one idempotency key per user and day", async () => {
+    sendDigestEmail.mockResolvedValueOnce("failed").mockResolvedValueOnce("sent");
+
+    await sendDailyDigests(NOW, noWait);
+
+    const keys = sendDigestEmail.mock.calls.map((call) => call[3]?.idempotencyKey);
+    expect(keys).toEqual(["daily-digest/u1/2026-08-23", "daily-digest/u1/2026-08-23"]);
+  });
+
+  it("a retry that throws does not end the sweep", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    userFindMany.mockResolvedValue([
+      { id: "u1", email: "a@example.com" },
+      { id: "u2", email: "b@example.com" },
+    ]);
+    sendDigestEmail
+      .mockResolvedValueOnce("failed")
+      .mockResolvedValueOnce("failed")
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce("sent");
+
+    await expect(sendDailyDigests(NOW, noWait)).resolves.toBe(1);
+    expect(sendDigestEmail).toHaveBeenCalledTimes(4);
   });
 });
