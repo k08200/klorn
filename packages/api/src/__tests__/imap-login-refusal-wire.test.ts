@@ -51,6 +51,7 @@ const { createImapClient, endImapSession } = await import("../mail/imap-connecti
 const { IMAP_PROVIDERS } = await import("../mail/imap-providers.js");
 const { imapSyncErrorCode, isCredentialRefusal } = await import("../mail/sync-error-code.js");
 const { classifyVerifyFailure } = await import("../mail/imap-verify-failure.js");
+const { pollFailureKind } = await import("../mail/imap-poll-failures.js");
 
 const HAS_OPENSSL = opensslAvailable();
 if (!HAS_OPENSSL) {
@@ -220,18 +221,24 @@ function observe(err: unknown) {
       host: HOST,
       password: PASSWORD,
     }).code,
+    pollKind: pollFailureKind(err),
   };
 }
 
 const no = (code: string) => (tag: string) => `${tag} NO [${code}] refused`;
 
 /** What a refusal of the credentials must read as. */
-const REFUSED = { credentialRefusal: true, syncErrorCode: "auth", verifyCode: "IMAP_AUTH_FAILED" };
+const REFUSED = {
+  credentialRefusal: true,
+  syncErrorCode: "auth",
+  verifyCode: "IMAP_AUTH_FAILED",
+  pollKind: "auth",
+};
 /** What a refusal for the moment must read as: never a credential refusal. */
 const BUSY = {
   credentialRefusal: false,
   syncErrorCode: "throttled",
-  verifyCode: "IMAP_AUTH_FAILED",
+  verifyCode: "IMAP_VERIFY_FAILED",
 };
 
 let consoleCalls: unknown[][] = [];
@@ -307,13 +314,18 @@ describe.skipIf(!HAS_OPENSSL)("real imapflow: a refused login, through Klorn's c
       responseStatus: "NO",
       code: null,
       ...BUSY,
+      pollKind: rfc5530,
     });
   });
 
   it("AUTHENTICATE PLAIN refused with UNAVAILABLE is about the moment, not the password", async () => {
     const { err, verbs } = await login({ reply: no("UNAVAILABLE") }, true);
     expect(verbs).toContain("AUTHENTICATE");
-    expect(observe(err)).toMatchObject({ serverResponseCode: "UNAVAILABLE", ...BUSY });
+    expect(observe(err)).toMatchObject({
+      serverResponseCode: "UNAVAILABLE",
+      ...BUSY,
+      pollKind: "UNAVAILABLE",
+    });
   });
 
   it.each(
@@ -330,6 +342,7 @@ describe.skipIf(!HAS_OPENSSL)("real imapflow: a refused login, through Klorn's c
       credentialRefusal: false,
       syncErrorCode: "throttled",
       verifyCode: "IMAP_VERIFY_FAILED",
+      pollKind: "ETHROTTLE",
     });
   });
 
@@ -345,6 +358,7 @@ describe.skipIf(!HAS_OPENSSL)("real imapflow: a refused login, through Klorn's c
       credentialRefusal: false,
       syncErrorCode: "error",
       verifyCode: "IMAP_VERIFY_FAILED",
+      pollKind: "ClosedAfterConnectTLS",
     });
   });
 

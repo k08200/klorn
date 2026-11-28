@@ -373,4 +373,77 @@ describe("verifyImapCredentials: what is logged", () => {
     await verifyImapCredentials(ICLOUD_ARGS);
     expect(warn).not.toHaveBeenCalled();
   });
+
+  it("logs a login refused for the moment, as facts with its RFC 5530 code", async () => {
+    warn.mockClear();
+    connectFn.mockRejectedValueOnce(
+      Object.assign(new Error(`Command failed FORGED ${ICLOUD_ARGS.password}`), {
+        authenticationFailed: true,
+        serverResponseCode: "LIMIT",
+        response: `A1 NO [LIMIT] FORGED ${ICLOUD_ARGS.email}`,
+      }),
+    );
+    await verifyImapCredentials(ICLOUD_ARGS);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(logged()).toContain("LIMIT");
+    expect(logged()).not.toMatch(/FORGED|you@icloud|abcd-efgh/);
+  });
+});
+
+/**
+ * A server that refuses LOGIN for the moment (RFC 5530 UNAVAILABLE, LIMIT, INUSE,
+ * SERVERBUG) did not refuse the password: imapflow still marks it
+ * authenticationFailed, but the connect wizard must say "try again", as the poll
+ * ("throttled") and the mail actions do, not "check your password".
+ */
+describe("verifyImapCredentials: a login refused for the moment", () => {
+  const refusedFor = (serverResponseCode: string, message = "Command failed") =>
+    Object.assign(new Error(message), { authenticationFailed: true, serverResponseCode });
+  const TRY_AGAIN = { ok: false, message: IMAP_VERIFY_FAILED_MESSAGE, code: "IMAP_VERIFY_FAILED" };
+
+  it.each([
+    "UNAVAILABLE",
+    "LIMIT",
+    "INUSE",
+    "SERVERBUG",
+  ])("%s answers try-again, not the password hint", async (code) => {
+    connectFn.mockRejectedValueOnce(refusedFor(code));
+    expect(await verifyImapCredentials(ICLOUD_ARGS)).toEqual(TRY_AGAIN);
+  });
+
+  it("goes by the response code, even when the text says authentication failed", async () => {
+    connectFn.mockRejectedValueOnce(
+      refusedFor("UNAVAILABLE", "Authentication failed (AUTH=PLAIN)"),
+    );
+    expect(await verifyImapCredentials(ICLOUD_ARGS)).toEqual(TRY_AGAIN);
+  });
+
+  it("reads the code case-insensitively, as the credential test does, and logs it upper-case", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    connectFn.mockRejectedValueOnce(refusedFor("inuse"));
+    expect(await verifyImapCredentials(ICLOUD_ARGS)).toEqual(TRY_AGAIN);
+    expect(warn.mock.calls.map((call) => call.map(String).join(" ")).join("\n")).toContain(
+      "refusal=INUSE",
+    );
+    warn.mockRestore();
+  });
+
+  it("a refused LOGIN whose code is not a string is still the password hint", async () => {
+    connectFn.mockRejectedValueOnce(
+      Object.assign(new Error("Command failed"), {
+        authenticationFailed: true,
+        serverResponseCode: 503,
+      }),
+    );
+    expect(await verifyImapCredentials(ICLOUD_ARGS)).toMatchObject({ code: "IMAP_AUTH_FAILED" });
+  });
+
+  it("any other response code on a refused LOGIN is still the password hint", async () => {
+    connectFn.mockRejectedValueOnce(refusedFor("ALERT"));
+    expect(await verifyImapCredentials(ICLOUD_ARGS)).toEqual({
+      ok: false,
+      message: IMAP_PROVIDERS.ICLOUD.authFailureHint,
+      code: "IMAP_AUTH_FAILED",
+    });
+  });
 });
