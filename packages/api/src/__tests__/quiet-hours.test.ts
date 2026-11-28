@@ -39,7 +39,6 @@ vi.mock("../notify/push-origin-allowlist.js", () => ({
   isAllowedPushOrigin: vi.fn(() => true),
 }));
 vi.mock("web-push", () => ({
-  default: { setVapidDetails: vi.fn(), sendNotification: mocks.webPushSend },
   setVapidDetails: vi.fn(),
   sendNotification: mocks.webPushSend,
 }));

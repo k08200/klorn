@@ -12,7 +12,10 @@
 
 import crypto from "node:crypto";
 import type { NotificationPresentation } from "@klorn/contract";
-import webPush from "web-push";
+// Namespace import: web-push 4 is ESM-only with named exports and no default.
+// A default import still type-checks (@types/web-push is CJS-shaped) and passes
+// vitest, but Node refuses to link it at boot — esm-import-smoke.test.ts.
+import * as webPush from "web-push";
 import { recordEvent } from "../analytics.js";
 import { pushZombieEvictionEnabled } from "../config.js";
 import { prisma } from "../db.js";
