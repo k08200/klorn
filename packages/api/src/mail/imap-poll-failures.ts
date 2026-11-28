@@ -11,7 +11,7 @@
  */
 
 import { PinnedAddressError } from "./pinned-address.js";
-import { isImapAuthFailure } from "./providers/imap-session.js";
+import { imapTransientRefusalCode, isImapAuthFailure } from "./providers/imap-session.js";
 
 export const MAX_TRACKED_POLL_FAILURES = 10_000;
 
@@ -19,10 +19,16 @@ export const MAX_TRACKED_POLL_FAILURES = 10_000;
 const KIND_CODE = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
 const GENERIC_KIND = "error";
 
-/** What kind of failure this is: "auth", a refusal code, a library error code, or "error". */
+/**
+ * What kind of failure this is: "auth" (the credentials were refused), a refusal
+ * code (a pinned-address refusal, or the RFC 5530 code of a login refused for
+ * the moment: UNAVAILABLE, LIMIT, INUSE, SERVERBUG), a library error code, or
+ * "error". A login refused for the moment is not "auth": the server is busy, the
+ * password is fine (sync-error-code.ts reads it as "throttled").
+ */
 export function pollFailureKind(err: unknown): string {
   if (err instanceof PinnedAddressError) return err.code;
-  if (isImapAuthFailure(err)) return "auth";
+  if (isImapAuthFailure(err)) return imapTransientRefusalCode(err) ?? "auth";
   const code = (err as { code?: unknown } | null)?.code;
   if (typeof code === "string" && KIND_CODE.test(code)) return code;
   return GENERIC_KIND;
