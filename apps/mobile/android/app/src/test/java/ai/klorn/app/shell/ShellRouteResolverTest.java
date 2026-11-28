@@ -16,17 +16,19 @@ public class ShellRouteResolverTest {
 
     private static JSONObject vectors() throws Exception {
         // Gradle runs unit tests from the module directory (apps/mobile/android/app).
+        // android.jar declares JSONException checked, hence the throws clauses.
         File file = new File("../../shell/route-cases.json");
         return new JSONObject(new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8));
     }
 
-    private static ShellRouteResolver.FileExists existsIn(JSONArray files) {
+    private static ShellRouteResolver.FileExists existsIn(JSONArray files) throws Exception {
         Set<String> set = new HashSet<>();
         for (int i = 0; i < files.length(); i++) set.add(files.getString(i));
         return set::contains;
     }
 
-    private static void assertCases(JSONArray cases, ShellRouteResolver.Rules rules, ShellRouteResolver.FileExists exists) {
+    private static void assertCases(JSONArray cases, ShellRouteResolver.Rules rules, ShellRouteResolver.FileExists exists)
+        throws Exception {
         for (int i = 0; i < cases.length(); i++) {
             JSONObject c = cases.getJSONObject(i);
             String path = c.getString("path");
