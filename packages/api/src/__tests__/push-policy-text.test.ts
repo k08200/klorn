@@ -33,7 +33,6 @@ vi.mock("../notify/telegram-notify.js", () => ({
   sendTelegramForPush: vi.fn(async () => "sent"),
 }));
 vi.mock("web-push", () => ({
-  default: { setVapidDetails: vi.fn(), sendNotification: vi.fn() },
   setVapidDetails: vi.fn(),
   sendNotification: vi.fn(),
 }));

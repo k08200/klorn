@@ -27,7 +27,6 @@ vi.mock("../notify/is-safe-push-endpoint.js", () => ({
   isSafePushEndpoint: vi.fn(() => true),
 }));
 vi.mock("web-push", () => ({
-  default: { setVapidDetails: vi.fn(), sendNotification: vi.fn() },
   setVapidDetails: vi.fn(),
   sendNotification: vi.fn(),
 }));
