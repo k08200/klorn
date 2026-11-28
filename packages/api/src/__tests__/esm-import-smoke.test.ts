@@ -17,6 +17,14 @@ import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 const run = promisify(execFile);
+type ChildFailure = {
+  stdout?: string;
+  stderr?: string;
+  message?: string;
+  code?: unknown;
+  killed?: boolean;
+  signal?: string | null;
+};
 const API_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // Generous: compiling and linking the whole graph in a fresh process takes a
 // few seconds alone and much longer while the full suite saturates the CPU.
@@ -37,11 +45,21 @@ describe("API module graph under Node's ESM loader", () => {
           env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "", NODE_ENV: "test" },
           timeout: SMOKE_TIMEOUT_MS,
         },
-      ).catch((err: { stdout?: string; stderr?: string; code?: unknown }) => err);
+      ).catch((err: ChildFailure) => ({
+        stdout: err.stdout ?? "",
+        // A non-zero exit, a timeout (killed, signal) or a spawn error: say
+        // which, alongside the script's own stderr (the module and the error).
+        stderr: [
+          err.stderr,
+          err.message,
+          err.killed ? `killed by ${err.signal ?? "timeout"}` : "",
+          err.code === undefined ? "" : `exit code ${String(err.code)}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      }));
 
-      // On failure the message carries the script's stderr (the module and
-      // the SyntaxError it hit).
-      expect(result.stdout ?? "", result.stderr).toMatch(/^esm-import-smoke: loaded \d+ modules/m);
+      expect(result.stdout, result.stderr).toMatch(/^esm-import-smoke: loaded \d+ modules/m);
     },
     SMOKE_TIMEOUT_MS + 10_000,
   );

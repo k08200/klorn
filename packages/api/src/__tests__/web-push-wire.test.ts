@@ -4,8 +4,8 @@
  * decrypted here independently with node:crypto, not with web-push's http_ece),
  * the VAPID JWT verifies against the VAPID public key (RFC 8292, ES256), the
  * TTL / Topic / Urgency headers are set, and sendNotification uses the `agent`
- * it is given (Klorn passes its SSRF-safe agent). Throwaway keys, a loopback
- * TLS server; no real push endpoint.
+ * it is given — including Klorn's SSRF-safe agent, which refuses a loopback
+ * endpoint. Throwaway keys, a loopback TLS server; no real push endpoint.
  */
 
 import crypto from "node:crypto";
@@ -13,6 +13,7 @@ import https from "node:https";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as webPush from "web-push";
+import { ssrfSafeHttpsAgent } from "../notify/ssrf-safe-agent.js";
 import {
   type Identity,
   makeCertDir,
@@ -176,19 +177,43 @@ describe.skipIf(!HAS_OPENSSL)("web-push 4: sendNotification over TLS with the gi
     webPush.setVapidDetails(SUBJECT, vapid.publicKey, vapid.privateKey);
 
     const trusting = new https.Agent({ ca: identity.cert });
-    const sent = await webPush.sendNotification({ endpoint, keys }, PAYLOAD, {
-      topic: TOPIC,
-      agent: trusting,
-    });
-    expect(sent.statusCode).toBe(201);
+    try {
+      const sent = await webPush.sendNotification({ endpoint, keys }, PAYLOAD, {
+        topic: TOPIC,
+        agent: trusting,
+      });
+      expect(sent.statusCode).toBe(201);
+    } finally {
+      trusting.destroy();
+    }
     expect(received).toHaveLength(1);
     expect(received[0].url).toBe("/push/sub-1?x=1");
     expect(received[0].headers.topic).toBe(TOPIC);
     expect(decrypt(received[0].body, ecdh, auth)).toBe(PAYLOAD);
 
+    // Without the agent the default trust store refuses the throwaway cert:
+    // a TLS verification failure, not some other connect error.
     await expect(
       webPush.sendNotification({ endpoint, keys }, PAYLOAD, { topic: TOPIC }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ code: expect.stringMatching(/SELF_SIGNED|UNABLE_TO_VERIFY/) });
     expect(received).toHaveLength(1);
+  });
+
+  it("through Klorn's SSRF-safe agent, a loopback endpoint is refused before any request", async () => {
+    const { port } = server.address() as AddressInfo;
+    const { keys } = subscriptionKeys();
+    const before = received.length;
+
+    await expect(
+      webPush.sendNotification(
+        { endpoint: `https://localhost:${port}/push/sub-2`, keys },
+        PAYLOAD,
+        {
+          topic: TOPIC,
+          agent: ssrfSafeHttpsAgent,
+        },
+      ),
+    ).rejects.toMatchObject({ code: "ESSRFBLOCKED" });
+    expect(received).toHaveLength(before);
   });
 });
