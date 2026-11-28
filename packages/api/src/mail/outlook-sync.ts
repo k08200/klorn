@@ -208,9 +208,10 @@ function reportPersistFailure(args: OutlookMessageArgs, graphId: string, err: un
   logDbFailure("[outlook-sync] persist failed", err, {
     ids: { userId: args.userId, messageId: graphId },
   });
+  // The Graph id only: the stable id embeds the mailbox address.
   captureDbFailure("[outlook-sync] persist failed", err, {
     tags: { scope: "outlook-sync.upsert" },
-    extra: { userId: args.userId, stableId: outlookStableId(args.email, graphId) },
+    extra: { userId: args.userId, messageId: graphId },
   });
 }
 
