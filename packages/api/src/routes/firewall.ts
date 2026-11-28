@@ -734,6 +734,13 @@ export async function firewallRoutes(app: FastifyInstance) {
       ]);
       const emailByGmailId = new Map(emailRowsByGmailId.map((e) => [e.gmailId, e]));
       const emailById = new Map(emailRowsById.map((e) => [e.id, e]));
+      // An EMAIL item whose mail row is gone (trashed, archived, purged) has no
+      // mail behind it to act on, so it is not listed — otherwise deleted mail
+      // kept showing on PUSH (docs/design/mail-cleanup-actions.md, PR1). The
+      // userId-scoped read above also makes another user's id one of these.
+      const listedItems = items.filter(
+        (row) => row.source !== "EMAIL" || emailById.has(row.sourceId),
+      );
 
       // The source badge and the attachment glyph: two lookups for the whole
       // page, run together, each bounded by this page's ids and by userId (a
@@ -877,8 +884,8 @@ export async function firewallRoutes(app: FastifyInstance) {
       };
       const scopedItems =
         !inbox || inbox === "all"
-          ? items
-          : items.filter((row) => {
+          ? listedItems
+          : listedItems.filter((row) => {
               const linkedId = linkedInboxIdOf(row);
               // == null covers both "primary mail" (null) and "no email" (undefined).
               return inbox === "primary" ? linkedId == null : linkedId === inbox;

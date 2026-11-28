@@ -47,6 +47,7 @@ import { formatRelative } from "../../lib/text";
 import { useKeyboardTriage } from "../../lib/use-hotkeys";
 import { MailV2 } from "./_v2/mail-v2";
 import { postReminder } from "./_v2/post-reminder";
+import { readUndoAccount, undoRequest } from "./mail-undo";
 import { UNDO_NOTICE_SECONDS, useLaneMove } from "./use-lane-move";
 import { TRIAGE_ROW_ATTR, useListTriage } from "./use-list-triage";
 
@@ -72,12 +73,15 @@ type EmailReminderKey = "later-today" | "tomorrow" | "next-week";
 interface UndoNotice {
   action: UndoableEmailAction;
   gmailId: string;
+  /** The mail's own account (null = primary): its undo restores there. */
+  linkedInboxAccountId: string | null;
   subject: string | null;
 }
 
 interface BulkUndoEmail {
   id: string;
   gmailId: string;
+  linkedInboxAccountId: string | null;
   subject: string;
 }
 
@@ -104,6 +108,7 @@ function parseUndoNotice(searchParams: ReturnType<typeof useSearchParams>): Undo
   return {
     action,
     gmailId,
+    linkedInboxAccountId: readUndoAccount(searchParams),
     subject: searchParams?.get("undoSubject") || null,
   };
 }
@@ -493,6 +498,7 @@ function EmailView() {
           .map((email) => ({
             id: email.id,
             gmailId: email.gmailId,
+            linkedInboxAccountId: email.linkedInboxAccountId ?? null,
             subject: email.subject || "No subject",
           }));
         setBulkUndoNotice(undoEmails.length > 0 ? { action: "archive", emails: undoEmails } : null);
@@ -592,13 +598,11 @@ function EmailView() {
     setUndoBusy(true);
     setError(null);
     try {
-      const data = await apiFetch<UndoActionResponse>(
-        `/api/email/${encodeURIComponent(undoNotice.gmailId)}/${undoNotice.action}/undo`,
-        {
-          method: "POST",
-          body: JSON.stringify({ gmailId: undoNotice.gmailId }),
-        },
-      );
+      const request = undoRequest(undoNotice);
+      const data = await apiFetch<UndoActionResponse>(request.path, {
+        method: "POST",
+        body: JSON.stringify(request.body),
+      });
       toast(t("emailDetail.toast.restored"), "success");
       router.replace(`/email/${data.emailId}?markRead=false`);
     } catch (err) {
@@ -615,15 +619,13 @@ function EmailView() {
     setError(null);
     try {
       const results = await Promise.allSettled(
-        bulkUndoNotice.emails.map((email) =>
-          apiFetch<UndoActionResponse>(
-            `/api/email/${encodeURIComponent(email.gmailId)}/archive/undo`,
-            {
-              method: "POST",
-              body: JSON.stringify({ gmailId: email.gmailId }),
-            },
-          ),
-        ),
+        bulkUndoNotice.emails.map((email) => {
+          const request = undoRequest({ action: "archive", ...email });
+          return apiFetch<UndoActionResponse>(request.path, {
+            method: "POST",
+            body: JSON.stringify(request.body),
+          });
+        }),
       );
       const failedCount = results.filter((result) => result.status === "rejected").length;
       if (failedCount > 0) {
@@ -698,7 +700,14 @@ function EmailView() {
       patchListPages([email.id], "archive");
       setBulkUndoNotice({
         action: "archive",
-        emails: [{ id: email.id, gmailId: email.gmailId, subject: email.subject || "No subject" }],
+        emails: [
+          {
+            id: email.id,
+            gmailId: email.gmailId,
+            linkedInboxAccountId: email.linkedInboxAccountId ?? null,
+            subject: email.subject || "No subject",
+          },
+        ],
       });
     } catch (err) {
       captureClientError(err, { scope: "email.row.quickArchive", emailId: email.id });
@@ -732,7 +741,14 @@ function EmailView() {
     );
     setBulkUndoNotice({
       action: "archive",
-      emails: [{ id: email.id, gmailId: email.gmailId, subject: email.subject || "No subject" }],
+      emails: [
+        {
+          id: email.id,
+          gmailId: email.gmailId,
+          linkedInboxAccountId: email.linkedInboxAccountId ?? null,
+          subject: email.subject || "No subject",
+        },
+      ],
     });
     try {
       const data = await apiFetch<BulkActionResponse>("/api/email/bulk", {

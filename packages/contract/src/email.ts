@@ -414,9 +414,31 @@ export type EmailUnsubscribeMethod = "one-click" | "mailto" | "link";
  * sent from the user's own account); `link` means nothing automatic worked and
  * `url` is the list's own page for the user to open.
  */
-export type EmailUnsubscribeResponse =
+export type EmailUnsubscribeResponse = (
   | { method: "one-click" | "mailto"; done: true }
-  | { method: "link"; done: false; url: string };
+  | { method: "link"; done: false; url: string }
+) & {
+  /**
+   * Each more automatic method the mail offered that was tried and did not work,
+   * in the order tried, with a code (never the provider's or the list's text).
+   * Absent when nothing was skipped.
+   */
+  skipped?: EmailUnsubscribeSkip[];
+};
+
+/**
+ * Why an unsubscribe method was skipped. One-click: `unsafe-endpoint` (refused
+ * before any request), `request-error` (no answer), `http-<status>`. Mailto:
+ * `invalid-target`, `unsupported` (the account cannot send from Klorn),
+ * `send-failed`, `receipt-unavailable` (the send receipt could not be written, so
+ * nothing was sent).
+ */
+export type EmailUnsubscribeSkip =
+  | { method: "one-click"; code: string }
+  | {
+      method: "mailto";
+      code: "invalid-target" | "unsupported" | "send-failed" | "receipt-unavailable";
+    };
 
 /** One sender that mails the user through a list, in ONE connected account. */
 export interface EmailSubscriptionWire {

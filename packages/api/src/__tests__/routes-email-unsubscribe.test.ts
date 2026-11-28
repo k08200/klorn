@@ -12,6 +12,8 @@ import { signToken } from "../auth.js";
 const emailFindFirst = vi.hoisted(() => vi.fn(async () => null as unknown));
 const oneClickMock = vi.hoisted(() => vi.fn());
 const sendEmailMock = vi.hoisted(() => vi.fn(async () => ({ success: true })));
+const receiptCreate = vi.hoisted(() => vi.fn(async () => ({ id: "rcpt-1" })));
+const receiptUpdateMany = vi.hoisted(() => vi.fn(async () => ({ count: 1 })));
 
 // The mailto unsubscribe leaves from the user's account; it must be recorded as
 // an unsubscribe, never as mail the user wrote to that list.
@@ -32,6 +34,7 @@ vi.mock("../db.js", () => {
       count: vi.fn(async () => 0),
     },
     attentionItem: { findMany: vi.fn(async () => []) },
+    sendReceipt: { create: receiptCreate, updateMany: receiptUpdateMany },
     emailRule: { findMany: vi.fn(async () => []) },
     user: { findUnique: vi.fn(async () => ({ id: "user-1", plan: "FREE", role: "USER" })) },
     device: {
@@ -82,6 +85,10 @@ beforeEach(() => {
   oneClickMock.mockReset();
   sendEmailMock.mockReset();
   sendEmailMock.mockResolvedValue({ success: true });
+  receiptCreate.mockReset();
+  receiptCreate.mockResolvedValue({ id: "rcpt-1" });
+  receiptUpdateMany.mockClear();
+  delete process.env.MANUAL_SEND_RECEIPTS_ENABLED;
 });
 
 describe("POST /api/email/:id/unsubscribe", () => {
@@ -135,7 +142,12 @@ describe("POST /api/email/:id/unsubscribe", () => {
       url: "/api/email/e1/unsubscribe",
       headers: auth(),
     });
-    expect(res.json()).toEqual({ method: "mailto", done: true });
+    // The failed one-click is reported, never silently skipped.
+    expect(res.json()).toEqual({
+      method: "mailto",
+      done: true,
+      skipped: [{ method: "one-click", code: "http-503" }],
+    });
     expect(sendEmailMock).toHaveBeenCalledWith(
       "user-1",
       "unsub@lists.x.com",
@@ -194,6 +206,141 @@ describe("POST /api/email/:id/unsubscribe", () => {
       headers: auth(),
     });
     expect(res.statusCode).toBe(502);
+    await app.close();
+  });
+});
+
+describe("unsubscribe reports and records what it did (docs/design/mail-cleanup-actions.md, PR1)", () => {
+  const MAILTO = "mailto:unsub@lists.x.com?subject=stop";
+
+  it("reports a failed one-click on the browser-link fallback", async () => {
+    emailFindFirst.mockResolvedValue(
+      unsubEmail({ listUnsubscribeUrl: "https://x.com/u", listUnsubscribeOneClick: true }),
+    );
+    oneClickMock.mockResolvedValue({ ok: false, reason: "request-error" });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/unsubscribe",
+      headers: auth(),
+    });
+    expect(res.json()).toEqual({
+      method: "link",
+      done: false,
+      url: "https://x.com/u",
+      skipped: [{ method: "one-click", code: "request-error" }],
+    });
+    await app.close();
+  });
+
+  it("reports a refused mailto on the browser-link fallback", async () => {
+    emailFindFirst.mockResolvedValue(
+      unsubEmail({ listUnsubscribeMailto: MAILTO, listUnsubscribeUrl: "https://x.com/u" }),
+    );
+    sendEmailMock.mockResolvedValue({ error: "Gmail not connected." } as never);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/unsubscribe",
+      headers: auth(),
+    });
+    expect(res.json()).toEqual({
+      method: "link",
+      done: false,
+      url: "https://x.com/u",
+      skipped: [{ method: "mailto", code: "send-failed" }],
+    });
+    await app.close();
+  });
+
+  it("writes a send receipt of the mailto bytes before sending (MANUAL_SEND_RECEIPTS_ENABLED on)", async () => {
+    process.env.MANUAL_SEND_RECEIPTS_ENABLED = "true";
+    emailFindFirst.mockResolvedValue(unsubEmail({ listUnsubscribeMailto: MAILTO }));
+    sendEmailMock.mockResolvedValueOnce({ success: true, messageId: "gm-8" } as never);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/unsubscribe",
+      headers: auth(),
+    });
+
+    expect(res.json()).toEqual({ method: "mailto", done: true });
+    expect(receiptCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: "user-1",
+          route: "unsubscribe",
+          action: "send_email",
+          inbox: "primary",
+          emailId: "e1",
+          status: "PENDING",
+        }),
+      }),
+    );
+    expect(receiptCreate.mock.invocationCallOrder[0]).toBeLessThan(
+      sendEmailMock.mock.invocationCallOrder[0],
+    );
+    expect(receiptUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "rcpt-1", userId: "user-1", status: "PENDING" },
+        data: expect.objectContaining({ status: "SENT", providerMessageId: "gm-8" }),
+      }),
+    );
+    await app.close();
+  });
+
+  it("sends nothing when the receipt cannot be written", async () => {
+    process.env.MANUAL_SEND_RECEIPTS_ENABLED = "true";
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    receiptCreate.mockRejectedValue(new Error("pooler dropped"));
+    emailFindFirst.mockResolvedValue(unsubEmail({ listUnsubscribeMailto: MAILTO }));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/unsubscribe",
+      headers: auth(),
+    });
+
+    expect(res.statusCode).toBe(503);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("falls back to the browser link, sending nothing, when the receipt cannot be written", async () => {
+    process.env.MANUAL_SEND_RECEIPTS_ENABLED = "true";
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    receiptCreate.mockRejectedValue(new Error("pooler dropped"));
+    emailFindFirst.mockResolvedValue(
+      unsubEmail({ listUnsubscribeMailto: MAILTO, listUnsubscribeUrl: "https://x.com/u" }),
+    );
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/unsubscribe",
+      headers: auth(),
+    });
+
+    expect(res.json()).toEqual({
+      method: "link",
+      done: false,
+      url: "https://x.com/u",
+      skipped: [{ method: "mailto", code: "receipt-unavailable" }],
+    });
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("writes no receipt while MANUAL_SEND_RECEIPTS_ENABLED is off (as for manual sends)", async () => {
+    emailFindFirst.mockResolvedValue(unsubEmail({ listUnsubscribeMailto: MAILTO }));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/unsubscribe",
+      headers: auth(),
+    });
+    expect(res.json()).toEqual({ method: "mailto", done: true });
+    expect(receiptCreate).not.toHaveBeenCalled();
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
     await app.close();
   });
 });

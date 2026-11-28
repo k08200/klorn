@@ -6,10 +6,17 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const m = vi.hoisted(() => ({ syncImapMessageForUser: vi.fn(), syncEmailByGmailId: vi.fn() }));
+const m = vi.hoisted(() => ({
+  syncImapMessageForUser: vi.fn(),
+  syncEmailByGmailId: vi.fn(),
+  syncOutlookMessageForUser: vi.fn(),
+}));
 
 vi.mock("../mail/imap-accounts.js", () => ({
   syncImapMessageForUser: (...args: unknown[]) => m.syncImapMessageForUser(...args),
+}));
+vi.mock("../mail/outlook-accounts.js", () => ({
+  syncOutlookMessageForUser: (...args: unknown[]) => m.syncOutlookMessageForUser(...args),
 }));
 vi.mock("../mail/email-sync.js", () => ({
   syncEmailByGmailId: (...args: unknown[]) => m.syncEmailByGmailId(...args),
@@ -79,9 +86,30 @@ describe("completeUndo: restored IMAP message", () => {
     );
   });
 
-  it.each(["GOOGLE", "OUTLOOK"] as const)("%s never takes the IMAP re-sync path", async (key) => {
-    const out = await completeUndo("u1", unsupportedMailActions(key), "id", "row-3", restored);
+  it("GOOGLE never takes the IMAP re-sync path", async () => {
+    const out = await completeUndo("u1", unsupportedMailActions("GOOGLE"), "id", "row-3", restored);
     expect(out).toEqual({ failure: "Could not refresh the restored message." });
     expect(m.syncImapMessageForUser).not.toHaveBeenCalled();
+  });
+
+  it("OUTLOOK re-syncs through its own Graph path, never the IMAP one", async () => {
+    m.syncOutlookMessageForUser.mockResolvedValue({ emailId: "e-ol" });
+    const out = await completeUndo(
+      "u1",
+      unsupportedMailActions("OUTLOOK"),
+      "outlook:me@outlook.com:AAMk-1",
+      "row-3",
+      { success: true },
+    );
+    expect(out).toEqual({
+      payload: { success: true, gmailId: "outlook:me@outlook.com:AAMk-1", emailId: "e-ol" },
+    });
+    expect(m.syncOutlookMessageForUser).toHaveBeenCalledWith(
+      "u1",
+      "row-3",
+      "outlook:me@outlook.com:AAMk-1",
+    );
+    expect(m.syncImapMessageForUser).not.toHaveBeenCalled();
+    expect(m.syncEmailByGmailId).not.toHaveBeenCalled();
   });
 });

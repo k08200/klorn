@@ -1483,6 +1483,9 @@ const ko: Record<string, string> = {
   "emailDetail.toast.unsubscribed": "구독을 취소했습니다.",
   "emailDetail.toast.unsubscribeLink": "발신자의 구독 취소 페이지를 열었습니다.",
   "emailDetail.error.unsubscribe": "이 발신자의 구독을 취소하지 못했습니다.",
+  "emailDetail.error.unsubscribeOpen": "발신자의 구독 취소 페이지를 열지 못했습니다.",
+  "emailDetail.toast.unsubscribeLinkFallback":
+    "자동 구독 취소가 되지 않아 발신자의 구독 취소 페이지를 열었습니다.",
   "emailDetail.toolbar.action.next": "다음",
   "emailDetail.toolbar.remindMe": "리마인드",
   "emailDetail.toolbar.settingReminder": "설정 중...",
@@ -1745,6 +1748,7 @@ const ko: Record<string, string> = {
   "mailV2.undo": "실행 취소",
   "mailV2.undo.restored": "복원했습니다.",
   "mailV2.undo.failed": "메일을 복원하지 못했습니다. 계정 연결을 확인하고 다시 시도하세요.",
+  "mailV2.archive.partialFailed": "메일 {count}개를 보관하지 못해 목록으로 되돌렸습니다.",
   "mailV2.read.failed": "메일을 변경하지 못했습니다. 바뀐 것은 없습니다.",
   "mailV2.sync.new": "동기화 완료. 새 메일 {count}개.",
   "mailV2.sync.nothingNew": "동기화 완료. 새 메일 없음.",

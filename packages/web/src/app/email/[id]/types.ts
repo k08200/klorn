@@ -85,6 +85,8 @@ export interface EmailDetail {
   id: string;
   gmailId: string;
   threadId?: string | null;
+  /** The account the mail lives in; null = primary. Absent on demo mail. */
+  linkedInboxAccountId?: string | null;
   from: string;
   senderEmail?: string | null;
   trust?: TrustScoreData | null;
@@ -122,6 +124,8 @@ export type UndoableEmailAction = "archive" | "delete";
 export interface UndoNotice {
   action: UndoableEmailAction;
   gmailId: string;
+  /** The mail's own account (null = primary): its undo restores there. */
+  linkedInboxAccountId: string | null;
   subject: string | null;
 }
 

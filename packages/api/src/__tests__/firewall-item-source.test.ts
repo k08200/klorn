@@ -256,8 +256,9 @@ describe("GET /api/inbox/firewall — account, read state and attachment on the 
     state.attention = [attention("a1", "EMAIL", "m1")];
     state.emails = [email("m1", null, { userId: "user-2" })];
     const items = await fetchItems();
-    expect(items.get("a1")).toBeDefined();
-    expect(items.get("a1")?.email).toBeUndefined();
+    // The caller has no such mail, so the item is one whose mail is gone: not listed.
+    expect(items.get("a1")).toBeUndefined();
+    expect(JSON.stringify([...items.values()])).not.toContain("m1@example.com");
   });
 
   it("claims no account for the primary when the user's address is unknown", async () => {
@@ -363,6 +364,9 @@ describe("GET /api/inbox/firewall — account, read state and attachment on the 
   it("leaves an item without mail as it was: no preview, no account", async () => {
     state.attention = [attention("a1", "COMMITMENT", "c1"), attention("a2", "EMAIL", "missing")];
     const items = await fetchItems();
+    // docs/design/mail-cleanup-actions.md (PR1): an EMAIL item whose mail row is
+    // gone (trashed or archived) is not listed; an item of another source stays.
+    expect(items.get("a2")).toBeUndefined();
     expect(items.get("a1")).toEqual({
       id: "a1",
       source: "COMMITMENT",
@@ -374,9 +378,21 @@ describe("GET /api/inbox/firewall — account, read state and attachment on the 
       priority: 50,
       surfacedAt: SURFACED.toISOString(),
     });
-    expect(items.get("a2")?.email).toBeUndefined();
-    // The item's own `source` stays the string it always was.
-    expect(items.get("a2")?.source).toBe("EMAIL");
+  });
+
+  it("lists an EMAIL item only while its mail row exists", async () => {
+    state.attention = [attention("a1", "EMAIL", "m1"), attention("a2", "EMAIL", "gone")];
+    state.emails = [email("m1", null)];
+    const app = Fastify();
+    await app.register(firewallRoutes, { prefix: "/api/inbox/firewall" });
+    const res = await app.inject({ method: "GET", url: "/api/inbox/firewall/" });
+    await app.close();
+    const body = res.json() as { tiers: Record<string, ItemWire[]>; summary: { total: number } };
+    const ids = Object.values(body.tiers)
+      .flat()
+      .map((item) => item.id);
+    expect(ids).toEqual(["a1"]);
+    expect(body.summary.total).toBe(1);
   });
 
   it("carries the mail's provider thread id on both preview kinds (NT0)", async () => {

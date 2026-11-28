@@ -15,8 +15,8 @@
 import { prisma } from "../db.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 import { markLinkedInboxForReconnect } from "./gmail.js";
-import { syncOutlookInbox } from "./outlook-sync.js";
-import { resolveAccessToken } from "./outlook-token.js";
+import { outlookStableId, syncOutlookInbox, syncOutlookMessage } from "./outlook-sync.js";
+import { resolveAccessToken, resolveOutlookBearer } from "./outlook-token.js";
 import { recordSyncError, syncSucceededFields } from "./sync-error-code.js";
 
 export interface OutlookSyncAggregate {
@@ -105,4 +105,25 @@ export async function syncOutlookAccountsForUser(
     }
   }
   return total;
+}
+
+/**
+ * Bring ONE message of one of the user's Outlook accounts back into Klorn by its
+ * stored id (`outlook:<mailbox>:<immutable id>`) — the undo of a trash or archive
+ * (docs/design/mail-cleanup-actions.md, PR1). null when the account is not
+ * connected, the id is not one of this mailbox's, or Graph does not return it.
+ */
+export async function syncOutlookMessageForUser(
+  userId: string,
+  linkedInboxAccountId: string,
+  stableId: string,
+): Promise<{ emailId: string } | null> {
+  const bearer = await resolveOutlookBearer(userId, linkedInboxAccountId);
+  if (!bearer) return null;
+  const prefix = outlookStableId(bearer.email, "");
+  if (!stableId.startsWith(prefix) || stableId.length === prefix.length) return null;
+  return syncOutlookMessage(
+    { userId, email: bearer.email, accessToken: bearer.accessToken, linkedInboxAccountId },
+    stableId.slice(prefix.length),
+  );
 }
