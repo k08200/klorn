@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // In-memory User table + a controllable queue of send outcomes so the
 // idempotency tests exercise the real atomic-claim logic end to end.
 type UserRow = { id: string; welcomeEmailSentAt: Date | null };
-type SendResult = "sent" | "skipped" | "failed";
+type SendResult = "sent" | "skipped" | "failed" | "rejected";
 const state = vi.hoisted(() => ({
   users: new Map<string, UserRow>(),
   sendResults: [] as SendResult[],
-  sendCalls: [] as Array<{ email: string; name: string | null }>,
+  sendCalls: [] as Array<{ email: string; name: string | null; idempotencyKey?: string }>,
 }));
 
 type UpdateManyArgs = {
@@ -39,11 +39,13 @@ vi.mock("../mail/email.js", async (importActual) => {
   const actual = await importActual<typeof import("../mail/email.js")>();
   return {
     ...actual,
-    sendWelcomeEmail: vi.fn((email: string, name?: string | null) => {
-      state.sendCalls.push({ email, name: name ?? null });
-      const result: SendResult = state.sendResults.shift() ?? "sent";
-      return Promise.resolve(result);
-    }),
+    sendWelcomeEmail: vi.fn(
+      (email: string, name?: string | null, opts?: { idempotencyKey?: string }) => {
+        state.sendCalls.push({ email, name: name ?? null, idempotencyKey: opts?.idempotencyKey });
+        const result: SendResult = state.sendResults.shift() ?? "sent";
+        return Promise.resolve(result);
+      },
+    ),
   };
 });
 
@@ -149,5 +151,25 @@ describe("maybeSendWelcomeEmail", () => {
     expect(state.users.get("u1")?.welcomeEmailSentAt).toBeNull();
     // A skip is expected, not an error: no Sentry noise.
     expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("keeps the claim when Resend refused the address for good, so sign-ins stop re-sending", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    state.users.set("u1", { id: "u1", welcomeEmailSentAt: null });
+    state.sendResults = ["rejected", "sent"];
+
+    await maybeSendWelcomeEmail(recipient);
+    expect(state.users.get("u1")?.welcomeEmailSentAt).toBeInstanceOf(Date);
+
+    await maybeSendWelcomeEmail(recipient);
+    expect(state.sendCalls).toHaveLength(1);
+  });
+
+  it("sends under a per-user idempotency key, so a retry after a timed-out send that did land is not a second welcome", async () => {
+    state.users.set("u1", { id: "u1", welcomeEmailSentAt: null });
+
+    await maybeSendWelcomeEmail(recipient);
+
+    expect(state.sendCalls[0]?.idempotencyKey).toBe("welcome-email/u1");
   });
 });

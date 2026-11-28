@@ -22,6 +22,11 @@ interface WaitlistResponse {
   counts: Record<string, number>;
 }
 
+/** PATCH answer: the entry, plus what became of the invite mail when approving sent one. */
+interface WaitlistUpdateResponse extends WaitlistEntry {
+  inviteEmail?: { sent: true } | { sent: false; code: string };
+}
+
 type Filter = "PENDING" | "APPROVED" | "REJECTED" | "ALL";
 
 const FILTERS: Array<{ key: Filter; label: string }> = [
@@ -31,6 +36,21 @@ const FILTERS: Array<{ key: Filter; label: string }> = [
   { key: "ALL", label: "All" },
 ];
 const TOP_N_SOURCES = 5;
+
+/**
+ * What the admin is told when approving sent no invite. A timeout is
+ * ambiguous (Resend may still deliver it), so it does not invite a re-send;
+ * an unconfigured Resend is a setup problem, not something to retry.
+ */
+function inviteFailureMessage(code: string): string {
+  if (code === "RESEND_NOT_CONFIGURED") {
+    return "Approved. No invite email was sent: RESEND_API_KEY is not set on the API.";
+  }
+  if (code === "RESEND_TIMEOUT") {
+    return "Approved, but Resend did not answer in time, so the invite may or may not have gone out. Check the Resend log before sending it again.";
+  }
+  return `Approved, but the invite email was not sent (${code}). Move to pending and approve again to retry, or email them directly.`;
+}
 
 function formatDate(iso: string): string {
   try {
@@ -107,18 +127,24 @@ function WaitlistPageInner() {
   const updateStatus = async (id: string, status: "APPROVED" | "REJECTED" | "PENDING") => {
     setUpdating(id);
     try {
-      await apiFetch(`/api/admin/waitlist/${id}`, {
+      const updated = await apiFetch<WaitlistUpdateResponse>(`/api/admin/waitlist/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
-      toast(
-        status === "APPROVED"
-          ? "Approved."
-          : status === "REJECTED"
-            ? "Rejected."
-            : "Moved back to pending.",
-        "success",
-      );
+      const invite = updated.inviteEmail;
+      if (invite && !invite.sent) {
+        // The approval stands; only the mail did not go out.
+        toast(inviteFailureMessage(invite.code), "error");
+      } else {
+        toast(
+          status === "APPROVED"
+            ? "Approved."
+            : status === "REJECTED"
+              ? "Rejected."
+              : "Moved back to pending.",
+          "success",
+        );
+      }
       await load();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not update status.", "error");
