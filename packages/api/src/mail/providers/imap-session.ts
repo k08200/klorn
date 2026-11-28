@@ -214,15 +214,27 @@ export const isImapAuthFailure = isAuthFailure;
 const TRANSIENT_LOGIN_REFUSALS = new Set(["UNAVAILABLE", "LIMIT", "INUSE", "SERVERBUG"]);
 
 /**
+ * The RFC 5530 code (upper case, one of TRANSIENT_LOGIN_REFUSALS) of a login
+ * refused for the moment, or null for anything else. Safe to log: it is never
+ * the server's own text. The connect wizard (imap-verify-failure.ts) and the
+ * poll's failure kind (imap-poll-failures.ts) read refusals through this too.
+ */
+export function imapTransientRefusalCode(err: unknown): string | null {
+  if (!isAuthFailure(err)) return null;
+  const code = (err as { serverResponseCode?: unknown } | null)?.serverResponseCode;
+  if (typeof code !== "string") return null;
+  const upper = code.toUpperCase();
+  return TRANSIENT_LOGIN_REFUSALS.has(upper) ? upper : null;
+}
+
+/**
  * A refused login that is about the credentials: only the user can fix it. The
  * one test the poll (sync-error-code.ts `isCredentialRefusal`) and the actions
  * share, so a busy server neither pauses the actions for the credential cooldown
  * nor tells the user the password was refused.
  */
 export function isImapCredentialRefusal(err: unknown): boolean {
-  if (!isAuthFailure(err)) return false;
-  const code = (err as { serverResponseCode?: unknown } | null)?.serverResponseCode;
-  return !(typeof code === "string" && TRANSIENT_LOGIN_REFUSALS.has(code.toUpperCase()));
+  return isAuthFailure(err) && imapTransientRefusalCode(err) === null;
 }
 
 /** Is this credential (row id plus stored cipher) paused after a rejected login? Shared with the poller. */
