@@ -211,8 +211,8 @@ importers:
         specifier: ^8.12.0
         version: 8.12.0(@capacitor/core@8.6.2)
       '@revenuecat/purchases-capacitor':
-        specifier: ^13.4.0
-        version: 13.4.0(@capacitor/core@8.6.2)
+        specifier: ^14.1.2
+        version: 14.1.2(@capacitor/core@8.6.2)
       '@sentry/browser':
         specifier: ^11.17.0
         version: 11.17.0
@@ -1184,13 +1184,13 @@ packages:
   '@prisma/get-platform@6.19.3':
     resolution: {integrity: sha512-xFj1VcJ1N3MKooOQAGO0W5tsd0W2QzIvW7DD7c/8H14Zmp4jseeWAITm+w2LLoLrlhoHdPPh0NMZ8mfL6puoHA==}
 
-  '@revenuecat/purchases-capacitor@13.4.0':
-    resolution: {integrity: sha512-0tGITx+M286w8Am7+zf1bfSDIbc7w1RhS7ROsdjUkmY+ksy43gmqpckWOEs85e8AwKTfxl14P9IrIEW4/YwiUQ==}
+  '@revenuecat/purchases-capacitor@14.1.2':
+    resolution: {integrity: sha512-NooPFCCBf6/5c38r7KpkbDSj1yUP6PCPqngi0/1H3YWFZ7wucZdtUyJETdmyDaIwNd3ZiPP0byDnjEAOTc7Slw==}
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
-  '@revenuecat/purchases-typescript-internal-esm@18.29.0':
-    resolution: {integrity: sha512-lXCvBaOf9QXHyi+UZgqdxn+ihveW2z4my1iYYj+Cb52U/HjTLHSBeuj2C/y0BU3PwKR3P34dW2kCFXfwTt0aKg==}
+  '@revenuecat/purchases-typescript-internal-esm@20.10.0':
+    resolution: {integrity: sha512-m5NaLeJS8vXdt0Hd4FUXmt1CiwoVL4oVpgbJvUgrdQjqImBkz+PTbmFXOu83stAUUV8ReL4DKTUrYRJWQvToug==}
 
   '@rolldown/binding-android-arm64@1.1.8':
     resolution: {integrity: sha512-yBy+BGoNYRh7qdsPTT8fj9nSrwEB/2LkIY9s0s9/PCsTNbrmJi0G0jS3PKJQ5NEbjnjbzkHqT7SN1ubuAykZ9w==}
@@ -1472,8 +1472,8 @@ packages:
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
 
-  '@tybys/wasm-util@0.10.4':
-    resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
+  '@tybys/wasm-util@0.10.5':
+    resolution: {integrity: sha512-dOGOPxlaNV+G046mZzN+9C0dAcQZeSKcXiVaM0TYy/LM4ttTmgSBDxYfovcYI8Em3+eAbiAYpvWLOv8+ZVRJKA==}
 
   '@types/bcryptjs@3.0.0':
     resolution: {integrity: sha512-WRZOuCuaz8UcZZE4R5HXTco2goQSI2XxjGY3hbM/xDvwmqFWd4ivooImsMx65OKM6CtNKbnZ5YL+YwAwK7c1dg==}
@@ -4880,7 +4880,7 @@ snapshots:
     dependencies:
       '@emnapi/core': 1.11.1
       '@emnapi/runtime': 1.11.1
-      '@tybys/wasm-util': 0.10.4
+      '@tybys/wasm-util': 0.10.5
     optional: true
 
   '@next/env@15.5.29': {}
@@ -5034,12 +5034,12 @@ snapshots:
     dependencies:
       '@prisma/debug': 6.19.3
 
-  '@revenuecat/purchases-capacitor@13.4.0(@capacitor/core@8.6.2)':
+  '@revenuecat/purchases-capacitor@14.1.2(@capacitor/core@8.6.2)':
     dependencies:
       '@capacitor/core': 8.6.2
-      '@revenuecat/purchases-typescript-internal-esm': 18.29.0
+      '@revenuecat/purchases-typescript-internal-esm': 20.10.0
 
-  '@revenuecat/purchases-typescript-internal-esm@18.29.0': {}
+  '@revenuecat/purchases-typescript-internal-esm@20.10.0': {}
 
   '@rolldown/binding-android-arm64@1.1.8':
     optional: true
@@ -5263,7 +5263,7 @@ snapshots:
       tslib: 2.9.1
     optional: true
 
-  '@tybys/wasm-util@0.10.4':
+  '@tybys/wasm-util@0.10.5':
     dependencies:
       tslib: 2.9.1
     optional: true
