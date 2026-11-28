@@ -16,7 +16,6 @@
  * All actions are idempotent (dedup via DB notification check).
  */
 
-import type { NotificationKind, NotificationPresentation } from "@klorn/contract";
 import {
   DEADLINE_WARNING_DAYS,
   EOD_HOUR,
@@ -29,20 +28,15 @@ import {
 } from "../config.js";
 import { prisma } from "../db.js";
 import { resolveTierReason } from "../judge/tier-reason-strings.js";
-import { parseAddress } from "../mail/email-address.js";
-import { clampText } from "../notify/clamp-text.js";
 import { meetPushCopy } from "../notify/kind-push-copy.js";
 import { inMorningWindow } from "../notify/morning-window.js";
-import type { NotifCategory } from "../notify/notification-prefs.js";
 import { getUserNotificationLanguage } from "../notify/notification-strings.js";
-import { sendPushNotification } from "../notify/push.js";
 import { meetingPresentation } from "../notify/push-presentation.js";
 import { sendSms } from "../notify/sms.js";
 import { dedupeCalendarEvents } from "../pim/calendar-dedupe.js";
 import { countCalendarRows } from "../pim/calendar-read.js";
 import { calendarSourceScope } from "../pim/calendar-scope.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
-import { isUniqueViolation } from "../slack/unique-violation.js";
 import {
   isLocalTimeWithin,
   localDayOfWeek,
@@ -50,19 +44,34 @@ import {
   localMinuteOfDay,
   normalizeTimeZone,
 } from "../time-zone.js";
-import { pushNotification } from "../websocket.js";
 import {
   composeEveningReview,
   eveningReviewHasContent,
   gatherEveningReviewInput,
 } from "./evening-review.js";
 import { leftToStartRing, meetingStartRingCovers, ringsAtStart } from "./meeting-start-ring.js";
+import { notify } from "./proactive-notify.js";
 import {
-  contactContextLabel,
-  followUpContent,
-  replyWaitContent,
-  type WaitingMail,
-} from "./reply-wait-content.js";
+  FOLLOW_UP_LISTED,
+  FOLLOW_UP_MAX_AGE_DAYS,
+  FOLLOW_UP_MIN_AGE_HOURS,
+  getContactContext,
+  NOT_BULK,
+  oneMailPerThread,
+  REPLY_WAIT_ORDER,
+  REPLY_WAIT_SCAN,
+  REPLY_WAIT_TYPES,
+  UNANSWERED_MAX_AGE_DAYS,
+  WAITING_SELECT,
+} from "./proactive-reply-wait.js";
+import { followUpContent, replyWaitContent, type WaitingMail } from "./reply-wait-content.js";
+
+// The bell/push plumbing lives in proactive-notify.ts and the reply-wait
+// reminders' query shapes in proactive-reply-wait.ts. Every check that reads
+// notifications, attention items or calendar rows stays here: the reader
+// guards (notification-cleared-readers, attention-calendar-visibility,
+// calendar-provider-writers) account for them by this file's path.
+export { getContactContext } from "./proactive-reply-wait.js";
 
 /** The user's configured IANA timezone (defaults to the product default). */
 async function getUserTimeZone(userId: string): Promise<string> {
@@ -76,20 +85,6 @@ async function getUserTimeZone(userId: string): Promise<string> {
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
-/** The oldest mail the unanswered reminder (flag off) still lists. */
-const UNANSWERED_MAX_AGE_DAYS = 7;
-/** The follow-up suggestion: older than this, up to FOLLOW_UP_MAX_AGE_DAYS. */
-const FOLLOW_UP_MIN_AGE_HOURS = 72;
-const FOLLOW_UP_MAX_AGE_DAYS = 14;
-/**
- * Rows read per reminder before one-per-thread folding: the title counts what
- * waits, so the read is not cut to the lines shown.
- */
-const REPLY_WAIT_SCAN = 100;
-/** Follow-up lines that get a contact lookup (the ones listed). */
-const FOLLOW_UP_LISTED = 3;
-/** Both reminder types: the merged one dedupes against either, so a flip mid-day never sends twice. */
-const REPLY_WAIT_TYPES = ["email_followup", "followup"];
 /**
  * The heads-up's "starts in" figure is floored to this step: a meeting the
  * 5-minute window first sees 60–65 minutes out reads "in 1 hr", not a figure
@@ -98,49 +93,6 @@ const REPLY_WAIT_TYPES = ["email_followup", "followup"];
 const HEADS_UP_STEP_MINUTES = 5;
 /** Bell-row dedupe key of a meeting heads-up: one per calendar row and start time. */
 const MEETING_PREP_KEY_PREFIX = "meeting-prep:";
-/** The push body cap (the bell row keeps the whole message). */
-const PUSH_BODY_MAX = 200;
-
-/**
- * Most important first, deterministically: URGENT before NORMAL before LOW
- * (EmailPriority's declaration order, which Postgres sorts enums by), then the
- * judge's reply confidence, then the mail that has waited longest; the id
- * breaks every remaining tie.
- */
-const REPLY_WAIT_ORDER = [
-  { priority: "asc" as const },
-  { needsReplyConfidence: "desc" as const },
-  { receivedAt: "asc" as const },
-  { id: "asc" as const },
-];
-
-/**
- * Bulk mail stays out. `category NOT IN (...)` alone is NULL for a mail with
- * no category, which drops it: the null branch keeps unclassified mail in.
- */
-const NOT_BULK = [{ category: null }, { category: { notIn: ["automated", "newsletter"] } }];
-
-const WAITING_SELECT = {
-  id: true,
-  from: true,
-  subject: true,
-  receivedAt: true,
-  threadId: true,
-} as const;
-
-/** One mail per thread, the first in order: a back-and-forth is one thing to answer. */
-function oneMailPerThread<T extends { id: string; threadId: string | null }>(
-  rows: readonly T[],
-): T[] {
-  const seen = new Set<string>();
-  return rows.filter((row) => {
-    const key = row.threadId ?? `id:${row.id}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 /** The single reminder's reason: its item's short reason, resolved for the reader. */
 async function withReason(
   userId: string,
@@ -503,22 +455,6 @@ async function checkDeadlineCountdown(userId: string, tz: string): Promise<void>
   );
 }
 
-// ─── NEW: Contact context on emails ────────────────────────────────────
-
-/**
- * Enrich unanswered email notifications with contact history. The sender is
- * matched on the whole address: the From header is the sender's to write, so a
- * part of it (`ceo@` of ceo@evil.com, or an empty one) must not pick a contact.
- */
-export async function getContactContext(userId: string, fromEmail: string): Promise<string> {
-  const email = parseAddress(fromEmail);
-  const contact = await prisma.contact.findFirst({
-    where: { userId, email: { equals: email.trim(), mode: "insensitive" } },
-    select: { name: true, company: true, role: true, tags: true },
-  });
-  return contact ? contactContextLabel(contact) : "";
-}
-
 // ─── NEW: Follow-up draft suggestion ───────────────────────────────────
 
 /**
@@ -621,129 +557,6 @@ async function checkBackToBackMeetings(userId: string, tz: string): Promise<void
     `You have ${events.length} meetings today with ${backToBackCount} gap(s) under 15 minutes. Consider blocking focus time.`,
     "/briefing",
   );
-}
-
-interface NotifyOptions {
-  /** The device push's title when it should differ from the bell row's (NT0 copy). */
-  pushTitle?: string;
-  /** The device push's text when it should differ from the bell row's message. */
-  pushBody?: string;
-  /** NT0 structured fields; the type's kind (kindForType) when absent. */
-  presentation?: NotificationPresentation;
-  /**
-   * The bell row's unique key: a second write under it fails on the
-   * (userId, dedupeKey) unique, and nothing rings — so two overlapping ticks
-   * cannot both notify.
-   */
-  dedupeKey?: string;
-}
-
-/** Create DB notification + WebSocket push + browser push. False when the dedupe key was taken. */
-async function notify(
-  userId: string,
-  type: string,
-  title: string,
-  message: string,
-  url: string,
-  opts: NotifyOptions = {},
-): Promise<boolean> {
-  const notification = await createBellRow(userId, type, title, message, url, opts.dedupeKey);
-  if (!notification) return false;
-  const kind = kindForType(type);
-  const presentation = opts.presentation ?? (kind ? { kind } : undefined);
-
-  pushNotification(userId, {
-    id: notification.id,
-    type,
-    title,
-    message,
-    link: url,
-    createdAt: notification.createdAt.toISOString(),
-    ...(presentation ?? {}),
-  });
-
-  // Unawaited (best-effort) but guarded — an unhandled rejection from the push
-  // internals would otherwise crash the single dyno.
-  sendPushNotification(
-    userId,
-    {
-      title: opts.pushTitle ?? title,
-      body: clampText(opts.pushBody ?? message, PUSH_BODY_MAX),
-      url,
-      presentation,
-    },
-    categoryForType(type),
-    // Heuristic-decided: ambient even for a "meeting" category (a back-to-back
-    // warning is not a meeting starting), so it cannot use up the interrupt
-    // room real meeting alerts and urgent mail need (push-bucket.ts).
-    { bucket: "ambient" },
-  ).catch((err) => {
-    logDbFailure("[PROACTIVE] push failed", err, { ids: { userId } });
-    captureDbFailure("[PROACTIVE] push failed", err, {
-      tags: { scope: "proactive.push", userId },
-    });
-  });
-  return true;
-}
-
-async function createBellRow(
-  userId: string,
-  type: string,
-  title: string,
-  message: string,
-  url: string,
-  dedupeKey: string | undefined,
-): Promise<{ id: string; createdAt: Date } | null> {
-  try {
-    return await prisma.notification.create({
-      data: { userId, type, title, message, link: url, ...(dedupeKey ? { dedupeKey } : {}) },
-    });
-  } catch (err) {
-    if (dedupeKey && isUniqueViolation(err)) return null;
-    throw err;
-  }
-}
-
-/**
- * The NT0 kind of a proactive notification (contract NotificationKind). The
- * reply-wait reminders name theirs; a meeting prep is a meeting; the rest are
- * rule-based heads-ups, read like the briefing (passive).
- */
-function kindForType(type: string): NotificationKind | undefined {
-  switch (type) {
-    case "calendar":
-      return "meet";
-    case "followup":
-      return "digest";
-    case "review":
-    case "eod_review":
-    case "task":
-    case "deadline":
-    case "schedule_warning":
-      return "brief";
-    default:
-      return undefined;
-  }
-}
-
-/** Preferences, quiet hours and label only; the push rings ambient regardless. */
-function categoryForType(type: string): NotifCategory {
-  switch (type) {
-    case "calendar":
-    case "schedule_warning":
-      return "meeting";
-    case "task":
-    case "deadline":
-      return "task_due";
-    case "email_followup":
-    case "followup":
-      return "agent_proposal";
-    case "review":
-    case "eod_review":
-      return "daily_briefing";
-    default:
-      return "system";
-  }
 }
 
 /**
