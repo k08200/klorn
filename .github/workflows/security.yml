@@ -29,7 +29,7 @@ jobs:
       # both together (check-actions-pinned.mjs fails a pin bump that leaves
       # this behind).
       - name: Scan for hardcoded secrets
-        uses: trufflesecurity/trufflehog@3bd2b5887eb0efb8fa18bfd1d296032924e4ffdc # v3.99.9
+        uses: trufflesecurity/trufflehog@4ef51f69ca6347aaa76a5e64a87eac9c0c909f71 # v3.100.1
         with:
           extra_args: --only-verified
           version: 3.99.9@sha256:2ec535840f860aa27f11fee20222fb790326ecd66325c96bd49d02ec6af46eca
