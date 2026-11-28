@@ -285,6 +285,11 @@ jobs:
       # on any drift — these are the headers the CASA DAST was assessed on.
       - name: Web Cloudflare _headers/_redirects match next.config.ts
         run: node --test packages/web/scripts/cloudflare-pages.test.mjs
+      # The mobile shell serves this export from the app bundle, where
+      # _redirects never runs; its native routers read
+      # apps/mobile/shell/shell-routes.json, generated from the same rules.
+      - name: Mobile shell route table matches next.config.ts and src/app
+        run: node --test packages/web/scripts/mobile-shell-routes.test.mjs
       - name: Build all packages
         run: pnpm -r build
       # Node links (and loads) every module the API entry imports from the

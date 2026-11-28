@@ -26,6 +26,8 @@ GoogleService-Info.plist
 # Bundled SPA build output (copied into the native projects by `cap sync`)
 /dist/
 /dist-mock/
+# Opt-in shell build: the packages/web static export (npm run build:shell)
+/web-export/
 # Playwright
 /test-results/
 /playwright-report/
