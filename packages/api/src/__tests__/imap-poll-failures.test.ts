@@ -31,6 +31,39 @@ describe("pollFailureKind", () => {
     ).toBe("auth");
   });
 
+  it.each([
+    "UNAVAILABLE",
+    "LIMIT",
+    "INUSE",
+    "SERVERBUG",
+  ])("a login refused for the moment is its RFC 5530 code, not 'auth': %s", (code) => {
+    const err = Object.assign(new Error("Command failed"), {
+      authenticationFailed: true,
+      serverResponseCode: code,
+    });
+    expect(pollFailureKind(err)).toBe(code);
+  });
+
+  it("reads the RFC 5530 code case-insensitively, as the credential test does", () => {
+    const err = Object.assign(new Error("x"), {
+      authenticationFailed: true,
+      serverResponseCode: "unavailable",
+    });
+    expect(pollFailureKind(err)).toBe("UNAVAILABLE");
+  });
+
+  it("any other response code on a refused login is still 'auth'", () => {
+    for (const serverResponseCode of ["ALERT", "UNAVAILABLE\nFORGED", "E".repeat(200), 503, null]) {
+      const err = Object.assign(new Error("x"), { authenticationFailed: true, serverResponseCode });
+      expect(pollFailureKind(err)).toBe("auth");
+    }
+  });
+
+  it("a throttled login (Microsoft 365, ETHROTTLE) is its code, not 'auth'", () => {
+    const err = Object.assign(new Error("x"), { authenticationFailed: true, code: "ETHROTTLE" });
+    expect(pollFailureKind(err)).toBe("ETHROTTLE");
+  });
+
   it("a refused name is its own code", () => {
     expect(pollFailureKind(new PinnedAddressError("blocked-address", ["10.0.0.1"]))).toBe(
       "blocked-address",
