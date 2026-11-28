@@ -10,7 +10,7 @@
 
 import { logDbFailure } from "../report-db-failure.js";
 import type { ImapProviderConfig } from "./imap-providers.js";
-import { isImapAuthFailure } from "./providers/imap-session.js";
+import { imapTransientRefusalCode, isImapAuthFailure } from "./providers/imap-session.js";
 
 /**
  * Machine-readable reason a verify failed, for clients that localize the message
@@ -80,9 +80,9 @@ function isAuthFailure(err: unknown, text: string): boolean {
  * (the user, the host, the password), nor the error object, whose fields
  * (response, command) are where a library would carry it.
  */
-function logVerifyFailure(provider: ImapProviderConfig, err: unknown): void {
+function logVerifyFailure(provider: ImapProviderConfig, err: unknown, refusal?: string): void {
   logDbFailure("[imap] connect verification failed", err, {
-    ids: { logScope: provider.logScope },
+    ids: refusal ? { logScope: provider.logScope, refusal } : { logScope: provider.logScope },
   });
 }
 
@@ -90,6 +90,15 @@ export function classifyVerifyFailure(
   err: unknown,
   args: { provider: ImapProviderConfig; host: string; password: string },
 ): VerifyFailure {
+  // A login refused for the moment (RFC 5530 UNAVAILABLE, LIMIT, INUSE,
+  // SERVERBUG) is flagged authenticationFailed too, but the password was not
+  // refused: "try again later", as the poll ("throttled") and the actions read
+  // it. Checked first, so neither the flag nor the text reads it as the password.
+  const refusal = imapTransientRefusalCode(err);
+  if (refusal) {
+    logVerifyFailure(args.provider, err, refusal);
+    return { ok: false, message: IMAP_VERIFY_FAILED_MESSAGE, code: "IMAP_VERIFY_FAILED" };
+  }
   const text = errorText(err);
   if (isAuthFailure(err, text)) {
     return { ok: false, message: args.provider.authFailureHint, code: "IMAP_AUTH_FAILED" };

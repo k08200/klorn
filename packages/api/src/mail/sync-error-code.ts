@@ -52,7 +52,11 @@ export function isCredentialRefusal(err: unknown): boolean {
   return isImapCredentialRefusal(err);
 }
 
-/** The code for a failed IMAP poll (pollFailureKind: "auth", a library code, or "error"). */
+/**
+ * The code for a failed IMAP poll. A refused login is decided here first (a
+ * credential refusal is "auth", one refused for the moment "throttled"), so only
+ * other failures reach pollFailureKind's kinds (a library or refusal code, or "error").
+ */
 export function imapSyncErrorCode(err: unknown): SyncErrorCode {
   if (isImapAuthFailure(err)) return isCredentialRefusal(err) ? "auth" : "throttled";
   const kind = pollFailureKind(err);
