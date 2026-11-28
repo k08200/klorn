@@ -343,6 +343,8 @@ const de: Record<string, string> = {
   "auth.signInToContinue": "Melde dich an, um zu {destination} weiterzugehen.",
   "auth.googleSignInError":
     "Die Anmeldung mit Google konnte nicht abgeschlossen werden. Bitte erneut versuchen.",
+  "auth.appleSignInError":
+    "Die Anmeldung mit Apple konnte nicht abgeschlossen werden. Bitte erneut versuchen.",
   "auth.desktopPairingCode":
     "Ihr Browser bittet Sie um eine Bestätigung. Fahren Sie dort nur fort, wenn {code} angezeigt wird.",
   "auth.googleDenied":
@@ -3570,6 +3572,33 @@ const de: Record<string, string> = {
   "providerFailure.serviceUnavailable":
     "Klorn ist kurz nicht erreichbar. Versuche es gleich noch einmal.",
   "providerFailure.internal": "Bei uns ist etwas schiefgelaufen. Versuche es gleich noch einmal.",
+
+  // Capacitor shell push (lib/native/native-push-layer.tsx, local-notify.ts).
+  "nativePush.priming.title": "Meldet sich nur, wenn es zählt",
+  "nativePush.priming.body":
+    "Klorn benachrichtigt dich bei PUSH-Mails – und bei MEETING für Terminabsprachen. QUEUE, INFO und SILENT warten still in Mail.",
+  "nativePush.priming.point.push": "Eine Benachrichtigung pro wichtiger Mail, mit dem Grund",
+  "nativePush.priming.point.actions":
+    "Lange drücken für schnelle Aktionen; einen Entwurf senden verlangt immer zuerst das Entsperren",
+  "nativePush.priming.point.settings":
+    "Ändere jederzeit in den Einstellungen, was dich benachrichtigt",
+  "nativePush.priming.enable": "Benachrichtigungen einschalten",
+  "nativePush.priming.later": "Nicht jetzt",
+  "nativePush.priming.now": "jetzt",
+  "nativePush.priming.sampleTitle": "PUSH · Seoyeon Park",
+  "nativePush.priming.sampleBody": "Vertrag heute um 18 Uhr fällig – Antwortentwurf liegt bereit.",
+  "nativePush.priming.quietSample": "47 Mails heute, lautlos sortiert",
+  "nativePush.denied":
+    "Benachrichtigungen sind aus. Du kannst sie in den Geräteeinstellungen einschalten.",
+  "nativePush.done": "Als erledigt markiert.",
+  "nativePush.notUrgent": "In QUEUE verschoben.",
+  "nativePush.action.later": "Später",
+  "nativePush.action.notUrgent": "Nicht dringend",
+  "nativePush.action.done": "Erledigt",
+  "nativePush.channel.push": "PUSH-Mails",
+  "nativePush.channel.pushBody":
+    "Nur Mails, die dich jetzt brauchen – mit „Später“, „Nicht dringend“ und „Erledigt“ direkt in der Benachrichtigung.",
+  "nativePush.channel.other": "Weitere Benachrichtigungen",
 };
 
 export default de;

@@ -336,6 +336,8 @@ const es: Record<string, string> = {
   "auth.signInToContinue": "Inicia sesión para continuar a {destination}.",
   "auth.googleSignInError":
     "No se pudo completar el inicio de sesión con Google. Inténtalo de nuevo.",
+  "auth.appleSignInError":
+    "No se pudo completar el inicio de sesión con Apple. Inténtalo de nuevo.",
   "auth.desktopPairingCode":
     "Tu navegador te pedirá que confirmes. Continúa solo si muestra {code}.",
   "auth.googleDenied": "Se canceló la conexión con Google: vuelve a intentarlo cuando quieras.",
@@ -3523,6 +3525,33 @@ const es: Record<string, string> = {
   "providerFailure.serviceUnavailable":
     "Klorn no está disponible por un momento. Inténtalo de nuevo en breve.",
   "providerFailure.internal": "Algo salió mal por nuestra parte. Inténtalo de nuevo en breve.",
+
+  // Capacitor shell push (lib/native/native-push-layer.tsx, local-notify.ts).
+  "nativePush.priming.title": "Solo suena cuando importa",
+  "nativePush.priming.body":
+    "Klorn te avisa del correo PUSH y del MEETING, para agendar. QUEUE, INFO y SILENT esperan en silencio en Correo.",
+  "nativePush.priming.point.push": "Una notificación por cada correo importante, con el motivo",
+  "nativePush.priming.point.actions":
+    "Mantén pulsado para acciones rápidas; enviar un borrador siempre pide desbloquear antes",
+  "nativePush.priming.point.settings": "Cambia qué te avisa cuando quieras en Ajustes",
+  "nativePush.priming.enable": "Activar notificaciones",
+  "nativePush.priming.later": "Ahora no",
+  "nativePush.priming.now": "ahora",
+  "nativePush.priming.sampleTitle": "PUSH · Seoyeon Park",
+  "nativePush.priming.sampleBody":
+    "El contrato vence hoy a las 18:00: borrador de respuesta listo.",
+  "nativePush.priming.quietSample": "47 correos hoy, ordenados sin hacer ruido",
+  "nativePush.denied":
+    "Las notificaciones están desactivadas. Puedes activarlas en los ajustes del dispositivo.",
+  "nativePush.done": "Marcado como hecho.",
+  "nativePush.notUrgent": "Movido a QUEUE.",
+  "nativePush.action.later": "Más tarde",
+  "nativePush.action.notUrgent": "No urgente",
+  "nativePush.action.done": "Hecho",
+  "nativePush.channel.push": "Correo PUSH",
+  "nativePush.channel.pushBody":
+    "Solo el correo que te necesita ahora, con Más tarde, No urgente y Hecho en la notificación.",
+  "nativePush.channel.other": "Otras notificaciones",
 };
 
 export default es;

@@ -329,6 +329,7 @@ const en: Record<string, string> = {
   // Auth — toasts, deep-link banner, sign-in shell copy
   "auth.signInToContinue": "Sign in to continue to {destination}.",
   "auth.googleSignInError": "Google sign-in could not be completed. Please try again.",
+  "auth.appleSignInError": "Apple sign-in could not be completed. Please try again.",
   "auth.desktopPairingCode":
     "Your browser will ask you to confirm. Continue there only if it shows {code}.",
   "auth.googleDenied": "Google connection was canceled — just try again whenever you're ready.",
@@ -3424,6 +3425,32 @@ const en: Record<string, string> = {
   "providerFailure.dailyCap": "Today's AI limit is used up. It resets tomorrow.",
   "providerFailure.serviceUnavailable": "Klorn is briefly unavailable. Try again shortly.",
   "providerFailure.internal": "Something went wrong on our side. Try again shortly.",
+
+  // Capacitor shell push (lib/native/native-push-layer.tsx, local-notify.ts).
+  "nativePush.priming.title": "Only rings when it matters",
+  "nativePush.priming.body":
+    "Klorn notifies you for PUSH mail — and MEETING, for scheduling. QUEUE, INFO and SILENT wait quietly in Mail.",
+  "nativePush.priming.point.push":
+    "One notification per important email, with the reason it got through",
+  "nativePush.priming.point.actions":
+    "Long-press for quick actions; sending a draft always asks you to unlock first",
+  "nativePush.priming.point.settings": "Change what notifies you anytime in Settings",
+  "nativePush.priming.enable": "Turn on notifications",
+  "nativePush.priming.later": "Not now",
+  "nativePush.priming.now": "now",
+  "nativePush.priming.sampleTitle": "PUSH · Seoyeon Park",
+  "nativePush.priming.sampleBody": "Contract due today at 6 PM — reply draft ready.",
+  "nativePush.priming.quietSample": "47 emails today, sorted without a sound",
+  "nativePush.denied": "Notifications are off. You can turn them on in the device's settings.",
+  "nativePush.done": "Marked done.",
+  "nativePush.notUrgent": "Moved to QUEUE.",
+  "nativePush.action.later": "Later",
+  "nativePush.action.notUrgent": "Not urgent",
+  "nativePush.action.done": "Done",
+  "nativePush.channel.push": "PUSH mail",
+  "nativePush.channel.pushBody":
+    "Only mail that needs you now, with Later, Not urgent and Done on the notification.",
+  "nativePush.channel.other": "Other notifications",
 };
 
 export default en;

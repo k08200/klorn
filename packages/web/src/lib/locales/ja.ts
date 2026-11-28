@@ -334,6 +334,7 @@ const ja: Record<string, string> = {
   "auth.resetYourPassword": "パスワードをリセット",
   "auth.signInToContinue": "{destination} に進むにはサインインしてください。",
   "auth.googleSignInError": "Googleサインインを完了できませんでした。もう一度お試しください。",
+  "auth.appleSignInError": "Appleサインインを完了できませんでした。もう一度お試しください。",
   "auth.desktopPairingCode":
     "ブラウザで確認を求められます。{code} が表示された場合のみ続行してください。",
   "auth.googleDenied": "Google接続がキャンセルされました — 準備ができたらいつでもやり直せます。",
@@ -3467,6 +3468,31 @@ const ja: Record<string, string> = {
     "Klorn が一時的に利用できません。しばらくしてからもう一度お試しください。",
   "providerFailure.internal":
     "Klorn 側で問題が発生しました。しばらくしてからもう一度お試しください。",
+
+  // Capacitor shell push (lib/native/native-push-layer.tsx, local-notify.ts).
+  "nativePush.priming.title": "本当に必要なときだけ鳴ります",
+  "nativePush.priming.body":
+    "通知するのはPUSHのメールと、日程調整のMEETINGのメールだけです。QUEUE・INFO・SILENTはメールで静かに待ちます。",
+  "nativePush.priming.point.push": "大事なメール1通に通知ひとつ、知らせた理由と一緒に",
+  "nativePush.priming.point.actions":
+    "長押しですぐ処理 — 下書きの送信は必ずロック解除を先に求めます",
+  "nativePush.priming.point.settings": "何を通知するかは設定でいつでも変えられます",
+  "nativePush.priming.enable": "通知をオンにする",
+  "nativePush.priming.later": "あとで",
+  "nativePush.priming.now": "今",
+  "nativePush.priming.sampleTitle": "PUSH · パク・ソヨン",
+  "nativePush.priming.sampleBody": "契約書は今日18時締め切り — 返信の下書きを用意しました。",
+  "nativePush.priming.quietSample": "今日のメール47通、音を立てずに整理しました",
+  "nativePush.denied": "通知がオフです。端末の設定でオンにできます。",
+  "nativePush.done": "処理済みにしました。",
+  "nativePush.notUrgent": "QUEUE に移しました。",
+  "nativePush.action.later": "あとで",
+  "nativePush.action.notUrgent": "急ぎではない",
+  "nativePush.action.done": "処理済み",
+  "nativePush.channel.push": "PUSH メール",
+  "nativePush.channel.pushBody":
+    "今対応が必要なメールだけ。通知から「あとで」「急ぎではない」「処理済み」を選べます。",
+  "nativePush.channel.other": "その他の通知",
 };
 
 export default ja;

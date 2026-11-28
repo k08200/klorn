@@ -73,8 +73,7 @@ export function clearSensitiveStorage(): void {
  * logout must complete instantly even when the API is unreachable, and the
  * 7-day TTL plus the device-session check bound the damage of a lost call.
  */
-export function revokeServerSession(): void {
-  const token = getStoredAuthToken();
+export function revokeServerSession(token: string | null = getStoredAuthToken()): void {
   if (!token) return;
   void fetch(`${API_BASE}/api/auth/logout`, {
     method: "POST",

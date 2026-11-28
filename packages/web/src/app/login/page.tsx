@@ -17,7 +17,11 @@ import { useAuth } from "../../lib/auth";
 import { readCachedProviders, writeCachedProviders } from "../../lib/auth-providers-cache";
 import { homePath } from "../../lib/home";
 import { useT } from "../../lib/i18n";
-import { startNativeGoogleLogin } from "../../lib/native/native-auth";
+import {
+  nativeAppleLoginAvailable,
+  startNativeAppleLogin,
+  startNativeGoogleLogin,
+} from "../../lib/native/native-auth";
 import { isNativeShell } from "../../lib/native/shell";
 import { providerLane } from "../../lib/provider-lane";
 import { loginNextPath } from "../../lib/safe-path";
@@ -93,6 +97,15 @@ function LoginForm() {
       })
       .finally(() => setPairingCode(null));
   };
+  // Apple in the Capacitor shell: the same system-browser relay (native-auth.ts).
+  const handleAppleClick = (e: React.MouseEvent) => {
+    if (!isNativeShell()) return;
+    e.preventDefault();
+    startNativeAppleLogin().catch((err) => {
+      console.error("[AUTH] Native Apple login failed:", err);
+      toast(t("auth.appleSignInError"), "error");
+    });
+  };
 
   // Server controls whether sign-up is open. When BETA_GATE_ENABLED is on,
   // hide the Sign-up tab and point new visitors at /early-access. Until the
@@ -111,8 +124,8 @@ function LoginForm() {
   // Server-advertised sign-in providers (GET /api/auth/providers). Google
   // renders unconditionally inside ProviderButtons — it must never be held
   // hostage to this probe; Apple/Naver appear only when the deployment
-  // enables them. Hidden in the native shell: those providers block WebView
-  // OAuth like Google does, and the external-browser relay speaks Google only.
+  // enables them. In the native shell only what the system-browser relay can
+  // run shows: Apple in the Capacitor shell (App Store 4.8), never Naver.
   const providersQuery = useQuery({
     queryKey: ["auth", "providers"],
     queryFn: async () => {
@@ -150,6 +163,7 @@ function LoginForm() {
   const { extras: extraProviders, resolved: providersResolved } = providerLane(
     nativeShell,
     providersQuery.data,
+    nativeShell && nativeAppleLoginAvailable() ? ["apple"] : [],
   );
 
   useEffect(() => {
@@ -285,6 +299,7 @@ function LoginForm() {
           extraProviders={extraProviders}
           resolved={providersResolved}
           onGoogleClick={handleGoogleClick}
+          onAppleClick={handleAppleClick}
         />
         {pairingCode && (
           <p role="status" className="mt-3 text-role-label text-ink-mid">

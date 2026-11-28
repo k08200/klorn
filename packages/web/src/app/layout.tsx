@@ -12,6 +12,7 @@ import CommandPalette from "../components/command-palette";
 import DesktopToastRouter from "../components/desktop-toast-router";
 import GoogleReconnectBanner from "../components/google-reconnect-banner";
 import KeyboardShortcuts from "../components/keyboard-shortcuts";
+import NativeBridgeMount from "../components/native-bridge-mount";
 import Providers from "../components/providers";
 import PushOnboardingBanner from "../components/push-onboarding-banner";
 import PushRegister from "../components/push-register";
@@ -105,6 +106,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <PwaPrompts />
           <AutostartPrompt />
           <DesktopToastRouter />
+          <NativeBridgeMount />
         </Providers>
       </body>
     </html>

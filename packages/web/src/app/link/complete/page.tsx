@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import AuthStatus from "../../../components/auth/auth-status";
-import { API_BASE, getStoredAuthToken } from "../../../lib/api";
+import { API_BASE, authTokenReady, getStoredAuthToken } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
 import {
   browserSessionStorage,
@@ -17,6 +17,7 @@ import {
   storePendingHandle,
   takePendingHandle,
 } from "../../../lib/link-complete";
+import { isNativePlatform } from "../../../lib/native/capacitor";
 
 /**
  * Where an account-link OAuth flow lands (Google connect/calendar/inbox,
@@ -120,25 +121,31 @@ export default function LinkCompletePage() {
     if (handled.current) return;
     handled.current = true;
 
-    const token = getStoredAuthToken();
-    const { handle, waiting } = handleToRedeem(token);
-    if (!handle || !token) {
-      setView(
-        waiting ? message("linkComplete.signIn", SIGN_IN) : message("linkComplete.expired", null),
-      );
-      return;
-    }
-    completeLink(handle, token)
-      .then(({ status, body }) => {
-        const outcome = linkCompleteOutcome(status, body);
-        // Only a relative path that passed safeNextPath ever gets here.
-        if (outcome.kind === "redirect") return router.replace(outcome.path);
-        // A rejected session never reached the handle: keep it for after sign-in.
-        if (outcome.kind === "signIn")
-          storePendingHandle(browserSessionStorage(), handle, Date.now());
-        setView(viewFor(outcome));
-      })
-      .catch(() => setView(message("linkComplete.failed", null)));
+    const redeem = (): void => {
+      const token = getStoredAuthToken();
+      const { handle, waiting } = handleToRedeem(token);
+      if (!handle || !token) {
+        setView(
+          waiting ? message("linkComplete.signIn", SIGN_IN) : message("linkComplete.expired", null),
+        );
+        return;
+      }
+      completeLink(handle, token)
+        .then(({ status, body }) => {
+          const outcome = linkCompleteOutcome(status, body);
+          // Only a relative path that passed safeNextPath ever gets here.
+          if (outcome.kind === "redirect") return router.replace(outcome.path);
+          // A rejected session never reached the handle: keep it for after sign-in.
+          if (outcome.kind === "signIn")
+            storePendingHandle(browserSessionStorage(), handle, Date.now());
+          setView(viewFor(outcome));
+        })
+        .catch(() => setView(message("linkComplete.failed", null)));
+    };
+    // The Capacitor shell keeps the token in the Keychain; a cold start from
+    // the link-complete deep link reads it first. The web goes on at once.
+    if (isNativePlatform()) void authTokenReady().then(redeem);
+    else redeem();
   }, [router]);
 
   if (view.kind === "working") return <AuthStatus label={t("linkComplete.working")} />;

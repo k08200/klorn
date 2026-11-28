@@ -315,6 +315,7 @@ const zh: Record<string, string> = {
   "auth.resetYourPassword": "重置你的密码",
   "auth.signInToContinue": "登录后继续前往 {destination}。",
   "auth.googleSignInError": "Google 登录未能完成。请重试。",
+  "auth.appleSignInError": "Apple 登录未能完成。请重试。",
   "auth.desktopPairingCode": "浏览器会请您确认。仅当它显示 {code} 时才继续。",
   "auth.googleDenied": "Google 连接已取消 — 准备好了随时再试。",
   "auth.googleUnverified":
@@ -3219,6 +3220,30 @@ const zh: Record<string, string> = {
   "providerFailure.dailyCap": "今天的 AI 额度已用完。明天会重置。",
   "providerFailure.serviceUnavailable": "Klorn 暂时不可用。请稍后重试。",
   "providerFailure.internal": "Klorn 这边出了问题。请稍后重试。",
+
+  // Capacitor shell push (lib/native/native-push-layer.tsx, local-notify.ts).
+  "nativePush.priming.title": "只在重要时响起",
+  "nativePush.priming.body":
+    "Klorn 只为 PUSH 邮件和用于日程协调的 MEETING 邮件发送通知。QUEUE、INFO 和 SILENT 会在邮件中安静等待。",
+  "nativePush.priming.point.push": "一封重要邮件一条通知，并告诉你原因",
+  "nativePush.priming.point.actions": "长按即可快速处理 — 发送草稿前总会先要求解锁",
+  "nativePush.priming.point.settings": "随时可以在设置中更改通知内容",
+  "nativePush.priming.enable": "开启通知",
+  "nativePush.priming.later": "以后再说",
+  "nativePush.priming.now": "现在",
+  "nativePush.priming.sampleTitle": "PUSH · 朴瑞妍",
+  "nativePush.priming.sampleBody": "合同今天 18 点截止 — 回复草稿已备好。",
+  "nativePush.priming.quietSample": "今天 47 封邮件，已悄悄整理好",
+  "nativePush.denied": "通知已关闭，可以在设备设置中开启。",
+  "nativePush.done": "已标记为完成。",
+  "nativePush.notUrgent": "已移到 QUEUE。",
+  "nativePush.action.later": "稍后",
+  "nativePush.action.notUrgent": "不紧急",
+  "nativePush.action.done": "已处理",
+  "nativePush.channel.push": "PUSH 邮件",
+  "nativePush.channel.pushBody":
+    "只有现在需要你处理的邮件，可在通知上直接选择“稍后”“不紧急”或“已处理”。",
+  "nativePush.channel.other": "其他通知",
 };
 
 export default zh;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { nativeKeyboardInset, subscribeNativeKeyboard } from "./native/keyboard";
 
 export interface VisualViewportBox {
   /** Pixels the on-screen keyboard (or other UI) covers at the bottom of the layout viewport. */
@@ -27,18 +28,26 @@ export function useVisualViewport(active: boolean): VisualViewportBox | null {
       return;
     }
     const update = () => {
-      const bottomInset = Math.max(
+      const viewportInset = Math.max(
         0,
         Math.round(window.innerHeight - (viewport.height + viewport.offsetTop)),
       );
-      setBox({ bottomInset, height: Math.round(viewport.height) });
+      // The Capacitor shell on iOS (Keyboard resize "body") shrinks <body>,
+      // not the visual viewport: the native keyboard height is the inset there.
+      // Always 0 on the web (native/keyboard.ts).
+      const keyboard = nativeKeyboardInset();
+      const bottomInset = Math.max(viewportInset, keyboard);
+      const height = keyboard > viewportInset ? window.innerHeight - keyboard : viewport.height;
+      setBox({ bottomInset, height: Math.round(height) });
     };
     update();
     viewport.addEventListener("resize", update);
     viewport.addEventListener("scroll", update);
+    const unsubscribeNative = subscribeNativeKeyboard(update);
     return () => {
       viewport.removeEventListener("resize", update);
       viewport.removeEventListener("scroll", update);
+      unsubscribeNative();
     };
   }, [active]);
   return box;

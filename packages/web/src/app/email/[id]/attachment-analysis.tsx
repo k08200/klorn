@@ -14,6 +14,7 @@ import { useState } from "react";
 import { useToast } from "../../../components/toast";
 import { API_BASE, authHeaders } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
+import { shareFileNatively } from "../../../lib/native/share-file";
 import { captureClientError } from "../../../lib/sentry";
 import { formatBytes } from "./atoms";
 import type { EmailAttachment } from "./types";
@@ -107,6 +108,8 @@ export function AttachmentAnalysis({
       );
       if (!res.ok) throw new Error(`download failed: ${res.status}`);
       const blob = await res.blob();
+      // The Capacitor shell hands the file to the OS share sheet; the web downloads.
+      if (await shareFileNatively(blob, attachment.filename || "attachment")) return;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

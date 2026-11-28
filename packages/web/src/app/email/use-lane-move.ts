@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "../../components/toast";
 import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
+import { hapticSuccess, hapticWarning } from "../../lib/native/haptics";
 import { captureClientError } from "../../lib/sentry";
 import { serverErrorMessage } from "../../lib/server-error";
 
@@ -117,8 +118,12 @@ export function useLaneMove({ apply, onError, onSettled }: UseLaneMoveOptions) {
         `/api/inbox/firewall/email/${encodeURIComponent(target.id)}`,
         { method: "POST", body: JSON.stringify({ tier }) },
       )
-        .then((res): UndoHandle => ({ itemId: res.itemId, undoToken: res.undoToken ?? null }))
+        .then((res): UndoHandle => {
+          void hapticSuccess();
+          return { itemId: res.itemId, undoToken: res.undoToken ?? null };
+        })
         .catch((err) => {
+          void hapticWarning();
           captureClientError(err, { scope: "email.lane.move", emailId: target.id, tier });
           // Roll back only what is still ours to roll back: if a later move on
           // the same mail has taken over, its lane is the one on screen and

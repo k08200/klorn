@@ -339,6 +339,7 @@ const fr: Record<string, string> = {
   "auth.resetYourPassword": "Réinitialisez votre mot de passe",
   "auth.signInToContinue": "Connectez-vous pour continuer vers {destination}.",
   "auth.googleSignInError": "La connexion Google n'a pas pu aboutir. Réessayez.",
+  "auth.appleSignInError": "La connexion Apple n'a pas pu aboutir. Réessayez.",
   "auth.desktopPairingCode":
     "Votre navigateur vous demandera de confirmer. Ne continuez que s'il affiche {code}.",
   "auth.googleDenied": "La connexion Google a été annulée — réessayez quand vous voulez.",
@@ -3537,6 +3538,32 @@ const fr: Record<string, string> = {
   "providerFailure.serviceUnavailable":
     "Klorn est brièvement indisponible. Réessayez dans un instant.",
   "providerFailure.internal": "Un problème est survenu de notre côté. Réessayez dans un instant.",
+
+  // Capacitor shell push (lib/native/native-push-layer.tsx, local-notify.ts).
+  "nativePush.priming.title": "Ne sonne que quand ça compte",
+  "nativePush.priming.body":
+    "Klorn vous prévient pour les e-mails PUSH, et MEETING pour la planification. QUEUE, INFO et SILENT attendent en silence dans E-mail.",
+  "nativePush.priming.point.push": "Une notification par e-mail important, avec la raison",
+  "nativePush.priming.point.actions":
+    "Appui long pour agir vite ; envoyer un brouillon demande toujours de déverrouiller d'abord",
+  "nativePush.priming.point.settings": "Changez ce qui vous notifie à tout moment dans Réglages",
+  "nativePush.priming.enable": "Activer les notifications",
+  "nativePush.priming.later": "Plus tard",
+  "nativePush.priming.now": "maintenant",
+  "nativePush.priming.sampleTitle": "PUSH · Seoyeon Park",
+  "nativePush.priming.sampleBody": "Contrat à rendre aujourd'hui 18 h — brouillon de réponse prêt.",
+  "nativePush.priming.quietSample": "47 e-mails aujourd'hui, triés sans un bruit",
+  "nativePush.denied":
+    "Les notifications sont désactivées. Vous pouvez les activer dans les réglages de l'appareil.",
+  "nativePush.done": "Marqué comme traité.",
+  "nativePush.notUrgent": "Déplacé dans QUEUE.",
+  "nativePush.action.later": "Plus tard",
+  "nativePush.action.notUrgent": "Pas urgent",
+  "nativePush.action.done": "Traité",
+  "nativePush.channel.push": "E-mails PUSH",
+  "nativePush.channel.pushBody":
+    "Seulement les e-mails qui ont besoin de vous maintenant, avec Plus tard, Pas urgent et Traité sur la notification.",
+  "nativePush.channel.other": "Autres notifications",
 };
 
 export default fr;

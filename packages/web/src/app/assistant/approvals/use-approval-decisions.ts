@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from "react";
 import { useT } from "../../../lib/i18n";
+import { hapticSuccess, hapticWarning } from "../../../lib/native/haptics";
 import { useHotkeys, useKeyboardTriage } from "../../../lib/use-hotkeys";
 import { approvalDomId } from "./approval-card";
 import { type ApprovalModel, nextSelection } from "./model";
@@ -45,7 +46,12 @@ export function useApprovalDecisions(models: readonly ApprovalModel[], approvals
 
   const approve = async (model: ApprovalModel) => {
     const next = afterLeaving(model.id);
-    if (await approvals.approve(model.id, model.sendsMail)) setSelected(next);
+    if (await approvals.approve(model.id, model.sendsMail)) {
+      void hapticSuccess();
+      setSelected(next);
+    } else {
+      void hapticWarning();
+    }
   };
 
   const confirmReject = (reason: string | null) => {

@@ -19,6 +19,7 @@ import { useAuth } from "../../../lib/auth";
 import { isEntitlementRefusal } from "../../../lib/entitlement";
 import { useT } from "../../../lib/i18n";
 import { linkifyText } from "../../../lib/linkify";
+import { hapticSuccess, hapticWarning } from "../../../lib/native/haptics";
 import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
 import { serverErrorMessage } from "../../../lib/server-error";
@@ -485,7 +486,9 @@ function EmailDetailView() {
       });
       setDraft(null);
       setReplySentCount((count) => count + 1);
+      void hapticSuccess();
     } catch (err) {
+      void hapticWarning();
       if (isEntitlementRefusal(err)) {
         setProGate("reply");
         return;
