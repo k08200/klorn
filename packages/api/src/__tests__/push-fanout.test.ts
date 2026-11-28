@@ -55,7 +55,6 @@ vi.mock("../notify/push-apns.js", () => ({
   sendApnsPush: vi.fn(async () => ({ status: "skipped" })),
 }));
 vi.mock("web-push", () => ({
-  default: { setVapidDetails: vi.fn(), sendNotification: mocks.webPushSend },
   setVapidDetails: vi.fn(),
   sendNotification: mocks.webPushSend,
 }));
