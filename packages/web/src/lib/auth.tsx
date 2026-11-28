@@ -2,11 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { apiFetch, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from "./api";
+import {
+  apiFetch,
+  authTokenReady,
+  clearStoredAuthToken,
+  getStoredAuthToken,
+  setStoredAuthToken,
+} from "./api";
 import { storedAttribution } from "./attribution";
 import { forgetHome, homePath, LEGACY_HOME, rememberHome, signInDestination } from "./home";
 import { browserSessionStorage, hasPendingHandle } from "./link-complete";
 import { clearSensitiveStorage, revokeServerSession } from "./logout-cleanup";
+import { isNativePlatform } from "./native/capacitor";
 import type { TimeZoneMode } from "./time-zone";
 import { useTimeZoneAutoSync } from "./time-zone-sync";
 import { trackAppOpenOnce } from "./track";
@@ -187,61 +194,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
   }, []);
 
-  // Load token from localStorage on mount
+  // Load the stored token on mount (localStorage; the Keychain in the
+  // Capacitor shell, which loads asynchronously — see authTokenReady).
   useEffect(() => {
-    const stored = getStoredAuthToken();
-    if (stored) {
-      setToken(stored);
-      // Verify token
-      apiFetch<{
-        user: User & {
-          googleConnected?: boolean;
-          googleNeedsReconnect?: boolean;
-          hasAnyMailSource?: boolean;
-        };
-      }>(
-        "/api/auth/me",
-        { headers: { Authorization: `Bearer ${stored}` } },
-        // This runs on EVERY route, public ones included, so a stale token
-        // must not bounce a visitor off /playground. The catch below clears
-        // it and AuthGuard handles the routes that need a session (#1727).
-        { redirectOnSessionExpiry: false },
-      )
-        .then((data) => {
-          setUser(data.user);
-          // UNIFIED_HOME: keep the home hint for the callers that route before
-          // this answer exists (the root redirect, the native sign-in).
-          rememberHome(data.user);
-          setGoogleConnected(data.user.googleConnected ?? false);
-          setGoogleNeedsReconnect(data.user.googleNeedsReconnect ?? false);
-          // Older API without the field: fall back to googleConnected so the
-          // guard behaves exactly as before this field existed.
-          setHasMailSource(data.user.hasAnyMailSource ?? data.user.googleConnected ?? false);
-          // Retention analytics: an authenticated session bootstrapped = the
-          // user opened the app. Fires once per browser session (DAU signal).
-          trackAppOpenOnce();
-          // Auto-sync on app reload if Google is connected
-          if (data.user.googleConnected) {
-            runInitialSync(stored);
-          }
-        })
-        .catch((err) => {
-          const isUnauthorized = err instanceof Error && err.message.startsWith("API 401:");
-          if (isUnauthorized) {
-            clearStoredAuthToken();
-            setToken(null);
-            // Only AuthGuard reads this, so a public page is unaffected; it is
-            // what keeps "your session expired" on the protected routes that
-            // used to get it from the redirect inside apiFetch.
-            setAuthError("session_expired");
-          } else {
-            setAuthError("api_unavailable");
-          }
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
+    const bootstrapSession = (): void => {
+      const stored = getStoredAuthToken();
+      if (stored) {
+        setToken(stored);
+        // Verify token
+        apiFetch<{
+          user: User & {
+            googleConnected?: boolean;
+            googleNeedsReconnect?: boolean;
+            hasAnyMailSource?: boolean;
+          };
+        }>(
+          "/api/auth/me",
+          { headers: { Authorization: `Bearer ${stored}` } },
+          // This runs on EVERY route, public ones included, so a stale token
+          // must not bounce a visitor off /playground. The catch below clears
+          // it and AuthGuard handles the routes that need a session (#1727).
+          { redirectOnSessionExpiry: false },
+        )
+          .then((data) => {
+            setUser(data.user);
+            // UNIFIED_HOME: keep the home hint for the callers that route before
+            // this answer exists (the root redirect, the native sign-in).
+            rememberHome(data.user);
+            setGoogleConnected(data.user.googleConnected ?? false);
+            setGoogleNeedsReconnect(data.user.googleNeedsReconnect ?? false);
+            // Older API without the field: fall back to googleConnected so the
+            // guard behaves exactly as before this field existed.
+            setHasMailSource(data.user.hasAnyMailSource ?? data.user.googleConnected ?? false);
+            // Retention analytics: an authenticated session bootstrapped = the
+            // user opened the app. Fires once per browser session (DAU signal).
+            trackAppOpenOnce();
+            // Auto-sync on app reload if Google is connected
+            if (data.user.googleConnected) {
+              runInitialSync(stored);
+            }
+          })
+          .catch((err) => {
+            const isUnauthorized = err instanceof Error && err.message.startsWith("API 401:");
+            if (isUnauthorized) {
+              clearStoredAuthToken();
+              setToken(null);
+              // Only AuthGuard reads this, so a public page is unaffected; it is
+              // what keeps "your session expired" on the protected routes that
+              // used to get it from the redirect inside apiFetch.
+              setAuthError("session_expired");
+            } else {
+              setAuthError("api_unavailable");
+            }
+          })
+          .finally(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
+    };
+    if (isNativePlatform()) {
+      let alive = true;
+      void authTokenReady().then(() => {
+        if (alive) bootstrapSession();
+      });
+      return () => {
+        alive = false;
+      };
     }
+    bootstrapSession();
+    return undefined;
   }, [runInitialSync]);
 
   const login = useCallback(
@@ -337,7 +358,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     // Order matters: revoke server-side BEFORE clearing the token (the call
     // needs it), then wipe secrets from browser storage (CASA 2.2.1 / 6.6.1).
-    revokeServerSession();
+    // In the Capacitor shell the device's push token is unregistered first,
+    // with the same session, and only then is the session revoked.
+    if (isNativePlatform()) {
+      const session = getStoredAuthToken();
+      void import("./native/native-push")
+        .then((m) => m.forgetNativePushToken(session))
+        .catch((err) => console.warn("[PUSH-DEVICE] unregister on sign-out failed:", err))
+        .finally(() => revokeServerSession(session));
+    } else {
+      revokeServerSession();
+    }
     clearStoredAuthToken();
     clearSensitiveStorage();
     // UNIFIED_HOME: the home hint belongs to the session that is ending.

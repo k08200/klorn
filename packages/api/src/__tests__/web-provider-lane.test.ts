@@ -22,8 +22,17 @@ describe("providerLane", () => {
     expect(providerLane(false, undefined)).toEqual({ extras: [], resolved: false });
   });
 
-  it("never shows Apple or Naver in the native shell", () => {
+  it("shows no extra provider in a native shell whose relay cannot run it", () => {
     expect(providerLane(true, CACHED)).toEqual({ extras: [], resolved: false });
+  });
+
+  it("shows Apple (never Naver) in the Capacitor shell, where the relay runs it", () => {
+    expect(providerLane(true, CACHED, ["apple"])).toEqual({ extras: ["apple"], resolved: true });
+    expect(providerLane(true, undefined, ["apple"])).toEqual({ extras: [], resolved: false });
+    expect(providerLane(true, { providers: [] } as never, ["apple"])).toEqual({
+      extras: [],
+      resolved: false,
+    });
   });
 
   it("drops ids it does not know, in server order", () => {

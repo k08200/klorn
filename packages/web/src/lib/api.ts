@@ -1,7 +1,9 @@
 // Auth-shaped flows must ask isNativeShell(), never isNativePlatform() — the
 // Capacitor-only test answers "no" inside the Tauri wrapper. capacitor.ts is
-// deliberately NOT imported here so that mistake cannot be made in this file.
-import { isNativeShell, openExternal } from "./native/shell";
+// deliberately NOT called here (./native/deep-links uses it internally only
+// for its default argument, which this file never relies on).
+import { linkRelayQuery, NATIVE_OAUTH_SCHEME } from "./native/deep-links";
+import { isNativeShell, openExternal, shellKind } from "./native/shell";
 import { safeHttpsUrl } from "./safe-path";
 import { activeUiLocale } from "./ui-locale";
 
@@ -24,8 +26,96 @@ export const AUTH_TOKEN_KEY = "klorn-token";
 const LEGACY_KEY_PREFIX = "ev" + "e";
 const LEGACY_AUTH_TOKEN_KEY = `${LEGACY_KEY_PREFIX}-token`;
 
+// ─── Native token storage (Capacitor shell) ─────────────────────────────────
+// Inside the Capacitor shell the token lives in the Keychain/Keystore
+// (native/secure-token.ts), mirrored here in memory because every reader below
+// is synchronous. Outside that shell (the plain web, the Tauri shell) or when
+// secure storage cannot load, localStorage stays the store, exactly as before.
+// Readers that run at launch await authTokenReady() first.
+//
+// Failure handling, so a session never comes back after sign-out and a newer
+// session is never replaced by an older one:
+//   - a failed Keychain WRITE keeps the new token in localStorage, which wins
+//     on the next launch (native/token-migration.ts) and moves back in;
+//   - a failed Keychain CLEAR leaves a marker; the next launch removes the
+//     Keychain item before reading anything.
+let nativeToken: string | null | undefined;
+let nativeTokenLoad: Promise<void> | null = null;
+let nativeTokenLoaded = false;
+/** A set/clear ran before the Keychain load settled: it wins over the loaded value. */
+let writtenBeforeLoad = false;
+let secureStorageFailed = false;
+let nativeTokenWrite: Promise<void> = Promise.resolve();
+const TOKEN_CLEARED_KEY = "klorn-token-cleared";
+
+function inSecureTokenMode(): boolean {
+  return typeof window !== "undefined" && shellKind() === "capacitor" && !secureStorageFailed;
+}
+
+function readLocalAuthToken(): string | null {
+  return localStorage.getItem(AUTH_TOKEN_KEY) ?? localStorage.getItem(LEGACY_AUTH_TOKEN_KEY);
+}
+
+function clearLocalAuthToken(): void {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
+}
+
+/**
+ * Resolves once the stored token can be read. Immediate on the web; in the
+ * Capacitor shell it loads the Keychain item (moving a localStorage copy in).
+ * Never rejects: if secure storage fails the localStorage behaviour stays.
+ */
+export function authTokenReady(): Promise<void> {
+  if (!inSecureTokenMode() && !nativeTokenLoad) return Promise.resolve();
+  nativeTokenLoad ??= import("./native/secure-token")
+    .then((m) =>
+      m.loadSecureToken({
+        local: readLocalAuthToken(),
+        cleared: localStorage.getItem(TOKEN_CLEARED_KEY) !== null,
+        clearLocal: clearLocalAuthToken,
+        clearMarker: () => localStorage.removeItem(TOKEN_CLEARED_KEY),
+      }),
+    )
+    .then((token) => {
+      if (!writtenBeforeLoad) nativeToken = token;
+    })
+    .catch((err) => {
+      console.error("[AUTH] Secure token storage unavailable; using localStorage:", err);
+      secureStorageFailed = true;
+      // A sign-in made meanwhile lives only in memory: hand it to localStorage.
+      if (writtenBeforeLoad && nativeToken) localStorage.setItem(AUTH_TOKEN_KEY, nativeToken);
+      nativeToken = undefined;
+    })
+    .finally(() => {
+      nativeTokenLoaded = true;
+    });
+  return nativeTokenLoad;
+}
+
+/** Resolves once every token write reached secure storage (before a hard navigation). */
+export function authTokenPersisted(): Promise<void> {
+  return nativeTokenWrite;
+}
+
+function persistNativeToken(token: string | null): void {
+  nativeToken = token;
+  if (!nativeTokenLoaded) writtenBeforeLoad = true;
+  // Chained, so writes land in call order and authTokenPersisted covers all.
+  nativeTokenWrite = nativeTokenWrite
+    .then(() => import("./native/secure-token"))
+    .then((m) => (token ? m.writeSecureToken(token) : m.clearSecureToken()))
+    .then(() => localStorage.removeItem(TOKEN_CLEARED_KEY))
+    .catch((err) => {
+      console.error("[AUTH] Secure token write failed:", err);
+      if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
+      else localStorage.setItem(TOKEN_CLEARED_KEY, "1");
+    });
+}
+
 export function getStoredAuthToken(): string | null {
   if (typeof window === "undefined") return null;
+  if (nativeToken !== undefined) return nativeToken;
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   if (token) return token;
   const legacyToken = localStorage.getItem(LEGACY_AUTH_TOKEN_KEY);
@@ -37,8 +127,13 @@ export function getStoredAuthToken(): string | null {
 }
 
 export function setStoredAuthToken(token: string): void {
-  localStorage.setItem(AUTH_TOKEN_KEY, token);
-  localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
+  if (inSecureTokenMode()) {
+    clearLocalAuthToken();
+    persistNativeToken(token);
+  } else {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+    localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
+  }
   // A fresh session means any in-flight expiry handling is stale. Without this
   // reset, a 401 race during login (or a bfcache restore) leaves the flag stuck
   // at true and every future session expiry is silently ignored.
@@ -46,8 +141,8 @@ export function setStoredAuthToken(token: string): void {
 }
 
 export function clearStoredAuthToken(): void {
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
+  clearLocalAuthToken();
+  if (inSecureTokenMode()) persistNativeToken(null);
 }
 
 // 401 on these endpoints means bad credentials, not session expiry — don't redirect.
@@ -77,7 +172,15 @@ function handleSessionExpired(): void {
   clearStoredAuthToken();
   const next = `${window.location.pathname}${window.location.search}`;
   const nextParam = next && next !== "/login" ? `&next=${encodeURIComponent(next)}` : "";
-  window.location.href = `/login?error=session_expired${nextParam}`;
+  const target = `/login?error=session_expired${nextParam}`;
+  // The Capacitor shell: the Keychain clear must land before the reload.
+  if (inSecureTokenMode()) {
+    void authTokenPersisted().then(() => {
+      window.location.href = target;
+    });
+    return;
+  }
+  window.location.href = target;
 }
 
 export async function apiFetch<T>(
@@ -160,11 +263,20 @@ async function openOAuthUrl(url: string): Promise<void> {
   }
 }
 
+// Inside the Capacitor shell an account link finishes in the SYSTEM browser,
+// which has no Klorn session, so the start asks the callback to deep-link the
+// parked handle back to the app (`?appScheme=`, routes/link-handoff.ts); the
+// app finishes it with its own session (native/native-bridge.tsx →
+// /link/complete). Empty on the web and in the Tauri shell (no deep link there).
+function accountLinkRelay(): string {
+  return linkRelayQuery({ native: shellKind() === "capacitor", scheme: NATIVE_OAUTH_SCHEME });
+}
+
 // Start the Gmail/Calendar OAuth flow without leaking the user's JWT into the
 // URL. Calls the header-authed start endpoint, then opens the returned Google
 // URL. Throws if there is no session or the API rejects.
 export async function startGoogleConnect(): Promise<void> {
-  const { url } = await apiFetch<{ url: string }>("/api/auth/google/start", {
+  const { url } = await apiFetch<{ url: string }>(`/api/auth/google/start${accountLinkRelay()}`, {
     method: "POST",
   });
   await openOAuthUrl(url);
@@ -173,17 +285,23 @@ export async function startGoogleConnect(): Promise<void> {
 // Start the OAuth flow to link a SECONDARY Google account for calendar
 // free/busy only (Pro-gated on the server). Throws (e.g. 403) if the API rejects.
 export async function startLinkCalendar(): Promise<void> {
-  const { url } = await apiFetch<{ url: string }>("/api/auth/google/link-calendar", {
-    method: "POST",
-  });
+  const { url } = await apiFetch<{ url: string }>(
+    `/api/auth/google/link-calendar${accountLinkRelay()}`,
+    {
+      method: "POST",
+    },
+  );
   await openOAuthUrl(url);
 }
 
 /** Kick off the OAuth flow to link a secondary Google inbox (Pro feature). */
 export async function startLinkInbox(): Promise<void> {
-  const { url } = await apiFetch<{ url: string }>("/api/auth/google/link-inbox", {
-    method: "POST",
-  });
+  const { url } = await apiFetch<{ url: string }>(
+    `/api/auth/google/link-inbox${accountLinkRelay()}`,
+    {
+      method: "POST",
+    },
+  );
   await openOAuthUrl(url);
 }
 
@@ -192,13 +310,18 @@ export async function startLinkInbox(): Promise<void> {
  * files only). The server answers 404 while Google Drive is off.
  */
 export async function startLinkGoogleDrive(): Promise<void> {
-  const { url } = await apiFetch<{ url: string }>("/api/drive/google/link", { method: "POST" });
+  const { url } = await apiFetch<{ url: string }>(`/api/drive/google/link${accountLinkRelay()}`, {
+    method: "POST",
+  });
   await openOAuthUrl(url);
 }
 
 export async function startLinkOutlookInbox(): Promise<void> {
-  const { url } = await apiFetch<{ url: string }>("/api/auth/outlook/link-inbox", {
-    method: "POST",
-  });
+  const { url } = await apiFetch<{ url: string }>(
+    `/api/auth/outlook/link-inbox${accountLinkRelay()}`,
+    {
+      method: "POST",
+    },
+  );
   await openOAuthUrl(url);
 }

@@ -16,16 +16,21 @@ export interface ProviderLane {
  * hits a hydration mismatch whenever a cached provider list exists (#1407
  * follow-up). After mount the cached seed counts as an answer.
  *
- * Hidden in the native shell: Apple and Naver block WebView OAuth the way
- * Google does, and the external-browser relay speaks Google only.
+ * In a native shell Apple and Naver block WebView OAuth the way Google does,
+ * so only `nativeProviders` — the ones the shell's system-browser relay can
+ * run (Apple in the Capacitor shell, native-auth.ts) — are shown there.
+ * App Store guideline 4.8: an app offering Google sign-in offers Apple too.
  */
 export function providerLane(
   nativeShell: boolean | null,
   data: AuthProvidersResponse | undefined,
+  nativeProviders: readonly AuthProviderId[] = [],
 ): ProviderLane {
-  if (nativeShell !== false) return { extras: [], resolved: false };
-  const extras = (data?.providers ?? [])
+  if (nativeShell === null) return { extras: [], resolved: false };
+  const offered = (data?.providers ?? [])
     .map((provider) => provider.id)
     .filter((id): id is AuthProviderId => id === "apple" || id === "naver");
-  return { extras, resolved: data !== undefined };
+  if (!nativeShell) return { extras: offered, resolved: data !== undefined };
+  const extras = offered.filter((id) => nativeProviders.includes(id));
+  return { extras, resolved: data !== undefined && extras.length > 0 };
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
 import { authHeaders, getStoredAuthToken } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { isNativePlatform } from "../lib/native/capacitor";
-import { registerNativePush } from "../lib/native/native-push";
 import {
   fetchVapidKey,
   getOrCreatePushSubscription,
@@ -12,19 +13,26 @@ import {
   sendSwConfig,
 } from "../lib/push";
 
-export default function PushRegister() {
-  useEffect(() => {
-    if (!getStoredAuthToken()) return;
+// The Capacitor shell's push layer (priming, banner, actions) — its own chunk,
+// never loaded on the web.
+const NativePushLayer = dynamic(() => import("../lib/native/native-push-layer"), { ssr: false });
 
-    // Native shell: register for FCM/APNs (native push), not Web Push — iOS
-    // WKWebView has no usable Web Push and on Android a web subscription would
-    // just be a redundant channel. (The on-device calendar probe was removed:
-    // requesting calendar permission with no user-facing feature is an App
-    // Store 5.1.1 risk. It returns with the native calendar feature.)
-    if (isNativePlatform()) {
-      void registerNativePush();
-      return;
-    }
+export default function PushRegister() {
+  const { token } = useAuth();
+  // Native shell: FCM/APNs (native push), not Web Push — iOS WKWebView has no
+  // usable Web Push and on Android a web subscription would just be a
+  // redundant channel. Mounted once signed in; the layer asks for permission
+  // only from its priming screen. (The on-device calendar probe was removed:
+  // requesting calendar permission with no user-facing feature is an App Store
+  // 5.1.1 risk. It returns with the native calendar feature.)
+  const [native, setNative] = useState(false);
+  useEffect(() => {
+    setNative(isNativePlatform());
+  }, []);
+
+  useEffect(() => {
+    if (isNativePlatform()) return;
+    if (!getStoredAuthToken()) return;
 
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
     // Never prompt on page load: there is no user gesture here, and browsers
@@ -35,7 +43,7 @@ export default function PushRegister() {
     registerPush();
   }, []);
 
-  return null;
+  return native && token ? <NativePushLayer /> : null;
 }
 
 async function registerPush() {

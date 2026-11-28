@@ -41,6 +41,8 @@ interface ProviderButtonsProps {
   resolved: boolean;
   /** Native shell intercepts Google and runs the system-browser flow. */
   onGoogleClick: (e: MouseEvent) => void;
+  /** Native shell intercepts Apple the same way (the Capacitor relay). */
+  onAppleClick?: (e: MouseEvent) => void;
   /** Invite-only deployments relabel Google as the approved-user path. */
   googleLabel?: string;
 }
@@ -49,6 +51,7 @@ export default function ProviderButtons({
   extraProviders,
   resolved,
   onGoogleClick,
+  onAppleClick,
   googleLabel,
 }: ProviderButtonsProps) {
   const { t } = useT();
@@ -104,7 +107,10 @@ export default function ProviderButtons({
               <a
                 key={id}
                 href={`${API_BASE}/api/auth/${id}/login`}
-                onClick={(event) => followBoundLoginLink(event, `${API_BASE}/api/auth/${id}/login`)}
+                onClick={(event) => {
+                  if (id === "apple") onAppleClick?.(event);
+                  followBoundLoginLink(event, `${API_BASE}/api/auth/${id}/login`);
+                }}
                 className={ROW_CLASS}
               >
                 {id === "apple" ? <AppleMark /> : <NaverMark />}

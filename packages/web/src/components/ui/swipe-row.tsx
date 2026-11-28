@@ -25,6 +25,7 @@
  */
 
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { hapticLight } from "../../lib/native/haptics";
 import {
   CLICK_SWALLOW_MS,
   directionOf,
@@ -103,6 +104,7 @@ export function SwipeRow(props: SwipeRowProps) {
   // While the row slides out after an exiting commit: no new gesture, no click.
   const exiting = useRef<{ timer: number; commit: () => void } | null>(null);
   const onCommitRef = useRef(props.onCommit);
+  const armedRef = useRef(false);
   onCommitRef.current = props.onCommit;
   const [reveal, setReveal] = useState<Reveal | null>(null);
   // A sideways drag is in progress (or the row is sliding out). Only then does
@@ -138,10 +140,14 @@ export function SwipeRow(props: SwipeRowProps) {
   const showReveal = (dx: number, next: SwipeTrack, width: number) => {
     const direction = directionOf(dx);
     if (!direction || !sideFor(direction)) {
+      armedRef.current = false;
       setReveal(null);
       return;
     }
     const armed = isArmed(dx, velocityX(next), width);
+    // A light tick as a release would start to run the action (native shell only).
+    if (armed && !armedRef.current) void hapticLight();
+    armedRef.current = armed;
     setReveal((prev) =>
       prev?.direction === direction && prev.armed === armed ? prev : { direction, armed },
     );

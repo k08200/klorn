@@ -326,6 +326,7 @@ const ko: Record<string, string> = {
   // Auth — 토스트, 딥링크 배너, 로그인 화면 문구
   "auth.signInToContinue": "{destination}(으)로 이어가려면 로그인하세요.",
   "auth.googleSignInError": "Google 로그인을 완료하지 못했습니다. 다시 시도해 주세요.",
+  "auth.appleSignInError": "Apple 로그인을 완료하지 못했습니다. 다시 시도해 주세요.",
   "auth.desktopPairingCode": "브라우저에서 확인을 요청합니다. {code}가 표시될 때만 계속하세요.",
   "auth.googleDenied": "Google 연결이 취소되었어요 — 준비되면 다시 시도하면 됩니다.",
   "auth.googleUnverified":
@@ -3419,6 +3420,31 @@ const ko: Record<string, string> = {
   "providerFailure.dailyCap": "오늘의 AI 한도를 모두 사용했습니다. 내일 초기화됩니다.",
   "providerFailure.serviceUnavailable": "Klorn을 잠시 사용할 수 없습니다. 잠시 후 다시 시도하세요.",
   "providerFailure.internal": "Klorn 쪽에서 문제가 발생했습니다. 잠시 후 다시 시도하세요.",
+
+  // Capacitor shell push (lib/native/native-push-layer.tsx, local-notify.ts).
+  "nativePush.priming.title": "꼭 필요할 때만 울려요",
+  "nativePush.priming.body":
+    "PUSH 메일과 일정 조율 MEETING 메일만 알려 드려요. QUEUE·INFO·SILENT는 메일에서 조용히 기다려요.",
+  "nativePush.priming.point.push": "중요한 메일 한 통에 알림 하나, 왜 알렸는지와 함께",
+  "nativePush.priming.point.actions":
+    "길게 누르면 바로 처리 — 초안 보내기는 항상 잠금 해제를 먼저 물어요",
+  "nativePush.priming.point.settings": "무엇을 알릴지는 설정에서 언제든 바꿀 수 있어요",
+  "nativePush.priming.enable": "알림 켜기",
+  "nativePush.priming.later": "나중에",
+  "nativePush.priming.now": "지금",
+  "nativePush.priming.sampleTitle": "PUSH · 박서연",
+  "nativePush.priming.sampleBody": "계약서 오늘 18시 마감 — 답장 초안을 준비해 뒀어요.",
+  "nativePush.priming.quietSample": "오늘 메일 47통, 소리 없이 정리했어요",
+  "nativePush.denied": "알림이 꺼져 있어요. 기기 설정에서 켤 수 있어요.",
+  "nativePush.done": "처리 완료로 표시했어요.",
+  "nativePush.notUrgent": "QUEUE로 옮겼어요.",
+  "nativePush.action.later": "나중에",
+  "nativePush.action.notUrgent": "급하지 않음",
+  "nativePush.action.done": "처리 완료",
+  "nativePush.channel.push": "PUSH 메일",
+  "nativePush.channel.pushBody":
+    "지금 챙겨야 할 메일만 알려요. 알림에서 바로 나중에·급하지 않음·처리 완료를 고를 수 있어요.",
+  "nativePush.channel.other": "기타 알림",
 };
 
 export default ko;

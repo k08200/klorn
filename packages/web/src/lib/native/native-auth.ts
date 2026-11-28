@@ -1,4 +1,4 @@
-// Native Google sign-in for the Capacitor shell.
+// Native Google / Apple sign-in for the Capacitor shell.
 //
 // Google blocks OAuth inside embedded WebViews (RFC 8252 "disallowed_useragent"),
 // so we open the SYSTEM browser. Two flows deliver the resulting session:
@@ -19,15 +19,17 @@
 // The JWT lands in WebView JS (not native code) and is stored directly, never
 // passed through a URL query.
 
-import { API_BASE, setStoredAuthToken } from "../api";
+import { API_BASE, authTokenPersisted, setStoredAuthToken } from "../api";
 import { landingHome } from "../home";
 import { pairingCodeOf } from "../pairing-code";
+import { NATIVE_OAUTH_SCHEME, parseOAuthCallback } from "./deep-links";
 import { closeExternal, openExternal, shellKind } from "./shell";
 
 const POLL_INTERVAL_MS = 1500;
 const MAX_POLLS = 120; // 3 min, well within the server's 10-min nonce window
 const RELAY_TIMEOUT_MS = 3 * 60_000; // match the poll window
-const NATIVE_OAUTH_SCHEME = process.env.NEXT_PUBLIC_NATIVE_OAUTH_SCHEME;
+/** After the system browser closes, how long a late deep link may still arrive. */
+const BROWSER_CLOSE_GRACE_MS = 2500;
 
 // Re-entrancy guard: a double-tap must not start two flows (and, on the relay
 // path, register two appUrlOpen listeners racing for the same code).
@@ -47,7 +49,7 @@ export async function startNativeGoogleLogin(
     // The relay flow rides Capacitor's appUrlOpen deep-link listener, which the
     // Tauri wrapper does not have — there the poll flow is the working path.
     if (NATIVE_OAUTH_SCHEME && shellKind() === "capacitor") {
-      await startRelayLogin(NATIVE_OAUTH_SCHEME);
+      await startRelayLogin(NATIVE_OAUTH_SCHEME, "google");
     } else {
       await startPollLogin(onPairingCode);
     }
@@ -56,9 +58,33 @@ export async function startNativeGoogleLogin(
   }
 }
 
+/** True where Sign in with Apple can run: the Capacitor shell with its app scheme. */
+export function nativeAppleLoginAvailable(): boolean {
+  return Boolean(NATIVE_OAUTH_SCHEME) && shellKind() === "capacitor";
+}
+
+/**
+ * Sign in with Apple in the Capacitor shell: the same system-browser relay as
+ * Google — Apple's desktop leg (routes/social-auth.ts) takes the same
+ * `source=desktop&nonce=…&appScheme=…` — so no native Apple plugin is needed
+ * (parity with apps/mobile/src/auth/oauth.ts).
+ */
+export async function startNativeAppleLogin(): Promise<void> {
+  if (!NATIVE_OAUTH_SCHEME || shellKind() !== "capacitor") {
+    throw new Error("Apple sign-in needs the app's deep-link scheme");
+  }
+  if (loginInFlight) return;
+  loginInFlight = true;
+  try {
+    await startRelayLogin(NATIVE_OAUTH_SCHEME, "apple");
+  } finally {
+    loginInFlight = false;
+  }
+}
+
 // ─── RELAY (deep-link) ───────────────────────────────────────────────────────
 
-async function startRelayLogin(scheme: string): Promise<void> {
+async function startRelayLogin(scheme: string, provider: "google" | "apple"): Promise<void> {
   const { Browser } = await import("@capacitor/browser");
   const { App } = await import("@capacitor/app");
 
@@ -77,33 +103,46 @@ async function startRelayLogin(scheme: string): Promise<void> {
     resolveCode = resolve;
     rejectCode = reject;
   });
+  // Settled by the deep link, the timeout, or the person closing the browser;
+  // a rejection with nobody awaiting yet must not surface as unhandled.
+  codePromise.catch(() => {});
   const timer = setTimeout(
-    () => rejectCode(new Error("Timed out waiting for Google sign-in")),
+    () => rejectCode(new Error("Timed out waiting for sign-in")),
     RELAY_TIMEOUT_MS,
   );
+  let closeTimer: ReturnType<typeof setTimeout> | undefined;
   const handle = await App.addListener("appUrlOpen", (event) => {
-    try {
-      const code = new URL(event.url).searchParams.get("code");
-      if (code) resolveCode(code);
-    } catch {
-      // Not our deep link — ignore.
-    }
+    // Only `<scheme>://oauth-callback?code=…`; a link-complete deep link
+    // arriving meanwhile is not a sign-in code.
+    const code = parseOAuthCallback(event.url, scheme);
+    if (code) resolveCode(code);
+  });
+  // Closed before finishing: end the attempt (a late deep link gets a short grace).
+  const closed = await Browser.addListener("browserFinished", () => {
+    closeTimer = setTimeout(
+      () => rejectCode(new Error("Browser closed before sign-in finished")),
+      BROWSER_CLOSE_GRACE_MS,
+    );
   });
 
   const loginUrl =
-    `${API_BASE}/api/auth/google/login?source=desktop` +
+    `${API_BASE}/api/auth/${provider}/login?source=desktop` +
     `&nonce=${encodeURIComponent(nonce)}&appScheme=${encodeURIComponent(scheme)}`;
-  await Browser.open({ url: loginUrl });
 
   try {
+    await Browser.open({ url: loginUrl });
     const code = await codePromise;
     const token = await exchangeCode(code);
     setStoredAuthToken(token);
+    // The Keychain write must land before the reload reads it back.
+    await authTokenPersisted();
     // Hard navigation so AuthProvider re-bootstraps from the stored token.
     window.location.href = landingHome();
   } finally {
     clearTimeout(timer);
+    clearTimeout(closeTimer);
     await handle.remove().catch(() => {});
+    await closed.remove().catch(() => {});
     await Browser.close().catch((err) => {
       console.warn("[AUTH] Browser.close() failed (harmless):", err);
     });
@@ -138,6 +177,7 @@ async function startPollLogin(onPairingCode?: (code: string) => void): Promise<v
   try {
     const token = await pollForToken(nonce, verifier);
     setStoredAuthToken(token);
+    await authTokenPersisted();
     window.location.href = landingHome();
   } finally {
     await closeExternal().catch((err) => {
