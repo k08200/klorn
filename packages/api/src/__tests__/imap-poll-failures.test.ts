@@ -53,7 +53,7 @@ describe("pollFailureKind", () => {
   });
 
   it("any other response code on a refused login is still 'auth'", () => {
-    for (const serverResponseCode of ["ALERT", "UNAVAILABLE\nFORGED", "E".repeat(200)]) {
+    for (const serverResponseCode of ["ALERT", "UNAVAILABLE\nFORGED", "E".repeat(200), 503, null]) {
       const err = Object.assign(new Error("x"), { authenticationFailed: true, serverResponseCode });
       expect(pollFailureKind(err)).toBe("auth");
     }

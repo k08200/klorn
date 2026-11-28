@@ -418,9 +418,24 @@ describe("verifyImapCredentials: a login refused for the moment", () => {
     expect(await verifyImapCredentials(ICLOUD_ARGS)).toEqual(TRY_AGAIN);
   });
 
-  it("reads the code case-insensitively, as the credential test does", async () => {
+  it("reads the code case-insensitively, as the credential test does, and logs it upper-case", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     connectFn.mockRejectedValueOnce(refusedFor("inuse"));
     expect(await verifyImapCredentials(ICLOUD_ARGS)).toEqual(TRY_AGAIN);
+    expect(warn.mock.calls.map((call) => call.map(String).join(" ")).join("\n")).toContain(
+      "refusal=INUSE",
+    );
+    warn.mockRestore();
+  });
+
+  it("a refused LOGIN whose code is not a string is still the password hint", async () => {
+    connectFn.mockRejectedValueOnce(
+      Object.assign(new Error("Command failed"), {
+        authenticationFailed: true,
+        serverResponseCode: 503,
+      }),
+    );
+    expect(await verifyImapCredentials(ICLOUD_ARGS)).toMatchObject({ code: "IMAP_AUTH_FAILED" });
   });
 
   it("any other response code on a refused LOGIN is still the password hint", async () => {
