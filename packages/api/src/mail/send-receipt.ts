@@ -1,6 +1,7 @@
 /**
- * The deterministic floor for USER-INITIATED sends — POST /api/email/send and
- * POST /api/email/:id/reply — behind MANUAL_SEND_RECEIPTS_ENABLED (OFF).
+ * The deterministic floor for USER-INITIATED sends — POST /api/email/send,
+ * POST /api/email/:id/reply and a List-Unsubscribe mailto (unsubscribe-action.ts)
+ * — behind MANUAL_SEND_RECEIPTS_ENABLED (OFF).
  *
  * CLAUDE.md: "the 3 real-world actions (send / delete / forward) always produce
  * an ActionReceipt with a payload hash", and the OAuth limited-use disclosure
@@ -41,8 +42,12 @@ import { captureDbFailure } from "../report-db-failure.js";
 
 export interface SendReceiptInput {
   userId: string;
-  /** "smart-reply": the smart action's Send (routes/smart-actions.ts), receipt always on. */
-  route: "send" | "reply" | "smart-reply";
+  /**
+   * "smart-reply": the smart action's Send (routes/smart-actions.ts), receipt always on.
+   * "unsubscribe": a List-Unsubscribe mailto sent from the user's account
+   * (mail/unsubscribe-action.ts), under the same flag as "send" and "reply".
+   */
+  route: "send" | "reply" | "smart-reply" | "unsubscribe";
   to: string;
   subject: string;
   body: string;

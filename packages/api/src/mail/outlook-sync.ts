@@ -36,15 +36,21 @@ import { listOutlookAttachments } from "./outlook-attachments.js";
 const GRAPH_ORIGIN = "https://graph.microsoft.com/";
 const PAGE_SIZE = 50;
 const DEFAULT_MAX_PAGES = 4;
+// The single-message fetch has a user waiting on it (an undo).
+const SINGLE_MESSAGE_TIMEOUT_MS = 15_000;
 const SELECT_FIELDS =
   "id,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,isRead,flag,body,hasAttachments";
 
-export interface OutlookSyncArgs {
+/** One linked mailbox and its bearer: what any Graph read of it needs. */
+export interface OutlookMessageArgs {
   userId: string;
   /** The linked mailbox's own address (normalized) — provenance + self-sent detection. */
   email: string;
   accessToken: string; // plaintext bearer (decrypted by caller)
   linkedInboxAccountId: string;
+}
+
+export interface OutlookSyncArgs extends OutlookMessageArgs {
   /** Stored delta/next link from the previous tick, or null for a first sync. */
   cursor: string | null;
   maxPages?: number;
@@ -100,7 +106,7 @@ function formatAddress(addr: GraphEmailAddress | null | undefined): string {
  * attachments; a later delivery of the same message (any change to it) retries.
  */
 async function attachmentsOf(
-  args: OutlookSyncArgs,
+  args: OutlookMessageArgs,
   msg: GraphMessage & { id: string },
   stableId: string,
 ): Promise<RawEmailAttachment[]> {
@@ -137,6 +143,119 @@ function initialDeltaUrl(): string {
  */
 function isGraphLink(url: string): boolean {
   return url.startsWith(GRAPH_ORIGIN);
+}
+
+/** The persist input for one Graph message, as the delta poll and the single fetch both map it. */
+async function persistOutlookMessage(
+  args: OutlookMessageArgs,
+  msg: GraphMessage & { id: string },
+): Promise<{ emailId: string; isNew: boolean }> {
+  const from = formatAddress(msg.from);
+  const to = formatAddress(msg.toRecipients?.[0]);
+  const cc = (msg.ccRecipients ?? []).map(formatAddress).filter(Boolean).join(", ") || "";
+  const subject = msg.subject?.trim() || "(no subject)";
+  // Invalid Date would make Prisma reject the create and permanently drop
+  // the email (delta pages never replay) — same guard as gmail-fetch's
+  // parseReceivedAt.
+  const parsedReceived = msg.receivedDateTime ? new Date(msg.receivedDateTime) : null;
+  const receivedAt =
+    parsedReceived && !Number.isNaN(parsedReceived.getTime()) ? parsedReceived : new Date();
+  const isRead = msg.isRead === true;
+  const isStarred = msg.flag?.flagStatus === "flagged";
+  const labels: string[] = ["INBOX"];
+  if (!isRead) labels.push("UNREAD");
+  if (isStarred) labels.push("IMPORTANT");
+  const bodyText = msg.body?.content ?? "";
+
+  // Same namespacing rule as the IMAP providers (`naver-imap:`,
+  // `icloud-imap:`): provider prefix + mailbox address keeps the Graph
+  // immutable id from colliding with any other provider's ids — or the
+  // same message reaching two linked Outlook mailboxes — in the
+  // (userId, gmailId) dedup key.
+  const stableId = outlookStableId(args.email, msg.id);
+  const attachments = await attachmentsOf(args, msg, stableId);
+
+  return persistGmailEmail(
+    args.userId,
+    {
+      gmailId: stableId,
+      threadId: null,
+      from,
+      to,
+      cc,
+      subject,
+      snippet: (msg.bodyPreview ?? "").slice(0, 200),
+      body: bodyText.slice(0, 50_000),
+      htmlBody: "",
+      labels,
+      isRead,
+      isStarred,
+      receivedAt,
+      attachments,
+    },
+    {
+      linkedInboxAccountId: args.linkedInboxAccountId,
+      // Self-sent detection and commitment senderIsUser compare against
+      // THIS mailbox's address, not the primary Google account.
+      userEmail: args.email,
+    },
+  );
+}
+
+function reportPersistFailure(args: OutlookMessageArgs, graphId: string, err: unknown): void {
+  // console first: captureError is a no-op without a Sentry DSN.
+  // Not the stable id in the line: it embeds the mailbox address.
+  logDbFailure("[outlook-sync] persist failed", err, {
+    ids: { userId: args.userId, messageId: graphId },
+  });
+  // The Graph id only: the stable id embeds the mailbox address.
+  captureDbFailure("[outlook-sync] persist failed", err, {
+    tags: { scope: "outlook-sync.upsert" },
+    extra: { userId: args.userId, messageId: graphId },
+  });
+}
+
+/** The `EmailMessage.gmailId` of an Outlook message: `outlook:<mailbox>:<immutable id>`. */
+export function outlookStableId(mailbox: string, graphId: string): string {
+  return `outlook:${mailbox}:${graphId}`;
+}
+
+/**
+ * Fetch ONE message by its immutable id and persist it like the delta poll does —
+ * the undo of a trash or archive (docs/design/mail-cleanup-actions.md, PR1): the
+ * message is back in the inbox under the same id, and the next delta delivery of
+ * it finds the row already there. null when Graph does not return it (gone, moved
+ * to another mailbox, or the grant failed); never throws for those.
+ */
+export async function syncOutlookMessage(
+  args: OutlookMessageArgs,
+  graphId: string,
+): Promise<{ emailId: string } | null> {
+  // encodeURIComponent leaves "." alone, and a "." or ".." segment would be
+  // collapsed by the URL parser into another Graph path (`/me`).
+  if (!graphId || /^\.+$/.test(graphId)) return null;
+  const params = new URLSearchParams({ $select: SELECT_FIELDS });
+  const res = await fetch(
+    `${GRAPH_ORIGIN}v1.0/me/messages/${encodeURIComponent(graphId)}?${params.toString()}`,
+    {
+      headers: {
+        authorization: `Bearer ${args.accessToken}`,
+        Prefer: 'IdType="ImmutableId", outlook.body-content-type="text"',
+      },
+      // A user is waiting on the undo.
+      signal: AbortSignal.timeout(SINGLE_MESSAGE_TIMEOUT_MS),
+    },
+  );
+  if (!res.ok) {
+    console.warn(
+      `[outlook-sync] single message fetch failed for ${args.userId}: http ${res.status}`,
+    );
+    return null;
+  }
+  const msg = (await res.json()) as GraphMessage | null;
+  if (!msg?.id) return null;
+  const persisted = await persistOutlookMessage(args, { ...msg, id: msg.id });
+  return { emailId: persisted.emailId };
 }
 
 export async function syncOutlookInbox(args: OutlookSyncArgs): Promise<OutlookSyncResult> {
@@ -187,73 +306,15 @@ export async function syncOutlookInbox(args: OutlookSyncArgs): Promise<OutlookSy
       // mail (AttentionItem/DecisionLabel reference it), so skip them.
       if (!msg.id || msg["@removed"] !== undefined) continue;
       result.fetched += 1;
-
-      const from = formatAddress(msg.from);
-      const to = formatAddress(msg.toRecipients?.[0]);
-      const cc = (msg.ccRecipients ?? []).map(formatAddress).filter(Boolean).join(", ") || "";
-      const subject = msg.subject?.trim() || "(no subject)";
-      // Invalid Date would make Prisma reject the create and permanently drop
-      // the email (delta pages never replay) — same guard as gmail-fetch's
-      // parseReceivedAt.
-      const parsedReceived = msg.receivedDateTime ? new Date(msg.receivedDateTime) : null;
-      const receivedAt =
-        parsedReceived && !Number.isNaN(parsedReceived.getTime()) ? parsedReceived : new Date();
-      const isRead = msg.isRead === true;
-      const isStarred = msg.flag?.flagStatus === "flagged";
-      const labels: string[] = ["INBOX"];
-      if (!isRead) labels.push("UNREAD");
-      if (isStarred) labels.push("IMPORTANT");
-      const bodyText = msg.body?.content ?? "";
-
-      // Same namespacing rule as the IMAP providers (`naver-imap:`,
-      // `icloud-imap:`): provider prefix + mailbox address keeps the Graph
-      // immutable id from colliding with any other provider's ids — or the
-      // same message reaching two linked Outlook mailboxes — in the
-      // (userId, gmailId) dedup key.
-      const stableId = `outlook:${args.email}:${msg.id}`;
-      const attachments = await attachmentsOf(args, { ...msg, id: msg.id }, stableId);
-
       try {
-        const persisted = await persistGmailEmail(
-          args.userId,
-          {
-            gmailId: stableId,
-            threadId: null,
-            from,
-            to,
-            cc,
-            subject,
-            snippet: (msg.bodyPreview ?? "").slice(0, 200),
-            body: bodyText.slice(0, 50_000),
-            htmlBody: "",
-            labels,
-            isRead,
-            isStarred,
-            receivedAt,
-            attachments,
-          },
-          {
-            linkedInboxAccountId: args.linkedInboxAccountId,
-            // Self-sent detection and commitment senderIsUser compare against
-            // THIS mailbox's address, not the primary Google account.
-            userEmail: args.email,
-          },
-        );
+        const persisted = await persistOutlookMessage(args, { ...msg, id: msg.id });
         if (persisted.isNew) {
           result.inserted += 1;
           result.classified += 1;
         }
       } catch (err) {
         result.errors += 1;
-        // console first: captureError is a no-op without a Sentry DSN.
-        // Not stableId in the line: it embeds the mailbox address.
-        logDbFailure("[outlook-sync] persist failed", err, {
-          ids: { userId: args.userId, messageId: msg.id },
-        });
-        captureDbFailure("[outlook-sync] persist failed", err, {
-          tags: { scope: "outlook-sync.upsert" },
-          extra: { userId: args.userId, stableId },
-        });
+        reportPersistFailure(args, msg.id, err);
       }
     }
 

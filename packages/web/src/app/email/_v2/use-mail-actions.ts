@@ -20,13 +20,20 @@ import { apiFetch } from "../../../lib/api";
 import { useT } from "../../../lib/i18n";
 import { captureClientError } from "../../../lib/sentry";
 import { serverErrorMessage } from "../../../lib/server-error";
+import { splitBulkOutcome, undoRequest } from "../mail-undo";
 import { UNDO_NOTICE_SECONDS, useLaneMove } from "../use-lane-move";
 import { postReminder } from "./post-reminder";
 import { REMINDER_LABEL_KEYS, type ReminderKey } from "./reminders";
 import type { MailList } from "./use-mail-list";
 
 export interface ArchivedNotice {
-  emails: ReadonlyArray<{ id: string; gmailId: string; subject: string }>;
+  emails: ReadonlyArray<{
+    id: string;
+    gmailId: string;
+    /** The mail's own account, which its undo restores in (null = primary). */
+    linkedInboxAccountId: string | null;
+    subject: string;
+  }>;
 }
 
 type Busy = "sync" | "row" | "undo" | "reanalyze" | "remind";
@@ -63,16 +70,32 @@ export function useMailActions(list: MailList) {
     return () => clearTimeout(timer);
   }, [archived]);
 
-  const bulk = async (ids: string[], action: "archive" | "mark-read" | "mark-unread") => {
-    const data = await apiFetch<EmailBulkActionResponse>("/api/email/bulk", {
+  const postBulk = (ids: string[], action: "archive" | "mark-read" | "mark-unread") =>
+    apiFetch<EmailBulkActionResponse>("/api/email/bulk", {
       method: "POST",
       body: JSON.stringify({ ids, action }),
     });
+
+  const bulk = async (ids: string[], action: "mark-read" | "mark-unread") => {
+    const data = await postBulk(ids, action);
     const failure = data.failed?.[0];
     if (failure) throw new Error(`API 200: ${JSON.stringify({ error: failure.error })}`);
   };
 
-  /** The rows leave at once; a refusal puts them back and says why. */
+  const noticeOf = (emails: readonly EmailListItem[]): ArchivedNotice => ({
+    emails: emails.map((email) => ({
+      id: email.id,
+      gmailId: email.gmailId,
+      linkedInboxAccountId: email.linkedInboxAccountId,
+      subject: email.subject || t("mailV2.noSubject"),
+    })),
+  });
+
+  /**
+   * The rows leave at once. A refusal of all of them puts them back and says why;
+   * a partial one puts back only the rows that failed and keeps the undo of the
+   * ones that left.
+   */
   const archive = async (emails: readonly EmailListItem[]) => {
     if (busy || emails.length === 0) return;
     const ids = new Set(emails.map((email) => email.id));
@@ -80,15 +103,25 @@ export function useMailActions(list: MailList) {
     setError(null);
     laneMove.dismiss();
     const snapshot = patchRows((rows) => rows.filter((row) => !ids.has(row.id)));
-    setArchived({
-      emails: emails.map((email) => ({
-        id: email.id,
-        gmailId: email.gmailId,
-        subject: email.subject || t("mailV2.noSubject"),
-      })),
-    });
+    setArchived(noticeOf(emails));
     try {
-      await bulk([...ids], "archive");
+      const data = await postBulk([...ids], "archive");
+      const outcome = splitBulkOutcome(emails, data.failed ?? []);
+      if (outcome.failed.length === 0) return;
+      captureClientError(new Error("bulk archive partly refused"), {
+        scope: "email.v2.archive.partial",
+        failed: outcome.failed.length,
+        count: ids.size,
+      });
+      if (outcome.succeeded.length === 0) {
+        const first = data.failed[0];
+        throw new Error(`API 200: ${JSON.stringify({ error: first?.error })}`);
+      }
+      const left = new Set(outcome.succeeded.map((email) => email.id));
+      restoreRows(snapshot);
+      patchRows((rows) => rows.filter((row) => !left.has(row.id)));
+      setArchived(noticeOf(outcome.succeeded));
+      setError(t("mailV2.archive.partialFailed", { count: String(outcome.failed.length) }));
     } catch (err) {
       captureClientError(err, { scope: "email.v2.archive", count: ids.size });
       restoreRows(snapshot);
@@ -105,12 +138,13 @@ export function useMailActions(list: MailList) {
     setBusy("undo");
     setError(null);
     const results = await Promise.allSettled(
-      archived.emails.map((email) =>
-        apiFetch<EmailUndoActionResponse>(
-          `/api/email/${encodeURIComponent(email.gmailId)}/archive/undo`,
-          { method: "POST", body: JSON.stringify({ gmailId: email.gmailId }) },
-        ),
-      ),
+      archived.emails.map((email) => {
+        const request = undoRequest({ action: "archive", ...email });
+        return apiFetch<EmailUndoActionResponse>(request.path, {
+          method: "POST",
+          body: JSON.stringify(request.body),
+        });
+      }),
     );
     const failures = results.filter((result) => result.status === "rejected");
     if (failures.length > 0) {

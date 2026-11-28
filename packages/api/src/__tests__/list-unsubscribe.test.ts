@@ -203,3 +203,51 @@ describe("isPlausibleMailtoAddress (linear: the target is sender-controlled)", (
     expectLinear((n) => repeatTo(n, ".", "mailto:a@", "@"), parseMailtoTarget);
   });
 });
+
+describe("one-click hardening (docs/design/mail-cleanup-actions.md, PR1)", () => {
+  it("names the client in a User-Agent: some list endpoints refuse a POST without one", async () => {
+    const post = vi.fn(async () => ({ statusCode: 200 }));
+    await executeOneClickUnsubscribe("https://acme.com/unsub", post);
+    const headers = post.mock.calls[0]?.[2] as Record<string, string>;
+    expect(headers["user-agent"]).toMatch(/^Klorn\//);
+  });
+
+  it("refuses any port but 443 without issuing a request", async () => {
+    const post = vi.fn(async () => ({ statusCode: 200 }));
+    for (const url of [
+      "https://acme.com:8443/u",
+      "https://acme.com:25/u",
+      "https://acme.com:80/u",
+    ]) {
+      expect(await executeOneClickUnsubscribe(url, post)).toEqual({
+        ok: false,
+        reason: "unsafe-endpoint",
+      });
+    }
+    expect(await executeOneClickUnsubscribe("https://acme.com:443/u", post)).toEqual({ ok: true });
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it("every reason it returns is a known code (the logs never print anything else)", async () => {
+    const { isKnownOneClickFailure } = await import("../mail/list-unsubscribe.js");
+    const reasons = [
+      await executeOneClickUnsubscribe("http://acme.com/u", vi.fn()),
+      await executeOneClickUnsubscribe(
+        "https://acme.com/u",
+        vi.fn(async () => ({ statusCode: 503 })),
+      ),
+      await executeOneClickUnsubscribe(
+        "https://acme.com/u",
+        vi.fn(async () => {
+          throw new Error("connect ECONNREFUSED https://acme.com/u?token=secret");
+        }),
+      ),
+    ].map((out) => (out.ok ? "ok" : out.reason));
+    expect(reasons).toEqual(["unsafe-endpoint", "http-503", "request-error"]);
+    for (const reason of reasons) expect(isKnownOneClickFailure(reason)).toBe(true);
+    expect(isKnownOneClickFailure("request-failed")).toBe(false);
+    expect(isKnownOneClickFailure("connect ECONNREFUSED https://acme.com/u?token=secret")).toBe(
+      false,
+    );
+  });
+});

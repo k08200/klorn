@@ -1417,6 +1417,10 @@ export async function emailRoutes(app: FastifyInstance) {
         id: dbEmail.id,
         gmailId: dbEmail.gmailId,
         threadId: dbEmail.threadId,
+        // The account the mail lives in (null = primary). Additive: the reader
+        // hands it to the undo of a trash or archive, which runs after this row
+        // is gone (docs/design/mail-cleanup-actions.md, PR1).
+        linkedInboxAccountId: dbEmail.linkedInboxAccountId,
         from: dbEmail.from,
         senderEmail: addr || null,
         trust: trustToWire(trust),

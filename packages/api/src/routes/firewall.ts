@@ -53,6 +53,7 @@ import {
   overrideAttentionTier,
   undoAttentionOverride,
 } from "../judge/attention-override.js";
+import { resolveAttentionForEmails } from "../judge/attention-resolve.js";
 import { snoozeAttentionItem } from "../judge/attention-snooze.js";
 import { getDecisionMetrics } from "../judge/decision-metrics.js";
 import {
@@ -734,6 +735,26 @@ export async function firewallRoutes(app: FastifyInstance) {
       ]);
       const emailByGmailId = new Map(emailRowsByGmailId.map((e) => [e.gmailId, e]));
       const emailById = new Map(emailRowsById.map((e) => [e.id, e]));
+      // An EMAIL item whose mail row is gone (trashed, archived, purged) has no
+      // mail behind it to act on, so it is not listed — otherwise deleted mail
+      // kept showing on PUSH (docs/design/mail-cleanup-actions.md, PR1). The
+      // userId-scoped read above also makes another user's id one of these.
+      const listedItems = items.filter(
+        (row) => row.source !== "EMAIL" || emailById.has(row.sourceId),
+      );
+      // ...and closed, so every other count of open items (Today, the bell)
+      // converges too: the mail is gone, so the item is the system's RESOLVED.
+      // Fire-and-forget like the stale-hash heal below; never fails the read.
+      const orphanIds = items
+        .filter((row) => row.source === "EMAIL" && !emailById.has(row.sourceId))
+        .map((row) => row.sourceId);
+      if (orphanIds.length > 0) {
+        void resolveAttentionForEmails(userId, orphanIds).catch((err) => {
+          captureDbFailure("[FIREWALL] orphaned attention resolve failed", err, {
+            tags: { scope: "firewall.orphanResolve" },
+          });
+        });
+      }
 
       // The source badge and the attachment glyph: two lookups for the whole
       // page, run together, each bounded by this page's ids and by userId (a
@@ -877,8 +898,8 @@ export async function firewallRoutes(app: FastifyInstance) {
       };
       const scopedItems =
         !inbox || inbox === "all"
-          ? items
-          : items.filter((row) => {
+          ? listedItems
+          : listedItems.filter((row) => {
               const linkedId = linkedInboxIdOf(row);
               // == null covers both "primary mail" (null) and "no email" (undefined).
               return inbox === "primary" ? linkedId == null : linkedId === inbox;

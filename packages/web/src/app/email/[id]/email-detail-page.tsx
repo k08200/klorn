@@ -1,5 +1,6 @@
 "use client";
 
+import type { EmailUnsubscribeResponse } from "@klorn/contract";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -19,6 +20,7 @@ import { useAuth } from "../../../lib/auth";
 import { isEntitlementRefusal } from "../../../lib/entitlement";
 import { useT } from "../../../lib/i18n";
 import { linkifyText } from "../../../lib/linkify";
+import { openExternal } from "../../../lib/native/shell";
 import { queryKeys } from "../../../lib/query-keys";
 import { captureClientError } from "../../../lib/sentry";
 import { serverErrorMessage } from "../../../lib/server-error";
@@ -26,6 +28,7 @@ import { useKeyboardTriage } from "../../../lib/use-hotkeys";
 import { useRouteParam } from "../../../lib/use-route-param";
 import { postReminder } from "../_v2/post-reminder";
 import { REMINDER_LABEL_KEYS } from "../_v2/reminders";
+import { readUndoAccount, UNDO_ACCOUNT_PARAM, undoRequest, writeUndoAccount } from "../mail-undo";
 import { useLaneMove } from "../use-lane-move";
 import { readerLeaveHref } from "./_v2/reader-model";
 import { ReaderV2 } from "./_v2/reader-v2";
@@ -104,6 +107,7 @@ function parseUndoNotice(searchParams: ReturnType<typeof useSearchParams>): Undo
   return {
     action,
     gmailId,
+    linkedInboxAccountId: readUndoAccount(searchParams),
     subject: searchParams?.get("undoSubject") || null,
   };
 }
@@ -116,6 +120,7 @@ function appendUndoParams(
   if (!email?.gmailId) return;
   params.set("undoAction", action);
   params.set("undoGmailId", email.gmailId);
+  writeUndoAccount(params, email.linkedInboxAccountId);
   if (email.subject) params.set("undoSubject", email.subject);
 }
 
@@ -609,6 +614,7 @@ function EmailDetailView() {
     const params = new URLSearchParams(searchParams?.toString() || "");
     params.delete("undoAction");
     params.delete("undoGmailId");
+    params.delete(UNDO_ACCOUNT_PARAM);
     params.delete("undoSubject");
     const query = params.toString();
     router.replace(`/email/${id}${query ? `?${query}` : ""}`);
@@ -619,13 +625,11 @@ function EmailDetailView() {
     setActionBusy("undo");
     setError(null);
     try {
-      const data = await apiFetch<UndoActionResponse>(
-        `/api/email/${encodeURIComponent(undoNotice.gmailId)}/${undoNotice.action}/undo`,
-        {
-          method: "POST",
-          body: JSON.stringify({ gmailId: undoNotice.gmailId }),
-        },
-      );
+      const request = undoRequest(undoNotice);
+      const data = await apiFetch<UndoActionResponse>(request.path, {
+        method: "POST",
+        body: JSON.stringify(request.body),
+      });
       toast(t("emailDetail.toast.restored"), "success");
       const params = new URLSearchParams({ markRead: "false", queue });
       router.replace(`/email/${data.emailId}?${params.toString()}`);
@@ -681,22 +685,40 @@ function EmailDetailView() {
     doneFeedback.sendAfterDone({ id: archived.id, needsReply: archived.needsReply === true });
   };
 
+  // Nothing automatic was possible: hand the list's own page to the user in the
+  // system browser (openExternal: a plain window.open is a silent no-op inside
+  // the desktop and mobile shells). The toast says what happened, including
+  // that the automatic attempt failed, and never claims an unsubscribe.
+  const openUnsubscribeLink = async (url: string, automaticFailed: boolean) => {
+    try {
+      await openExternal(url);
+    } catch (err) {
+      captureClientError(err, { scope: "email.detail.unsubscribe.open", id });
+      setError(t("emailDetail.error.unsubscribeOpen"));
+      return;
+    }
+    toast(
+      t(
+        automaticFailed
+          ? "emailDetail.toast.unsubscribeLinkFallback"
+          : "emailDetail.toast.unsubscribeLink",
+      ),
+      "success",
+    );
+  };
+
   const unsubscribeNow = async () => {
     if (!id || actionBusy) return;
     setActionBusy("unsubscribe");
     setError(null);
     try {
-      const res = await apiFetch<{ method: string; done: boolean; url?: string }>(
-        `/api/email/${id}/unsubscribe`,
-        { method: "POST" },
-      );
+      const res = await apiFetch<EmailUnsubscribeResponse>(`/api/email/${id}/unsubscribe`, {
+        method: "POST",
+      });
       if (res.done) {
         toast(t("emailDetail.toast.unsubscribed"), "success");
-      } else if (res.url) {
-        // Nothing automatic was possible — hand the list's own page to the
-        // user in a fresh tab. noopener: the target is sender-controlled.
-        window.open(res.url, "_blank", "noopener,noreferrer");
-        toast(t("emailDetail.toast.unsubscribeLink"), "success");
+      } else {
+        await openUnsubscribeLink(res.url, (res.skipped?.length ?? 0) > 0);
       }
     } catch (err) {
       captureClientError(err, { scope: "email.detail.unsubscribe", id });

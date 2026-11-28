@@ -137,7 +137,7 @@ describe("DELETE /api/email/:id (trash)", () => {
     expect(h.emailDeleteMany).not.toHaveBeenCalled();
   });
 
-  it("answers 200 without touching the row itself when the IMAP provider confirmed (it removed the row)", async () => {
+  it("answers 200 when the IMAP provider confirmed; the route's own row delete is owner-scoped and idempotent", async () => {
     h.emailFindFirst.mockResolvedValue(NAVER_EMAIL);
     h.mailActionsFor.mockResolvedValue(surface("NAVER"));
 
@@ -149,7 +149,12 @@ describe("DELETE /api/email/:id (trash)", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ success: true });
-    expect(h.emailDeleteMany).not.toHaveBeenCalled();
+    // The provider removed the row already; the route removes it for every
+    // provider (Outlook's move does not), which is a no-op here.
+    expect(h.emailDeleteMany).toHaveBeenCalledTimes(1);
+    expect(h.emailDeleteMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", id: NAVER_EMAIL.id },
+    });
   });
 
   it("still answers 501 for an unsupported provider, with no local write", async () => {
@@ -501,16 +506,7 @@ describe("POST /api/email/:id/{delete,archive}/undo", () => {
     expect(h.syncEmailByGmailId).toHaveBeenCalledWith("user-1", "18c2f0a1", null);
   });
 
-  it("does not look at the record at all while the flag is off (the old 501)", async () => {
-    h.mailActionsFor.mockResolvedValue(
-      surface("GOOGLE", {
-        untrash: {
-          unsupported: true,
-          error: "This mailbox's provider does not support restore from Klorn yet.",
-        },
-      }),
-    );
-
+  it("does not look at the record while the flag is off, and never hands the IMAP id to the primary Gmail", async () => {
     const res = await (await buildApp()).inject({
       method: "POST",
       url: "/api/email/x/delete/undo",
@@ -518,9 +514,11 @@ describe("POST /api/email/:id/{delete,archive}/undo", () => {
       payload: undoBody,
     });
 
-    expect(res.statusCode).toBe(501);
+    // docs/design/mail-cleanup-actions.md (PR1): a provider-prefixed id whose
+    // account cannot be found is refused instead of restored against the primary.
+    expect(res.statusCode).toBe(409);
     expect(h.findMovedAccountId).not.toHaveBeenCalled();
-    expect(h.mailActionsFor).toHaveBeenCalledWith("user-1", null);
+    expect(h.mailActionsFor).not.toHaveBeenCalled();
   });
 
   it("answers 409 for { error } and never re-syncs", async () => {

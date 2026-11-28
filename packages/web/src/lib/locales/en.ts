@@ -1496,6 +1496,9 @@ const en: Record<string, string> = {
   "emailDetail.toast.unsubscribed": "Unsubscribed.",
   "emailDetail.toast.unsubscribeLink": "Opened the sender's unsubscribe page.",
   "emailDetail.error.unsubscribe": "Could not unsubscribe from this sender.",
+  "emailDetail.error.unsubscribeOpen": "Could not open the sender's unsubscribe page.",
+  "emailDetail.toast.unsubscribeLinkFallback":
+    "Automatic unsubscribe didn't work, so the sender's unsubscribe page was opened.",
   "emailDetail.toolbar.action.next": "Next",
   "emailDetail.toolbar.remindMe": "Remind me",
   "emailDetail.toolbar.settingReminder": "Setting...",
@@ -1760,6 +1763,7 @@ const en: Record<string, string> = {
   "mailV2.undo": "Undo",
   "mailV2.undo.restored": "Restored.",
   "mailV2.undo.failed": "Couldn't restore that mail. Check the account connection and try again.",
+  "mailV2.archive.partialFailed": "{count} couldn't be archived. They are back in the list.",
   "mailV2.read.failed": "Couldn't update that mail. Nothing was changed.",
   "mailV2.sync.new": "Synced. {count} new.",
   "mailV2.sync.nothingNew": "Synced. Nothing new.",
