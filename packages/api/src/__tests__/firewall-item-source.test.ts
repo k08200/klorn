@@ -74,6 +74,8 @@ interface EmailWhere {
   gmailId?: { in: string[] };
 }
 
+const attentionUpdateMany = vi.fn(async (_args: unknown) => ({ count: 1 }));
+
 const emailFindMany = vi.fn(async ({ where }: { where: EmailWhere }) =>
   state.emails.filter(
     (e) =>
@@ -107,7 +109,10 @@ const attachmentGroupBy = vi.fn(async ({ where }: { where: AttachmentWhere }) =>
 
 vi.mock("../db.js", () => ({
   prisma: {
-    attentionItem: { findMany: vi.fn(async () => state.attention) },
+    attentionItem: {
+      findMany: vi.fn(async () => state.attention),
+      updateMany: attentionUpdateMany,
+    },
     pendingAction: { findMany: vi.fn(async () => state.pendingActions) },
     emailMessage: { findMany: emailFindMany },
     linkedInboxAccount: { findMany: accountFindMany },
@@ -174,6 +179,7 @@ beforeEach(() => {
   state.accounts = [];
   state.ownerEmail = "me@company.example";
   emailFindMany.mockClear();
+  attentionUpdateMany.mockClear();
   accountFindMany.mockClear();
   attachmentGroupBy.mockClear();
 });
@@ -393,6 +399,26 @@ describe("GET /api/inbox/firewall — account, read state and attachment on the 
       .map((item) => item.id);
     expect(ids).toEqual(["a1"]);
     expect(body.summary.total).toBe(1);
+    // ...and the orphan is closed, so every other count of open items converges.
+    await vi.waitFor(() =>
+      expect(attentionUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: "user-1",
+            source: "EMAIL",
+            sourceId: { in: ["gone"] },
+          }),
+          data: expect.objectContaining({ status: "RESOLVED" }),
+        }),
+      ),
+    );
+  });
+
+  it("closes nothing when every EMAIL item still has its mail", async () => {
+    state.attention = [attention("a1", "EMAIL", "m1")];
+    state.emails = [email("m1", null)];
+    await fetchItems();
+    expect(attentionUpdateMany).not.toHaveBeenCalled();
   });
 
   it("carries the mail's provider thread id on both preview kinds (NT0)", async () => {

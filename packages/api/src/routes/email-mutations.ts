@@ -651,9 +651,6 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         noteEmailOutcome(uid, email.id, "ARCHIVED");
         return { success: true, warning: "Gmail not connected, removed locally only" };
       }
-      // The trash reached the mailbox. Gmail and IMAP dropped the row already;
-      // Outlook did not (left-inbox.ts).
-      await removeLeftInboxRow(uid, email.id);
     } catch (err) {
       logDbFailure("[EMAIL] Gmail trash failed", err, {
         level: "error",
@@ -662,8 +659,11 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       return reply.code(502).send(providerActionFailure("Delete", err));
     }
 
-    // The ledger keys on the id string, not the row, so it still takes the
-    // stamp. Trash counts as ARCHIVED: either way the mail left the inbox.
+    // The trash reached the mailbox. Gmail and IMAP dropped the row already;
+    // Outlook did not (left-inbox.ts). The ledger keys on the id string, not the
+    // row, so it still takes the stamp. Trash counts as ARCHIVED: either way the
+    // mail left the inbox.
+    await removeLeftInboxRow(uid, email.id);
     await closeLeftInboxAttention(uid, email.id);
     noteEmailOutcome(uid, email.id, "ARCHIVED");
     return { success: true };
@@ -730,8 +730,6 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
         noteEmailOutcome(uid, email.id, "ARCHIVED");
         return { success: true, warning: "Gmail not connected, removed locally only" };
       }
-      // Same as DELETE above: the row leaves whatever the provider.
-      await removeLeftInboxRow(uid, email.id);
     } catch (err) {
       logDbFailure("[EMAIL] Gmail archive failed", err, {
         level: "error",
@@ -740,6 +738,8 @@ export async function registerEmailMutationsRoutes(app: FastifyInstance) {
       return reply.code(502).send(providerActionFailure("Archive", err));
     }
 
+    // Same as DELETE above: the row leaves whatever the provider.
+    await removeLeftInboxRow(uid, email.id);
     await closeLeftInboxAttention(uid, email.id);
     // Retention analytics: archiving is the core "I handled this card" signal.
     void recordEvent(uid, "queue_action", { action: "archive" });

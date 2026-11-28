@@ -53,6 +53,7 @@ import {
   overrideAttentionTier,
   undoAttentionOverride,
 } from "../judge/attention-override.js";
+import { resolveAttentionForEmails } from "../judge/attention-resolve.js";
 import { snoozeAttentionItem } from "../judge/attention-snooze.js";
 import { getDecisionMetrics } from "../judge/decision-metrics.js";
 import {
@@ -741,6 +742,19 @@ export async function firewallRoutes(app: FastifyInstance) {
       const listedItems = items.filter(
         (row) => row.source !== "EMAIL" || emailById.has(row.sourceId),
       );
+      // ...and closed, so every other count of open items (Today, the bell)
+      // converges too: the mail is gone, so the item is the system's RESOLVED.
+      // Fire-and-forget like the stale-hash heal below; never fails the read.
+      const orphanIds = items
+        .filter((row) => row.source === "EMAIL" && !emailById.has(row.sourceId))
+        .map((row) => row.sourceId);
+      if (orphanIds.length > 0) {
+        void resolveAttentionForEmails(userId, orphanIds).catch((err) => {
+          captureDbFailure("[FIREWALL] orphaned attention resolve failed", err, {
+            tags: { scope: "firewall.orphanResolve" },
+          });
+        });
+      }
 
       // The source badge and the attachment glyph: two lookups for the whole
       // page, run together, each bounded by this page's ids and by userId (a

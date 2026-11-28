@@ -193,6 +193,24 @@ describe("single trash / archive leave no local row and no open attention item",
     await app.close();
   });
 
+  it("answers success when the mailbox moved but the local row delete failed", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    db.emailFindFirst.mockResolvedValue(OUTLOOK_EMAIL);
+    db.emailDeleteMany.mockRejectedValueOnce(new Error("pooler dropped"));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e-ol/archive",
+      headers: auth(),
+    });
+
+    // The mail is in Archive at Outlook: "Archive failed" would be false.
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true });
+    resolvedAttention("e-ol");
+    await app.close();
+  });
+
   it("removes nothing and closes nothing when the provider refuses", async () => {
     db.emailFindFirst.mockResolvedValue(OUTLOOK_EMAIL);
     fetchMock.mockResolvedValue({ ok: false, status: 429, json: async () => ({}) });

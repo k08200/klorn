@@ -98,12 +98,14 @@ async function openUnsubscribeReceipt(
 async function tryMailto(userId: string, email: UnsubscribableEmail, mailto: string) {
   const target = parseMailtoTarget(mailto);
   if (!target) return "invalid-target" satisfies MailtoSkipCode;
+  // Resolved before the receipt: a lookup failure then leaves no PENDING receipt
+  // ("may have gone out") for a send that never started.
+  const actions = await mailActionsFor(userId, email.linkedInboxAccountId);
   const receipt = await openUnsubscribeReceipt(userId, email, target);
   if (receipt === "unavailable") return "receipt-unavailable" satisfies MailtoSkipCode;
 
   // The exact bytes handed to the provider, verified against the receipt.
   if (receipt) await verifySendOrRefuse(receipt, userId, target);
-  const actions = await mailActionsFor(userId, email.linkedInboxAccountId);
   let result: SendMailResult;
   try {
     result = await actions.sendEmail(userId, target.to, target.subject, target.body, [], {

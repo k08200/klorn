@@ -330,6 +330,25 @@ describe("unsubscribe reports and records what it did (docs/design/mail-cleanup-
     await app.close();
   });
 
+  it("opens no receipt when the account's provider cannot even be resolved", async () => {
+    process.env.MANUAL_SEND_RECEIPTS_ENABLED = "true";
+    const { mailActionsFor } = await import("../mail/providers/dispatch.js");
+    vi.mocked(mailActionsFor).mockRejectedValueOnce(new Error("pooler dropped"));
+    emailFindFirst.mockResolvedValue(unsubEmail({ listUnsubscribeMailto: MAILTO }));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/email/e1/unsubscribe",
+      headers: auth(),
+    });
+
+    expect(res.statusCode).toBe(500);
+    // Nothing left, so no receipt may stand as PENDING ("may have gone out").
+    expect(receiptCreate).not.toHaveBeenCalled();
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("writes no receipt while MANUAL_SEND_RECEIPTS_ENABLED is off (as for manual sends)", async () => {
     emailFindFirst.mockResolvedValue(unsubEmail({ listUnsubscribeMailto: MAILTO }));
     const app = await buildApp();

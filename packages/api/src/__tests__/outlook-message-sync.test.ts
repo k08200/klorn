@@ -87,6 +87,14 @@ describe("syncOutlookMessageForUser", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ".",
+    "..",
+  ])("never fetches a dot-segment id (%s), which would re-point the URL", async (id) => {
+    expect(await syncOutlookMessageForUser("u1", "acc-ol", `outlook:${MAILBOX}:${id}`)).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("answers null when Graph does not return the message", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     fetchMock.mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });

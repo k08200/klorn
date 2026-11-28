@@ -230,6 +230,9 @@ export async function syncOutlookMessage(
   args: OutlookMessageArgs,
   graphId: string,
 ): Promise<{ emailId: string } | null> {
+  // encodeURIComponent leaves "." alone, and a "." or ".." segment would be
+  // collapsed by the URL parser into another Graph path (`/me`).
+  if (!graphId || /^\.+$/.test(graphId)) return null;
   const params = new URLSearchParams({ $select: SELECT_FIELDS });
   const res = await fetch(
     `${GRAPH_ORIGIN}v1.0/me/messages/${encodeURIComponent(graphId)}?${params.toString()}`,

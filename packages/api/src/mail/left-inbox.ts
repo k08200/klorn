@@ -15,9 +15,24 @@ import { prisma } from "../db.js";
 import { resolveAttentionForEmails } from "../judge/attention-resolve.js";
 import { captureDbFailure, logDbFailure } from "../report-db-failure.js";
 
-/** Remove the row of a mail that left the inbox. Throws on a database failure. */
+/**
+ * Remove the row of a mail that left the inbox. Fail-soft like the attention
+ * close below: by now the provider moved the mail, so answering "failed" would be
+ * false. A row left behind is reported, and a retry of the action is idempotent.
+ */
 export async function removeLeftInboxRow(userId: string, emailId: string): Promise<void> {
-  await prisma.emailMessage.deleteMany({ where: { userId, id: emailId } });
+  try {
+    await prisma.emailMessage.deleteMany({ where: { userId, id: emailId } });
+  } catch (err) {
+    logDbFailure("[EMAIL] row delete after a single action failed", err, {
+      level: "error",
+      ids: { userId, emailId },
+    });
+    captureDbFailure("[EMAIL] row delete after a single action failed", err, {
+      tags: { scope: "email.single-action.row-delete" },
+      extra: { userId },
+    });
+  }
 }
 
 /**
