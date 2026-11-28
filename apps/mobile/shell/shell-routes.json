@@ -1,0 +1,50 @@
+{
+  "redirects": [
+    {
+      "from": "/dashboard",
+      "to": "/inbox"
+    },
+    {
+      "from": "/tasks",
+      "to": "/inbox"
+    },
+    {
+      "from": "/notes",
+      "to": "/files"
+    },
+    {
+      "from": "/contacts",
+      "to": "/email/candidates"
+    },
+    {
+      "from": "/reminders",
+      "to": "/inbox"
+    },
+    {
+      "from": "/skills",
+      "to": "/settings/memory"
+    },
+    {
+      "from": "/notifications",
+      "to": "/briefing"
+    },
+    {
+      "from": "/workspace",
+      "to": "/files"
+    }
+  ],
+  "shells": [
+    {
+      "prefix": "/email/candidates/",
+      "target": "/email/candidates/_"
+    },
+    {
+      "prefix": "/calendar/",
+      "target": "/calendar/_"
+    },
+    {
+      "prefix": "/email/",
+      "target": "/email/_"
+    }
+  ]
+}

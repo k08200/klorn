@@ -1,0 +1,69 @@
+{
+  "comment": "Shared vectors for the shell route resolver. resolve-route.mjs (node --test), ShellRouteResolver.java (JUnit) and ShellRouteResolver.swift (shell/swift-check) must all give `expect` for `path` when the bundle holds exactly `files`.",
+  "rules": {
+    "redirects": [{ "from": "/dashboard", "to": "/inbox" }],
+    "shells": [
+      { "prefix": "/email/candidates/", "target": "/email/candidates/_" },
+      { "prefix": "/calendar/", "target": "/calendar/_" },
+      { "prefix": "/email/", "target": "/email/_" }
+    ]
+  },
+  "files": [
+    "/index.html",
+    "/index.txt",
+    "/404.html",
+    "/inbox.html",
+    "/inbox.txt",
+    "/settings.html",
+    "/settings.txt",
+    "/settings/memory.html",
+    "/email.html",
+    "/email/_.html",
+    "/email/_.txt",
+    "/email/candidates.html",
+    "/email/candidates.txt",
+    "/email/candidates/_.html",
+    "/email/candidates/_.txt",
+    "/calendar/_.html",
+    "/calendar/_.txt",
+    "/docs/index.html",
+    "/_next/static/chunks/app.js"
+  ],
+  "cases": [
+    { "path": "", "expect": "/index.html" },
+    { "path": "/", "expect": "/index.html" },
+    { "path": "/index.txt", "expect": "/index.txt" },
+    { "path": "/settings", "expect": "/settings.html" },
+    { "path": "/settings/", "expect": "/settings.html" },
+    { "path": "/settings.txt", "expect": "/settings.txt" },
+    { "path": "/settings/memory", "expect": "/settings/memory.html" },
+    { "path": "/docs", "expect": "/docs/index.html" },
+    { "path": "/email", "expect": "/email.html" },
+    { "path": "/email/abc123", "expect": "/email/_.html" },
+    { "path": "/email/abc123/", "expect": "/email/_.html" },
+    { "path": "/email/abc123.txt", "expect": "/email/_.txt" },
+    { "path": "/email/candidates", "expect": "/email/candidates.html" },
+    { "path": "/email/candidates.txt", "expect": "/email/candidates.txt" },
+    { "path": "/email/candidates/e1", "expect": "/email/candidates/_.html" },
+    { "path": "/email/candidates/e1.txt", "expect": "/email/candidates/_.txt" },
+    { "path": "/calendar/ev-9", "expect": "/calendar/_.html" },
+    { "path": "/calendar/ev-9.txt", "expect": "/calendar/_.txt" },
+    { "path": "/email/a/b", "expect": "/404.html" },
+    { "path": "/dashboard", "expect": "/inbox.html" },
+    { "path": "/dashboard.txt", "expect": "/inbox.txt" },
+    { "path": "/nowhere", "expect": "/404.html" },
+    { "path": "/nowhere.txt", "expect": "/nowhere.txt" },
+    { "path": "/_next/static/chunks/app.js", "expect": "/_next/static/chunks/app.js" },
+    { "path": "/_next/static/chunks/missing.js", "expect": "/_next/static/chunks/missing.js" }
+  ],
+  "spaCases": {
+    "comment": "The current Vite SPA bundle: no shell-routes.json (empty rules), no 404.html. Every unknown page path must still get index.html, as Capacitor's own router did.",
+    "files": ["/index.html", "/assets/index-abc.js"],
+    "cases": [
+      { "path": "/", "expect": "/index.html" },
+      { "path": "/mail/abc", "expect": "/index.html" },
+      { "path": "/today", "expect": "/index.html" },
+      { "path": "/assets/index-abc.js", "expect": "/assets/index-abc.js" }
+    ]
+  }
+}

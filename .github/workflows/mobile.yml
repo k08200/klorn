@@ -11,12 +11,16 @@ on:
       - "apps/mobile/**"
       - "packages/contract/**"
       - ".github/workflows/mobile.yml"
+      - "packages/web/scripts/mobile-shell-routes.mjs"
+      - "packages/web/scripts/cloudflare-pages-rules.mjs"
   push:
     branches: [main]
     paths:
       - "apps/mobile/**"
       - "packages/contract/**"
       - ".github/workflows/mobile.yml"
+      - "packages/web/scripts/mobile-shell-routes.mjs"
+      - "packages/web/scripts/cloudflare-pages-rules.mjs"
 
 concurrency:
   group: mobile-${{ github.ref }}
@@ -42,6 +46,9 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # Shell route resolver (reference for the native routers) and the
+      # export checker: plain node --test, no Vite involved.
+      - run: npm run test:shell
       - run: npm run build
       - name: Install Chromium and CJK fonts for screenshots
         run: |
@@ -103,6 +110,79 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx cap sync ios
+      - name: Build for the simulator (unsigned)
+        working-directory: apps/mobile/ios/App
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO build
+
+  # Opt-in shell build (Structure A, PR6a): the packages/web static export as
+  # the app's web bundle (KLORN_MOBILE_SHELL=1, scripts/build-shell-web.mjs),
+  # served by the native routers in android shell/ and ios ShellRouter. The
+  # jobs above keep building the current Vite app until it is retired.
+  shell-android:
+    name: Shell — web export, Android debug build
+    needs: app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install workspace dependencies (packages/web)
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+      - run: npm ci
+      - name: Static export, copied to web-export/ and route-checked
+        run: npm run build:shell
+      - run: KLORN_MOBILE_SHELL=1 npx cap sync android
+      - name: Shell table reached the APK assets
+        run: test -f android/app/src/main/assets/public/shell-routes.json
+      - name: Native unit tests and debug APK
+        working-directory: apps/mobile/android
+        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: klorn-android-shell-debug
+          path: apps/mobile/android/app/build/outputs/apk/debug/*.apk
+
+  shell-ios:
+    name: Shell — web export, iOS simulator build
+    needs: app
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Select the newest Xcode
+        working-directory: .
+        run: |
+          XC=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
+          xcodebuild -version
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Swift route resolver passes the shared vectors (headless swiftc)
+        run: |
+          swiftc -o "$RUNNER_TEMP/shell-check" ios/App/App/ShellRouteResolver.swift shell/swift-check/main.swift
+          "$RUNNER_TEMP/shell-check" shell/route-cases.json
+      - name: Install workspace dependencies (packages/web)
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+      - run: npm ci
+      - name: Static export, copied to web-export/ and route-checked
+        run: npm run build:shell
+      - run: KLORN_MOBILE_SHELL=1 npx cap sync ios
+      - name: Shell table reached the app bundle
+        run: test -f ios/App/App/public/shell-routes.json
       - name: Build for the simulator (unsigned)
         working-directory: apps/mobile/ios/App
         run: |

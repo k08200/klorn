@@ -7,11 +7,19 @@ import type { KeyboardResize } from "@capacitor/keyboard";
 // app.klorn.ai and the app renders its own offline state when the network is
 // down (src/ui/StateView.tsx). Run `npm run build` before `npx cap sync`
 // (`npm run sync` does both).
+//
+// Shell build (opt-in, PR6a of the Structure A move): KLORN_MOBILE_SHELL=1
+// swaps webDir for web-export/, the packages/web static export copied by
+// `npm run build:shell` (scripts/build-shell-web.mjs; `npm run sync:shell`
+// does both). The native routers (android shell/ShellWebViewClient.java, ios
+// ShellBridgeViewController.swift) serve its per-route files and dynamic-route
+// shells from shell-routes.json; with dist/ they behave as Capacitor's own.
+const SHELL_BUILD = process.env.KLORN_MOBILE_SHELL === "1";
 
 const config: CapacitorConfig = {
   appId: "ai.klorn.app",
   appName: "Klorn",
-  webDir: "dist",
+  webDir: SHELL_BUILD ? "web-export" : "dist",
   server: {
     // https so secure-context APIs (crypto.subtle for PKCE) behave as on the
     // web. The bundle is served from https://localhost (Android) and
